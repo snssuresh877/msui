@@ -3,8 +3,8 @@ use fuzzy_matcher::skim::SkimMatcherV2;
 use iced::keyboard::key::Named;
 use iced::keyboard::{Event as KeyboardEvent, Key};
 use iced::widget::operation::focus;
-use iced::widget::{button, column, container, scrollable, text, text_input};
-use iced::{Element, Event, Length, Task as Command, event};
+use iced::widget::{button, column, container, image, row, scrollable, space, svg, text, text_input};
+use iced::{Alignment, Element, Event, Font, Length, Task as Command, Theme, event};
 use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
@@ -25,6 +25,11 @@ pub fn run_launcher(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
         Launcher::update,
         Launcher::view,
     )
+    .theme(Theme::CatppuccinMocha)
+    .default_font(Font {
+        family: iced::font::Family::Name("JetBrainsMono Nerd Font"),
+        ..Font::DEFAULT
+    })
     .layer_settings(LayerShellSettings {
         size: LayerSize::px(width, height),
         anchor: Anchor::empty(), // Center of the screen
@@ -176,21 +181,52 @@ impl Launcher {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let input = text_input(&self.config.launcher.placeholder, &self.query)
+        let placeholder = format!("󰍉 {}", self.config.launcher.placeholder);
+        let input = text_input(&placeholder, &self.query)
             .id(INPUT_ID.clone())
             .on_input(Message::QueryChanged)
             .padding(12)
-            .size(18);
+            .size(16);
 
         let mut app_list = column![].spacing(6);
 
         for (idx, app) in self.filtered.iter().enumerate() {
             let is_selected = idx == self.selected_idx;
 
-            let title_text = text(&app.name).size(16);
-            let desc_text = text(&app.comment).size(12);
+            let icon_element: Element<'_, Message> = match &app.icon {
+                Some(p) if p.extension().is_some_and(|e| e == "svg") => {
+                    svg(svg::Handle::from_path(p))
+                        .width(Length::Fixed(32.0))
+                        .height(Length::Fixed(32.0))
+                        .into()
+                }
+                Some(p) if p.extension().is_some_and(|e| e == "png") => {
+                    image(image::Handle::from_path(p))
+                        .width(Length::Fixed(32.0))
+                        .height(Length::Fixed(32.0))
+                        .into()
+                }
+                _ => text("󰵆 ").size(24).into(),
+            };
 
-            let content = column![title_text, desc_text].spacing(2);
+            let title_text = text(&app.name).size(15);
+            let desc = if app.comment.is_empty() {
+                format!("Launch {}", &app.name)
+            } else {
+                app.comment.clone()
+            };
+            let desc_text = text(desc).size(11);
+
+            let label_col = column![title_text, desc_text].spacing(2);
+
+            let mut app_row = row![icon_element, label_col]
+                .spacing(12)
+                .align_y(Alignment::Center);
+
+            if is_selected {
+                app_row = app_row.push(space().width(Length::Fill));
+                app_row = app_row.push(text("⏎ Launch").size(11));
+            }
 
             let btn_style = if is_selected {
                 button::primary
@@ -198,21 +234,32 @@ impl Launcher {
                 button::secondary
             };
 
-            let app_btn = button(content)
+            let app_btn = button(app_row)
                 .width(Length::Fill)
                 .style(btn_style)
-                .padding(8)
+                .padding([6, 10])
                 .on_press(Message::LaunchApp(idx));
 
             app_list = app_list.push(app_btn);
         }
 
+        let footer = row![
+            text("↑↓ Navigate").size(11),
+            text("•").size(11),
+            text("Enter Launch").size(11),
+            text("•").size(11),
+            text("Esc Close").size(11),
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center);
+
         let container_content = column![
             input,
             scrollable(app_list).height(Length::Fill),
+            footer,
         ]
-        .spacing(12)
-        .padding(16);
+        .spacing(10)
+        .padding(14);
 
         container(container_content)
             .width(Length::Fill)

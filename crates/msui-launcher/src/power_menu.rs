@@ -15,6 +15,11 @@ pub fn run_power_menu() -> Result<(), iced_exwlshell::Error> {
         PowerMenu::update,
         PowerMenu::view,
     )
+    .theme(iced::Theme::CatppuccinMocha)
+    .default_font(iced::Font {
+        family: iced::font::Family::Name("JetBrainsMono Nerd Font"),
+        ..iced::Font::DEFAULT
+    })
     .layer_settings(LayerShellSettings {
         size: LayerSize::px(500, 260),
         anchor: Anchor::empty(), // Centered on screen

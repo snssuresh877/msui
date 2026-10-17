@@ -213,7 +213,9 @@ impl Bar {
                 }
             }
             Message::OpenLauncher => {
-                let _ = std::process::Command::new("msui")
+                let bin = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                let _ = std::process::Command::new(bin)
                     .arg("launcher")
                     .spawn();
             }
@@ -222,7 +224,9 @@ impl Bar {
                 let _ = std::process::Command::new(term).spawn();
             }
             Message::OpenPowerMenu => {
-                let _ = std::process::Command::new("msui")
+                let bin = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                let _ = std::process::Command::new(bin)
                     .arg("power")
                     .spawn();
             }
