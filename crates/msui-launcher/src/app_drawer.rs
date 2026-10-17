@@ -1,0 +1,512 @@
+use fuzzy_matcher::FuzzyMatcher;
+use fuzzy_matcher::skim::SkimMatcherV2;
+use iced::keyboard::key::Named;
+use iced::keyboard::{Event as KeyboardEvent, Key, Modifiers};
+use iced::widget::{button, column, container, image, row, scrollable, space, svg, text, text_input};
+use iced::{Alignment, Element, Event, Font, Length, Task as Command, Theme, event};
+use iced_exwlshell::actions::ExwlShellCustomActionWithId;
+use iced_exwlshell::layershell::application;
+use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
+use iced_exwlshell::settings::LayerShellSettings;
+use msui_core::{
+    find_icon_for_class, scan_desktop_apps, DesktopApp, HyprlandClient, HyprlandIpc, MsuiConfig,
+};
+use std::path::PathBuf;
+use std::sync::LazyLock;
+
+static INPUT_ID: LazyLock<iced::widget::Id> = LazyLock::new(iced::widget::Id::unique);
+
+pub fn run_app_drawer(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
+    let width = 780;
+    let height = 620;
+    let cfg_clone = config.clone();
+
+    application(
+        move || AppDrawer::new(cfg_clone.clone()),
+        AppDrawer::namespace,
+        AppDrawer::update,
+        AppDrawer::view,
+    )
+    .theme(Theme::CatppuccinMocha)
+    .default_font(Font {
+        family: iced::font::Family::Name("JetBrainsMono Nerd Font"),
+        ..Font::DEFAULT
+    })
+    .layer_settings(LayerShellSettings {
+        size: LayerSize::px(width, height),
+        anchor: Anchor::empty(), // Centered on screen
+        layer: Layer::Overlay,
+        keyboard_interactivity: KeyboardInteractivity::Exclusive,
+        ..Default::default()
+    })
+    .subscription(AppDrawer::subscription)
+    .run()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DrawerTab {
+    Running,
+    Installed,
+    All,
+}
+
+#[derive(Debug, Clone)]
+pub enum DrawerItem {
+    Window {
+        client: HyprlandClient,
+        icon: Option<PathBuf>,
+    },
+    App {
+        app: DesktopApp,
+    },
+}
+
+pub struct AppDrawer {
+    _config: MsuiConfig,
+    tab: DrawerTab,
+    query: String,
+    clients: Vec<HyprlandClient>,
+    all_apps: Vec<DesktopApp>,
+    filtered: Vec<DrawerItem>,
+    selected_idx: usize,
+    matcher: SkimMatcherV2,
+}
+
+#[derive(Debug, Clone)]
+pub enum Message {
+    QueryChanged(String),
+    SetTab(DrawerTab),
+    SelectPrevious,
+    SelectNext,
+    ActivateItem(usize),
+    FocusWindow(String),
+    CloseWindow(String),
+    LaunchApp(usize),
+    Refresh,
+    Close,
+    IcedEvent(Event),
+}
+
+impl TryInto<ExwlShellCustomActionWithId> for Message {
+    type Error = Self;
+    fn try_into(self) -> Result<ExwlShellCustomActionWithId, Self::Error> {
+        Err(self)
+    }
+}
+
+impl AppDrawer {
+    pub fn new(config: MsuiConfig) -> (Self, Command<Message>) {
+        let clients = HyprlandIpc::get_clients();
+        let all_apps = scan_desktop_apps();
+
+        let mut drawer = Self {
+            _config: config,
+            tab: DrawerTab::Running,
+            query: String::new(),
+            clients,
+            all_apps,
+            filtered: Vec::new(),
+            selected_idx: 0,
+            matcher: SkimMatcherV2::default(),
+        };
+
+        drawer.rebuild_filtered();
+
+        (drawer, iced::widget::operation::focus(INPUT_ID.clone()))
+    }
+
+    pub fn namespace() -> String {
+        "msui-app-drawer".to_string()
+    }
+
+    pub fn subscription(&self) -> iced::Subscription<Message> {
+        event::listen().map(Message::IcedEvent)
+    }
+
+    fn rebuild_filtered(&mut self) {
+        let q = self.query.trim().to_lowercase();
+        let mut items = Vec::new();
+
+        // 1. Windows (if tab is Running or All)
+        if self.tab == DrawerTab::Running || self.tab == DrawerTab::All {
+            for client in &self.clients {
+                let matches = if q.is_empty() {
+                    true
+                } else {
+                    let score_title = self.matcher.fuzzy_match(&client.title, &q).is_some();
+                    let score_class = self.matcher.fuzzy_match(&client.class, &q).is_some();
+                    let score_init = self.matcher.fuzzy_match(&client.initial_class, &q).is_some();
+                    score_title || score_class || score_init
+                };
+
+                if matches {
+                    let icon = find_icon_for_class(&client.class)
+                        .or_else(|| find_icon_for_class(&client.initial_class));
+                    items.push(DrawerItem::Window {
+                        client: client.clone(),
+                        icon,
+                    });
+                }
+            }
+        }
+
+        // 2. Apps (if tab is Installed or All)
+        if self.tab == DrawerTab::Installed || self.tab == DrawerTab::All {
+            for app in &self.all_apps {
+                let matches = if q.is_empty() {
+                    true
+                } else {
+                    self.matcher.fuzzy_match(&app.name, &q).is_some()
+                        || self.matcher.fuzzy_match(&app.comment, &q).is_some()
+                        || self.matcher.fuzzy_match(&app.id, &q).is_some()
+                };
+
+                if matches {
+                    items.push(DrawerItem::App { app: app.clone() });
+                }
+            }
+        }
+
+        self.filtered = items;
+        if self.selected_idx >= self.filtered.len() {
+            self.selected_idx = 0;
+        }
+    }
+
+    pub fn update(&mut self, message: Message) -> Command<Message> {
+        match message {
+            Message::QueryChanged(new_query) => {
+                self.query = new_query;
+                self.selected_idx = 0;
+                self.rebuild_filtered();
+            }
+            Message::SetTab(tab) => {
+                self.tab = tab;
+                self.selected_idx = 0;
+                self.rebuild_filtered();
+            }
+            Message::SelectPrevious => {
+                if !self.filtered.is_empty() {
+                    if self.selected_idx == 0 {
+                        self.selected_idx = self.filtered.len() - 1;
+                    } else {
+                        self.selected_idx -= 1;
+                    }
+                }
+            }
+            Message::SelectNext => {
+                if !self.filtered.is_empty() {
+                    self.selected_idx = (self.selected_idx + 1) % self.filtered.len();
+                }
+            }
+            Message::ActivateItem(idx) => {
+                if let Some(item) = self.filtered.get(idx) {
+                    match item {
+                        DrawerItem::Window { client, .. } => {
+                            HyprlandIpc::focus_window(&client.address);
+                            std::process::exit(0);
+                        }
+                        DrawerItem::App { app } => {
+                            let _ = app.launch();
+                            std::process::exit(0);
+                        }
+                    }
+                }
+            }
+            Message::FocusWindow(addr) => {
+                HyprlandIpc::focus_window(&addr);
+                std::process::exit(0);
+            }
+            Message::CloseWindow(addr) => {
+                HyprlandIpc::close_window(&addr);
+                // Small sleep to allow Hyprland to process close
+                std::thread::sleep(std::time::Duration::from_millis(150));
+                return Command::done(Message::Refresh);
+            }
+            Message::LaunchApp(idx) => {
+                if let Some(DrawerItem::App { app }) = self.filtered.get(idx) {
+                    let _ = app.launch();
+                    std::process::exit(0);
+                }
+            }
+            Message::Refresh => {
+                self.clients = HyprlandIpc::get_clients();
+                self.rebuild_filtered();
+            }
+            Message::Close => {
+                std::process::exit(0);
+            }
+            Message::IcedEvent(Event::Keyboard(KeyboardEvent::KeyPressed {
+                key,
+                modifiers,
+                ..
+            })) => {
+                match key {
+                    Key::Named(Named::Escape) => {
+                        return Command::done(Message::Close);
+                    }
+                    Key::Named(Named::ArrowDown) => {
+                        return Command::done(Message::SelectNext);
+                    }
+                    Key::Named(Named::ArrowUp) => {
+                        return Command::done(Message::SelectPrevious);
+                    }
+                    Key::Named(Named::Enter) => {
+                        if !self.filtered.is_empty() {
+                            return Command::done(Message::ActivateItem(self.selected_idx));
+                        }
+                    }
+                    Key::Named(Named::Delete) => {
+                        if let Some(DrawerItem::Window { client, .. }) = self.filtered.get(self.selected_idx) {
+                            return Command::done(Message::CloseWindow(client.address.clone()));
+                        }
+                    }
+                    Key::Character(ref c) if (c == "w" || c == "W") && modifiers.contains(Modifiers::CTRL) => {
+                        if let Some(DrawerItem::Window { client, .. }) = self.filtered.get(self.selected_idx) {
+                            return Command::done(Message::CloseWindow(client.address.clone()));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        Command::none()
+    }
+
+    pub fn view(&self) -> Element<'_, Message> {
+        // --- 1. Header with Title, Tabs, Refresh, Close ---
+        let title_icon = text("󰣆").size(20);
+        let title_label = text("App Drawer & Tasks").size(16);
+        let header_title = row![title_icon, title_label].spacing(8).align_y(Alignment::Center);
+
+        // Tab buttons
+        let running_count = self.clients.len();
+        let running_label = format!("󰖯 Running ({})", running_count);
+        let btn_running = button(text(running_label).size(12))
+            .style(if self.tab == DrawerTab::Running { button::primary } else { button::secondary })
+            .padding([4, 10])
+            .on_press(Message::SetTab(DrawerTab::Running));
+
+        let btn_apps = button(text("󰀻 Installed Apps").size(12))
+            .style(if self.tab == DrawerTab::Installed { button::primary } else { button::secondary })
+            .padding([4, 10])
+            .on_press(Message::SetTab(DrawerTab::Installed));
+
+        let btn_all = button(text("󰣆 All").size(12))
+            .style(if self.tab == DrawerTab::All { button::primary } else { button::secondary })
+            .padding([4, 10])
+            .on_press(Message::SetTab(DrawerTab::All));
+
+        let refresh_btn = button(text("󰑐 Refresh").size(12))
+            .style(button::secondary)
+            .padding([4, 8])
+            .on_press(Message::Refresh);
+
+        let close_btn = button(text("✕").size(12))
+            .style(button::danger)
+            .padding([4, 8])
+            .on_press(Message::Close);
+
+        let header_row = row![
+            header_title,
+            space().width(Length::Fill),
+            btn_running,
+            btn_apps,
+            btn_all,
+            refresh_btn,
+            close_btn,
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center);
+
+        // --- 2. Search Input ---
+        let placeholder = match self.tab {
+            DrawerTab::Running => "󰍉 Search running windows by title or class...",
+            DrawerTab::Installed => "󰍉 Search installed applications...",
+            DrawerTab::All => "󰍉 Search running tasks and desktop apps...",
+        };
+        let input = text_input(placeholder, &self.query)
+            .id(INPUT_ID.clone())
+            .on_input(Message::QueryChanged)
+            .padding(10)
+            .size(15);
+
+        // --- 3. Items List ---
+        let mut list_col = column![].spacing(6);
+
+        if self.filtered.is_empty() {
+            let empty_msg = if self.tab == DrawerTab::Running && self.clients.is_empty() {
+                "No active or running windows found on any workspace."
+            } else {
+                "No applications or tasks match your search query."
+            };
+            list_col = list_col.push(
+                container(text(empty_msg).size(13))
+                    .padding(24)
+                    .center_x(Length::Fill),
+            );
+        } else {
+            for (idx, item) in self.filtered.iter().enumerate() {
+                let is_selected = idx == self.selected_idx;
+
+                match item {
+                    DrawerItem::Window { client, icon } => {
+                        let icon_elem: Element<'_, Message> = match icon {
+                            Some(p) if p.extension().is_some_and(|e| e == "svg") => {
+                                svg(svg::Handle::from_path(p))
+                                    .width(Length::Fixed(28.0))
+                                    .height(Length::Fixed(28.0))
+                                    .into()
+                            }
+                            Some(p) if p.extension().is_some_and(|e| e == "png") => {
+                                image(image::Handle::from_path(p))
+                                    .width(Length::Fixed(28.0))
+                                    .height(Length::Fixed(28.0))
+                                    .into()
+                            }
+                            _ => text("󰖯").size(24).into(),
+                        };
+
+                        let title_str = if client.title.is_empty() {
+                            client.class.clone()
+                        } else if client.title.len() > 50 {
+                            format!("{}…", &client.title[..50])
+                        } else {
+                            client.title.clone()
+                        };
+                        let win_title = text(title_str).size(14);
+
+                        let win_meta = text(format!(
+                            "Class: {} • PID: {}",
+                            client.class, client.pid
+                        ))
+                        .size(11);
+
+                        let info_col = column![win_title, win_meta].spacing(2);
+
+                        // Badges
+                        let ws_badge = text(format!("󰮯 WS {}", client.workspace.id)).size(11);
+                        let is_focused = client.focus_history_id == 0;
+                        let active_badge = if is_focused {
+                            Some(text("󰄬 Active").size(11))
+                        } else {
+                            None
+                        };
+
+                        let focus_btn = button(text("󰁔 Switch").size(11))
+                            .style(button::primary)
+                            .padding([3, 8])
+                            .on_press(Message::FocusWindow(client.address.clone()));
+
+                        let close_win_btn = button(text("✕ Close").size(11))
+                            .style(button::danger)
+                            .padding([3, 8])
+                            .on_press(Message::CloseWindow(client.address.clone()));
+
+                        let mut item_row = row![icon_elem, info_col]
+                            .spacing(12)
+                            .align_y(Alignment::Center);
+
+                        item_row = item_row.push(space().width(Length::Fill));
+                        item_row = item_row.push(ws_badge);
+                        if let Some(badge) = active_badge {
+                            item_row = item_row.push(badge);
+                        }
+                        item_row = item_row.push(focus_btn);
+                        item_row = item_row.push(close_win_btn);
+
+                        let item_container = button(item_row)
+                            .width(Length::Fill)
+                            .style(if is_selected {
+                                button::primary
+                            } else {
+                                button::secondary
+                            })
+                            .padding([6, 10])
+                            .on_press(Message::ActivateItem(idx));
+
+                        list_col = list_col.push(item_container);
+                    }
+                    DrawerItem::App { app } => {
+                        let icon_elem: Element<'_, Message> = match &app.icon {
+                            Some(p) if p.extension().is_some_and(|e| e == "svg") => {
+                                svg(svg::Handle::from_path(p))
+                                    .width(Length::Fixed(28.0))
+                                    .height(Length::Fixed(28.0))
+                                    .into()
+                            }
+                            Some(p) if p.extension().is_some_and(|e| e == "png") => {
+                                image(image::Handle::from_path(p))
+                                    .width(Length::Fixed(28.0))
+                                    .height(Length::Fixed(28.0))
+                                    .into()
+                            }
+                            _ => text("󰵆").size(24).into(),
+                        };
+
+                        let app_name = text(&app.name).size(14);
+                        let comment_str = if app.comment.is_empty() {
+                            format!("Launch {}", &app.name)
+                        } else if app.comment.len() > 60 {
+                            format!("{}…", &app.comment[..60])
+                        } else {
+                            app.comment.clone()
+                        };
+                        let app_comment = text(comment_str).size(11);
+
+                        let info_col = column![app_name, app_comment].spacing(2);
+
+                        let launch_btn = button(text("󰐊 Launch").size(11))
+                            .style(button::primary)
+                            .padding([3, 8])
+                            .on_press(Message::LaunchApp(idx));
+
+                        let mut item_row = row![icon_elem, info_col]
+                            .spacing(12)
+                            .align_y(Alignment::Center);
+
+                        item_row = item_row.push(space().width(Length::Fill));
+                        item_row = item_row.push(launch_btn);
+
+                        let item_container = button(item_row)
+                            .width(Length::Fill)
+                            .style(if is_selected {
+                                button::primary
+                            } else {
+                                button::secondary
+                            })
+                            .padding([6, 10])
+                            .on_press(Message::ActivateItem(idx));
+
+                        list_col = list_col.push(item_container);
+                    }
+                }
+            }
+        }
+
+        let scroll = scrollable(list_col).height(Length::Fill);
+
+        // --- 4. Footer ---
+        let footer = row![
+            text("↑↓ Navigate").size(11),
+            text("•").size(11),
+            text("Enter Focus/Launch").size(11),
+            text("•").size(11),
+            text("Del / Ctrl+W Close Window").size(11),
+            text("•").size(11),
+            text("Esc Close").size(11),
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center);
+
+        let content = column![header_row, input, scroll, footer]
+            .spacing(12)
+            .padding(16);
+
+        container(content)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
+    }
+}

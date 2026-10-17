@@ -1,3 +1,3 @@
 pub mod scanner;
 
-pub use scanner::{DesktopApp, scan_desktop_apps};
+pub use scanner::{find_icon_for_class, DesktopApp, scan_desktop_apps};

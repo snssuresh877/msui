@@ -112,6 +112,20 @@ fn resolve_icon(icon_source: IconSource) -> Option<PathBuf> {
     }
 }
 
+pub fn find_icon_for_class(class: &str) -> Option<PathBuf> {
+    let lower = class.to_lowercase();
+    if let Some(p) = get_icon_path_from_xdgicon(&lower) {
+        return Some(p);
+    }
+    // Check without dashes/underscores or after last period (e.g., org.mozilla.firefox -> firefox)
+    if let Some(last_part) = lower.rsplit('.').next() {
+        if let Some(p) = get_icon_path_from_xdgicon(last_part) {
+            return Some(p);
+        }
+    }
+    None
+}
+
 pub fn scan_desktop_apps() -> Vec<DesktopApp> {
     let desktop_entries = fde::desktop_entries(&LOCALE);
 

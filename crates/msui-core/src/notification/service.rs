@@ -26,8 +26,8 @@ impl NotificationServer {
             notif.id
         };
 
-        // Spawn msui toast popup window if not currently running
-        if !is_toast_running() {
+        // Spawn msui toast popup window if not currently running and DND is OFF
+        if !crate::notification::DndManager::is_dnd_enabled() && !is_toast_running() {
             if let Ok(exe) = std::env::current_exe() {
                 if let Ok(mut child) = std::process::Command::new(exe).arg("toast").spawn() {
                     std::thread::spawn(move || {

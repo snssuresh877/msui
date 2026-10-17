@@ -1,3 +1,3 @@
 pub mod hyprland;
 
-pub use hyprland::{HyprlandEvent, HyprlandIpc};
+pub use hyprland::{HyprlandClient, HyprlandEvent, HyprlandIpc, HyprlandWorkspaceRef};

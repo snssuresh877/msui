@@ -420,6 +420,96 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        "drawer" | "tasks" | "appdrawer" | "apps" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            match sub {
+                Some("list") => {
+                    let clients = msui_core::HyprlandIpc::get_clients();
+                    if clients.is_empty() {
+                        println!("No active windows or tasks found.");
+                    } else {
+                        println!("{:<16} {:<6} {:<8} {:<24} {:<32}", "ADDRESS", "WS", "PID", "CLASS", "TITLE");
+                        println!("{}", "-".repeat(88));
+                        for c in clients {
+                            let title = if c.title.len() > 30 {
+                                format!("{}…", &c.title[..30])
+                            } else {
+                                c.title
+                            };
+                            let active_mark = if c.focus_history_id == 0 { "*" } else { " " };
+                            println!("{:<16} {:<1}{:<5} {:<8} {:<24} {:<32}", c.address, active_mark, c.workspace.id, c.pid, c.class, title);
+                        }
+                    }
+                }
+                Some("focus") => {
+                    if let Some(addr) = args.get(3) {
+                        if msui_core::HyprlandIpc::focus_window(addr) {
+                            println!("Focused window: {}", addr);
+                        } else {
+                            eprintln!("Failed to focus window: {}", addr);
+                            std::process::exit(1);
+                        }
+                    } else {
+                        eprintln!("Usage: msui tasks focus <address>");
+                        std::process::exit(1);
+                    }
+                }
+                Some("close") => {
+                    if let Some(addr) = args.get(3) {
+                        if msui_core::HyprlandIpc::close_window(addr) {
+                            println!("Closed window: {}", addr);
+                        } else {
+                            eprintln!("Failed to close window: {}", addr);
+                            std::process::exit(1);
+                        }
+                    } else {
+                        eprintln!("Usage: msui tasks close <address>");
+                        std::process::exit(1);
+                    }
+                }
+                _ => {
+                    tracing::info!("Starting msUI App Drawer & Task Switcher...");
+                    let config = MsuiConfig::load_or_default();
+                    if let Err(e) = msui_launcher::run_app_drawer(config) {
+                        tracing::error!("msUI App Drawer exited with error: {:?}", e);
+                    }
+                }
+            }
+        }
+        "control" | "quicksettings" | "cc" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            match sub {
+                Some("dnd") => {
+                    let action = args.get(3).map(|s| s.as_str()).unwrap_or("status");
+                    match action {
+                        "on" | "enable" => {
+                            msui_core::DndManager::set_dnd(true);
+                            println!("Do Not Disturb: ENABLED (toasts muted)");
+                        }
+                        "off" | "disable" => {
+                            msui_core::DndManager::set_dnd(false);
+                            println!("Do Not Disturb: DISABLED (toasts active)");
+                        }
+                        "toggle" => {
+                            let state = msui_core::DndManager::toggle_dnd();
+                            println!("Do Not Disturb: {}", if state { "ENABLED (toasts muted)" } else { "DISABLED (toasts active)" });
+                        }
+                        _ => {
+                            let state = msui_core::DndManager::is_dnd_enabled();
+                            println!("Do Not Disturb Status: {}", if state { "ENABLED" } else { "DISABLED" });
+                            println!("Usage: msui control dnd <on|off|toggle|status>");
+                        }
+                    }
+                }
+                _ => {
+                    tracing::info!("Starting msUI Quick Settings Control Center...");
+                    let config = MsuiConfig::load_or_default();
+                    if let Err(e) = msui_launcher::run_control_center(config) {
+                        tracing::error!("msUI Control Center exited with error: {:?}", e);
+                    }
+                }
+            }
+        }
         "--help" | "-h" | "help" => {
             print_help();
         }
@@ -443,6 +533,8 @@ fn print_help() {
           msui [COMMAND]\n\n\
         COMMANDS:\n  \
           bar           Run the Wayland Layer Shell status bar & background daemons (default)\n  \
+          drawer        Open the App Drawer & Window Task Switcher overlay (or 'list', 'focus <addr>', 'close <addr>')\n  \
+          control       Open the Unified Quick Settings Control Center popup (or 'dnd <on|off|toggle>')\n  \
           launcher      Open the Spotlight application launcher overlay\n  \
           clipboard     Open the Spotlight clipboard history manager\n  \
           notifications Open the Notification Center history overlay\n  \

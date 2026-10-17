@@ -232,3 +232,51 @@ pub fn remove_toast_pid() {
         let _ = fs::remove_file(pid_path);
     }
 }
+
+pub struct DndManager;
+
+impl DndManager {
+    pub fn dnd_file_path() -> PathBuf {
+        let dir = dirs_cache_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
+        dir.join("dnd_enabled")
+    }
+
+    pub fn is_dnd_enabled() -> bool {
+        Self::dnd_file_path().exists()
+    }
+
+    pub fn set_dnd(enabled: bool) {
+        let path = Self::dnd_file_path();
+        if enabled {
+            if let Some(parent) = path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let _ = fs::write(&path, "1");
+        } else {
+            let _ = fs::remove_file(&path);
+        }
+    }
+
+    pub fn toggle_dnd() -> bool {
+        let new_state = !Self::is_dnd_enabled();
+        Self::set_dnd(new_state);
+        new_state
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dnd_toggle() {
+        let initial = DndManager::is_dnd_enabled();
+        DndManager::set_dnd(true);
+        assert!(DndManager::is_dnd_enabled());
+        DndManager::set_dnd(false);
+        assert!(!DndManager::is_dnd_enabled());
+        // Restore initial
+        DndManager::set_dnd(initial);
+    }
+}
+

@@ -95,6 +95,8 @@ pub enum Message {
     ActivateWorkspace(WorkspaceId),
     OutputChanged(Option<OutputId>),
     OpenLauncher,
+    OpenDrawer,
+    OpenControlCenter,
     OpenTerminal,
     OpenPowerMenu,
     OpenClipboard,
@@ -239,6 +241,16 @@ impl Bar {
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
                 spawn_detached(std::process::Command::new(bin).arg("launcher"));
             }
+            Message::OpenDrawer => {
+                let bin = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                spawn_detached(std::process::Command::new(bin).arg("drawer"));
+            }
+            Message::OpenControlCenter => {
+                let bin = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                spawn_detached(std::process::Command::new(bin).arg("control"));
+            }
             Message::OpenClipboard => {
                 let bin = std::env::current_exe()
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
@@ -337,7 +349,7 @@ impl Bar {
         let brand_btn = button(text(" 󰣇 msUI ").size(14))
             .style(button::primary)
             .padding([4, 10])
-            .on_press(Message::OpenLauncher);
+            .on_press(Message::OpenDrawer);
 
         let mut left_row = row![brand_btn].spacing(8).align_y(Alignment::Center);
 
@@ -413,7 +425,10 @@ impl Bar {
         }
 
         // --- Center Section: Clock & Date ---
-        let clock_widget = text(format!("󰃭 {}", &self.current_time)).size(14);
+        let clock_widget = button(text(format!("󰃭 {}", &self.current_time)).size(14))
+            .style(button::text)
+            .padding([2, 6])
+            .on_press(Message::OpenControlCenter);
 
         // --- Right Section: Hardware & Status ---
         let mut right_row = row![].spacing(6).align_y(Alignment::Center);
@@ -636,6 +651,13 @@ impl Bar {
             .padding([2, 6])
             .on_press(Message::OpenNotifications);
         right_row = right_row.push(notif_btn);
+
+        // Quick Settings Control Center Shortcut
+        let control_btn = button(text(" 󰒓 ").size(12))
+            .style(button::secondary)
+            .padding([2, 6])
+            .on_press(Message::OpenControlCenter);
+        right_row = right_row.push(control_btn);
 
         // Terminal Shortcut
         let term_btn = button(text(" 󰞷 Term ").size(12))

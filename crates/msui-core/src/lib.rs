@@ -9,9 +9,9 @@ pub mod theme;
 pub mod wallpaper;
 
 pub use clipboard::{ClipboardEntry, ClipboardStore, GLOBAL_CLIPBOARD, watcher::start_clipboard_watcher};
-pub use compositor::{HyprlandEvent, HyprlandIpc};
+pub use compositor::{HyprlandClient, HyprlandEvent, HyprlandIpc, HyprlandWorkspaceRef};
 pub use config::{BarConfig, LauncherConfig, MsuiConfig};
-pub use desktop::{DesktopApp, scan_desktop_apps};
+pub use desktop::{find_icon_for_class, DesktopApp, scan_desktop_apps};
 pub use monitor::{
     AudioDevice, AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BatteryStatus, BluetoothDevice,
     BluetoothInfo, BluetoothManager, BrightnessInfo, BrightnessMonitor, DisplayManager, DisplayMonitorInfo,
@@ -20,7 +20,7 @@ pub use monitor::{
 };
 pub use notification::{
     clear_active_toasts, dismiss_active_toast, is_toast_running, load_active_toasts,
-    record_toast_pid, remove_toast_pid, GLOBAL_NOTIFICATIONS, Notification, NotificationStore,
+    record_toast_pid, remove_toast_pid, DndManager, GLOBAL_NOTIFICATIONS, Notification, NotificationStore,
     service::run_notification_service,
 };
 pub use power::SystemControl;
