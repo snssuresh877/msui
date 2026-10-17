@@ -6,7 +6,9 @@ pub mod clipboard_menu;
 pub mod control_center;
 pub mod display_menu;
 pub mod launcher;
+pub mod media_menu;
 pub mod notification_center;
+pub mod osd_window;
 pub mod power_menu;
 pub mod theme_menu;
 pub mod toast;
@@ -22,11 +24,14 @@ pub use clipboard_menu::run_clipboard_menu;
 pub use control_center::run_control_center;
 pub use display_menu::run_display_menu;
 pub use launcher::run_launcher;
+pub use media_menu::run_media_menu;
 pub use notification_center::run_notification_center;
+pub use osd_window::run_osd_window;
 pub use power_menu::run_power_menu;
 pub use theme_menu::run_theme_menu;
 pub use toast::run_toast_window;
 pub use wallpaper_daemon::run_wallpaper_daemon;
 pub use wallpaper_menu::run_wallpaper_menu;
 pub use wifi_menu::run_wifi_menu;
+
 

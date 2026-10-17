@@ -510,6 +510,95 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        "media" | "mpris" | "player" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            match sub {
+                Some("status") => {
+                    if let Some(info) = msui_core::MediaMonitor::read() {
+                        let m = info.position_secs / 60;
+                        let s = info.position_secs % 60;
+                        let tm = info.length_secs / 60;
+                        let ts = info.length_secs % 60;
+                        println!("Player : {}", info.player_name);
+                        println!("Status : {}", if info.is_playing { "Playing" } else { "Paused" });
+                        println!("Title  : {}", info.title);
+                        println!("Artist : {}", info.artist);
+                        if !info.album.is_empty() {
+                            println!("Album  : {}", info.album);
+                        }
+                        println!("Time   : {:02}:{:02} / {:02}:{:02}", m, s, tm, ts);
+                    } else {
+                        println!("No active media player found.");
+                    }
+                }
+                Some("play-pause") | Some("toggle") => {
+                    msui_core::MediaMonitor::play_pause();
+                    println!("Toggled media playback.");
+                }
+                Some("play") => {
+                    msui_core::MediaMonitor::play();
+                    println!("Started media playback.");
+                }
+                Some("pause") => {
+                    msui_core::MediaMonitor::pause();
+                    println!("Paused media playback.");
+                }
+                Some("next") => {
+                    msui_core::MediaMonitor::next();
+                    println!("Skipped to next track.");
+                }
+                Some("prev") | Some("previous") => {
+                    msui_core::MediaMonitor::previous();
+                    println!("Skipped to previous track.");
+                }
+                Some("seek") => {
+                    if let Some(val_str) = args.get(3) {
+                        if let Ok(secs) = val_str.parse::<u64>() {
+                            msui_core::MediaMonitor::seek(secs);
+                            println!("Seeked to {}s.", secs);
+                        } else {
+                            eprintln!("Invalid seek position in seconds.");
+                            std::process::exit(1);
+                        }
+                    } else {
+                        eprintln!("Usage: msui media seek <seconds>");
+                        std::process::exit(1);
+                    }
+                }
+                _ => {
+                    tracing::info!("Starting msUI Media Player Overlay...");
+                    let config = MsuiConfig::load_or_default();
+                    if let Err(e) = msui_launcher::run_media_menu(config) {
+                        tracing::error!("msUI Media Menu exited with error: {:?}", e);
+                    }
+                }
+            }
+        }
+        "osd" => {
+            let target = args.get(2).map(|s| s.as_str()).unwrap_or("");
+            let action = args.get(3).map(|s| s.as_str()).unwrap_or("");
+            match target {
+                "volume" | "vol" => {
+                    msui_core::OsdManager::trigger_volume(action);
+                    let audio = msui_core::AudioMonitor::read();
+                    println!("Volume: {}% (Muted: {})", audio.volume_percent, audio.is_muted);
+                }
+                "brightness" | "bright" => {
+                    msui_core::OsdManager::trigger_brightness(action);
+                    let bright_mon = msui_core::BrightnessMonitor::new();
+                    let b = bright_mon.read().map(|b| b.percent).unwrap_or(0);
+                    println!("Brightness: {}%", b);
+                }
+                _ => {
+                    println!("Usage: msui osd <volume|brightness> <up|down|mute|<percent>>");
+                }
+            }
+        }
+        "osd-window" => {
+            if let Err(e) = msui_launcher::run_osd_window() {
+                tracing::error!("msUI OSD Window exited with error: {:?}", e);
+            }
+        }
         "--help" | "-h" | "help" => {
             print_help();
         }
@@ -535,6 +624,8 @@ fn print_help() {
           bar           Run the Wayland Layer Shell status bar & background daemons (default)\n  \
           drawer        Open the App Drawer & Window Task Switcher overlay (or 'list', 'focus <addr>', 'close <addr>')\n  \
           control       Open the Unified Quick Settings Control Center popup (or 'dnd <on|off|toggle>')\n  \
+          media         Open the MPRIS Now Playing Controller overlay (or 'status', 'play-pause', 'next', 'prev', 'seek <secs>')\n  \
+          osd           Trigger volume or screen brightness OSD HUD (e.g. 'osd volume up', 'osd brightness down')\n  \
           launcher      Open the Spotlight application launcher overlay\n  \
           clipboard     Open the Spotlight clipboard history manager\n  \
           notifications Open the Notification Center history overlay\n  \

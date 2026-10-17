@@ -108,6 +108,7 @@ pub enum Message {
     OpenAudio,
     OpenBattery,
     OpenDisplay,
+    OpenMedia,
     TakeScreenshot,
     ToggleMute,
     VolumeUp,
@@ -296,6 +297,11 @@ impl Bar {
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
                 spawn_detached(std::process::Command::new(bin).arg("display"));
             }
+            Message::OpenMedia => {
+                let bin = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                spawn_detached(std::process::Command::new(bin).arg("media"));
+            }
             Message::OpenTerminal => {
                 let term = &self.config.launcher.terminal;
                 spawn_detached(&mut std::process::Command::new(term));
@@ -409,18 +415,22 @@ impl Bar {
         // Media Widget (when playing or paused music exists)
         if self.config.bar.show_media {
             if let Some(media) = &self.media_info {
-                let symbol = if media.is_playing { "󰐊" } else { "󰏤" };
+                let symbol = if media.is_playing { "󰏤" } else { "󰐊" };
                 let short_title = if media.title.len() > 20 {
-                    format!("{}...", &media.title[..18])
+                    format!("{}…", &media.title[..18])
                 } else {
                     media.title.clone()
                 };
-                let media_label = format!(" 󰝚 {short_title} {symbol} ");
-                let media_btn = button(text(media_label).size(13))
+                let track_btn = button(text(format!(" 󰝚 {short_title} ")).size(13))
                     .style(button::secondary)
-                    .padding([3, 8])
+                    .padding([2, 6])
+                    .on_press(Message::OpenMedia);
+                let play_btn = button(text(symbol).size(12))
+                    .style(button::primary)
+                    .padding([2, 6])
                     .on_press(Message::MediaPlayPause);
-                left_row = left_row.push(media_btn);
+                let media_group = row![track_btn, play_btn].spacing(2).align_y(Alignment::Center);
+                left_row = left_row.push(media_group);
             }
         }
 

@@ -5,6 +5,7 @@ pub mod brightness;
 pub mod display;
 pub mod media;
 pub mod network;
+pub mod osd;
 pub mod system;
 
 pub use audio::{AudioDevice, AudioInfo, AudioMonitor};
@@ -14,4 +15,6 @@ pub use brightness::{BrightnessInfo, BrightnessMonitor};
 pub use display::{DisplayManager, DisplayMonitorInfo, NightLightConfig, NightLightManager};
 pub use media::{MediaInfo, MediaMonitor};
 pub use network::{NetworkInfo, NetworkMonitor, WifiNetwork};
+pub use osd::{OsdKind, OsdManager, OsdState};
 pub use system::{SystemMetrics, SystemMonitor};
+

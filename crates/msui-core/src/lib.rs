@@ -16,7 +16,7 @@ pub use monitor::{
     AudioDevice, AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BatteryStatus, BluetoothDevice,
     BluetoothInfo, BluetoothManager, BrightnessInfo, BrightnessMonitor, DisplayManager, DisplayMonitorInfo,
     MediaInfo, MediaMonitor, NetworkInfo, NetworkMonitor, NightLightConfig, NightLightManager,
-    PowerProfile, PowerProfileManager, SystemMetrics, SystemMonitor, WifiNetwork,
+    OsdKind, OsdManager, OsdState, PowerProfile, PowerProfileManager, SystemMetrics, SystemMonitor, WifiNetwork,
 };
 pub use notification::{
     clear_active_toasts, dismiss_active_toast, is_toast_running, load_active_toasts,
