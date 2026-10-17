@@ -245,6 +245,90 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        "battery" | "power-profile" | "profile" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            match sub {
+                Some("status" | "info") => {
+                    let monitor = msui_core::BatteryMonitor::new();
+                    if let Some(bat) = monitor.read() {
+                        let active_prof = msui_core::PowerProfileManager::get_profile();
+                        println!("msUI Battery Telemetry & Diagnostics");
+                        println!("{}", "=".repeat(45));
+                        println!("{:<22}: {}% ({})", "Battery Charge", bat.percentage, bat.status.as_str());
+                        println!("{:<22}: {}", "AC Adapter", if bat.is_ac_online { "Online (Plugged In)" } else { "Offline (On Battery)" });
+                        println!("{:<22}: {:.2} W", "Power Draw", bat.power_watts);
+                        println!("{:<22}: {:.2} V", "Voltage", bat.voltage_volts);
+                        println!("{:<22}: {:.2} Wh / {:.2} Wh", "Current / Full Energy", bat.energy_now_wh, bat.energy_full_wh);
+                        println!("{:<22}: {:.2} Wh", "Design Capacity", bat.energy_full_design_wh);
+                        println!("{:<22}: {:.1}%", "Battery Health", bat.health_percent);
+                        if let Some(cycles) = bat.cycle_count {
+                            println!("{:<22}: {}", "Cycle Count", cycles);
+                        }
+                        println!("{:<22}: {}", "Technology", bat.technology);
+                        if let Some(mins) = bat.time_remaining_mins {
+                            let h = mins / 60;
+                            let m = mins % 60;
+                            println!("{:<22}: ~{}h {}m", "Estimated Time", h, m);
+                        }
+                        println!("{:<22}: {} ({})", "Active Power Profile", active_prof.display_name(), active_prof.as_str());
+                    } else {
+                        println!("No battery detected on this system (Desktop / AC Only).");
+                    }
+                }
+                Some("profile") => {
+                    let sub2 = args.get(3).map(|s| s.as_str());
+                    match sub2 {
+                        Some("set") => {
+                            if let Some(p_str) = args.get(4) {
+                                if let Some(prof) = msui_core::PowerProfile::from_str_loose(p_str) {
+                                    if msui_core::PowerProfileManager::set_profile(prof) {
+                                        println!("Power profile switched to: {} ({})", prof.display_name(), prof.as_str());
+                                    } else {
+                                        eprintln!("Failed to switch power profile to: {}", p_str);
+                                        std::process::exit(1);
+                                    }
+                                } else {
+                                    eprintln!("Invalid profile '{}'. Choose: power-saver, balanced, performance", p_str);
+                                    std::process::exit(1);
+                                }
+                            } else {
+                                eprintln!("Usage: msui battery profile set <power-saver|balanced|performance>");
+                                std::process::exit(1);
+                            }
+                        }
+                        _ => {
+                            let current = msui_core::PowerProfileManager::get_profile();
+                            println!("Active Power Profile: {} ({})", current.display_name(), current.as_str());
+                            println!("Available: power-saver, balanced, performance");
+                        }
+                    }
+                }
+                Some("set") => {
+                    if let Some(p_str) = args.get(3) {
+                        if let Some(prof) = msui_core::PowerProfile::from_str_loose(p_str) {
+                            if msui_core::PowerProfileManager::set_profile(prof) {
+                                println!("Power profile switched to: {} ({})", prof.display_name(), prof.as_str());
+                            } else {
+                                eprintln!("Failed to switch power profile to: {}", p_str);
+                                std::process::exit(1);
+                            }
+                        } else {
+                            eprintln!("Invalid profile '{}'. Choose: power-saver, balanced, performance", p_str);
+                            std::process::exit(1);
+                        }
+                    } else {
+                        eprintln!("Usage: msui battery set <power-saver|balanced|performance>");
+                        std::process::exit(1);
+                    }
+                }
+                _ => {
+                    tracing::info!("Starting msUI Battery & Power Profile Manager...");
+                    if let Err(e) = msui_launcher::run_battery_menu() {
+                        tracing::error!("msUI Battery Menu exited with error: {:?}", e);
+                    }
+                }
+            }
+        }
         "--help" | "-h" | "help" => {
             print_help();
         }
@@ -272,6 +356,7 @@ fn print_help() {
           clipboard     Open the Spotlight clipboard history manager\n  \
           notifications Open the Notification Center history overlay\n  \
           audio         Open the Audio Mixer & Device Switcher overlay (or 'sinks', 'sources', 'set-sink', 'set-source', 'volume', 'mute')\n  \
+          battery       Open the Battery Diagnostics & Power Profile Manager (or 'status', 'profile set')\n  \
           wifi          Open the Wi-Fi network manager overlay (or 'list', 'connect', 'disconnect')\n  \
           bluetooth     Open the Bluetooth settings manager overlay\n  \
           wallpaper     Open the Wallpaper changer overlay (or 'cycle', 'random', 'set <path>')\n  \

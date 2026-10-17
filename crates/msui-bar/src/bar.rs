@@ -104,6 +104,7 @@ pub enum Message {
     OpenWallpaper,
     OpenTheme,
     OpenAudio,
+    OpenBattery,
     TakeScreenshot,
     ToggleMute,
     VolumeUp,
@@ -271,6 +272,11 @@ impl Bar {
                 let bin = std::env::current_exe()
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
                 spawn_detached(std::process::Command::new(bin).arg("audio"));
+            }
+            Message::OpenBattery => {
+                let bin = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                spawn_detached(std::process::Command::new(bin).arg("battery"));
             }
             Message::OpenTerminal => {
                 let term = &self.config.launcher.terminal;
@@ -543,7 +549,15 @@ impl Bar {
                     "󰁻"
                 };
                 let bat_str = format!("{bat_icon} {}%", bat.percentage);
-                right_row = right_row.push(text(bat_str).size(13));
+                let bat_btn = button(text(bat_str).size(13))
+                    .style(if bat.percentage <= 20 && !bat.is_charging {
+                        button::danger
+                    } else {
+                        button::text
+                    })
+                    .padding([2, 5])
+                    .on_press(Message::OpenBattery);
+                right_row = right_row.push(bat_btn);
             }
         }
 

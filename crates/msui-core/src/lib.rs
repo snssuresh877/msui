@@ -15,7 +15,7 @@ pub use desktop::{DesktopApp, scan_desktop_apps};
 pub use monitor::{
     AudioDevice, AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BatteryStatus, BluetoothDevice,
     BluetoothInfo, BluetoothManager, BrightnessInfo, BrightnessMonitor, MediaInfo, MediaMonitor,
-    NetworkInfo, NetworkMonitor, SystemMetrics, SystemMonitor, WifiNetwork,
+    NetworkInfo, NetworkMonitor, PowerProfile, PowerProfileManager, SystemMetrics, SystemMonitor, WifiNetwork,
 };
 pub use notification::{
     clear_active_toasts, dismiss_active_toast, is_toast_running, load_active_toasts,
@@ -176,5 +176,15 @@ mod tests {
         assert_eq!(sources[0].volume_percent, 75);
         assert!(sources[0].is_muted);
         assert!(sources[0].is_default);
+    }
+
+    #[test]
+    fn test_power_profile_manager() {
+        let prof = PowerProfileManager::get_profile();
+        assert!(matches!(prof, PowerProfile::PowerSaver | PowerProfile::Balanced | PowerProfile::Performance));
+        assert_eq!(PowerProfile::from_str_loose("power-saver"), Some(PowerProfile::PowerSaver));
+        assert_eq!(PowerProfile::from_str_loose("performance"), Some(PowerProfile::Performance));
+        assert_eq!(PowerProfile::from_str_loose("balanced"), Some(PowerProfile::Balanced));
+        assert_eq!(PowerProfileManager::list_profiles().len(), 3);
     }
 }

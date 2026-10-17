@@ -7,7 +7,7 @@ pub mod network;
 pub mod system;
 
 pub use audio::{AudioDevice, AudioInfo, AudioMonitor};
-pub use battery::{BatteryInfo, BatteryMonitor, BatteryStatus};
+pub use battery::{BatteryInfo, BatteryMonitor, BatteryStatus, PowerProfile, PowerProfileManager};
 pub use bluetooth::{BluetoothDevice, BluetoothInfo, BluetoothManager};
 pub use brightness::{BrightnessInfo, BrightnessMonitor};
 pub use media::{MediaInfo, MediaMonitor};
