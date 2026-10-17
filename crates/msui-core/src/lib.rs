@@ -15,7 +15,7 @@ pub use desktop::{DesktopApp, scan_desktop_apps};
 pub use monitor::{
     AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BatteryStatus, BluetoothDevice,
     BluetoothInfo, BluetoothManager, BrightnessInfo, BrightnessMonitor, MediaInfo, MediaMonitor,
-    NetworkInfo, NetworkMonitor, SystemMetrics, SystemMonitor,
+    NetworkInfo, NetworkMonitor, SystemMetrics, SystemMonitor, WifiNetwork,
 };
 pub use notification::{
     clear_active_toasts, dismiss_active_toast, is_toast_running, load_active_toasts,
@@ -123,5 +123,11 @@ mod tests {
         let _iced_theme = ThemeManager::current_theme();
         assert_eq!(ThemeManager::to_iced_theme("nord"), iced::Theme::Nord);
         assert_eq!(ThemeManager::to_iced_theme("dracula"), iced::Theme::Dracula);
+    }
+
+    #[test]
+    fn test_network_wifi_scan() {
+        let networks = NetworkMonitor::scan_wifi();
+        assert!(networks.len() < usize::MAX);
     }
 }

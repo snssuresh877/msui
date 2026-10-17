@@ -11,5 +11,5 @@ pub use battery::{BatteryInfo, BatteryMonitor, BatteryStatus};
 pub use bluetooth::{BluetoothDevice, BluetoothInfo, BluetoothManager};
 pub use brightness::{BrightnessInfo, BrightnessMonitor};
 pub use media::{MediaInfo, MediaMonitor};
-pub use network::{NetworkInfo, NetworkMonitor};
+pub use network::{NetworkInfo, NetworkMonitor, WifiNetwork};
 pub use system::{SystemMetrics, SystemMonitor};

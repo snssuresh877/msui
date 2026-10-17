@@ -99,6 +99,7 @@ pub enum Message {
     OpenPowerMenu,
     OpenClipboard,
     OpenNotifications,
+    OpenWifi,
     OpenBluetooth,
     OpenWallpaper,
     OpenTheme,
@@ -244,6 +245,11 @@ impl Bar {
                 let bin = std::env::current_exe()
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
                 spawn_detached(std::process::Command::new(bin).arg("notifications"));
+            }
+            Message::OpenWifi => {
+                let bin = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                spawn_detached(std::process::Command::new(bin).arg("wifi"));
             }
             Message::OpenBluetooth => {
                 let bin = std::env::current_exe()
@@ -416,7 +422,15 @@ impl Bar {
             } else {
                 "󰤭 Offline".into()
             };
-            right_row = right_row.push(text(net_text).size(13));
+            let net_btn = button(text(net_text).size(13))
+                .style(if self.network_info.is_connected {
+                    button::secondary
+                } else {
+                    button::danger
+                })
+                .padding([2, 6])
+                .on_press(Message::OpenWifi);
+            right_row = right_row.push(net_btn);
         }
 
         // Audio Volume with Mute and +/- controls

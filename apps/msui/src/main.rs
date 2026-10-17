@@ -67,6 +67,54 @@ fn main() -> anyhow::Result<()> {
                 tracing::error!("msUI Bluetooth Menu exited with error: {:?}", e);
             }
         }
+        "wifi" | "network" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            match sub {
+                Some("list") => {
+                    let networks = msui_core::NetworkMonitor::scan_wifi();
+                    println!("{:<4} {:<32} {:<10} {:<10}", "USE", "SSID", "SIGNAL", "SECURITY");
+                    println!("{}", "-".repeat(60));
+                    for net in networks {
+                        let active = if net.is_connected { "*" } else { " " };
+                        let sec = if net.is_secure { &net.security } else { "Open" };
+                        println!("{:<4} {:<32} {:<10} {:<10}", active, net.ssid, format!("{}% {}", net.signal, net.bars), sec);
+                    }
+                }
+                Some("rescan") => {
+                    msui_core::NetworkMonitor::rescan_wifi();
+                    println!("Triggered Wi-Fi rescan.");
+                }
+                Some("disconnect") => {
+                    if msui_core::NetworkMonitor::disconnect_wifi() {
+                        println!("Disconnected from Wi-Fi.");
+                    } else {
+                        eprintln!("Failed to disconnect.");
+                        std::process::exit(1);
+                    }
+                }
+                Some("connect") => {
+                    if let Some(ssid) = args.get(3) {
+                        let password = args.get(4).map(|s| s.as_str());
+                        match msui_core::NetworkMonitor::connect_wifi(ssid, password) {
+                            Ok(()) => println!("Connected to \"{}\"", ssid),
+                            Err(e) => {
+                                eprintln!("Connection error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Usage: msui wifi connect <SSID> [password]");
+                        std::process::exit(1);
+                    }
+                }
+                _ => {
+                    tracing::info!("Starting msUI Wi-Fi Network Manager...");
+                    if let Err(e) = msui_launcher::run_wifi_menu() {
+                        tracing::error!("msUI Wi-Fi Menu exited with error: {:?}", e);
+                    }
+                }
+            }
+        }
         "wallpaper" | "wall" => {
             let sub = args.get(2).map(|s| s.as_str());
             match sub {
@@ -156,6 +204,7 @@ fn print_help() {
           launcher      Open the Spotlight application launcher overlay\n  \
           clipboard     Open the Spotlight clipboard history manager\n  \
           notifications Open the Notification Center history overlay\n  \
+          wifi          Open the Wi-Fi network manager overlay (or 'list', 'connect', 'disconnect')\n  \
           bluetooth     Open the Bluetooth settings manager overlay\n  \
           wallpaper     Open the Wallpaper changer overlay (or 'cycle', 'random', 'set <path>')\n  \
           bg            Run the native Wayland background wallpaper daemon\n  \
