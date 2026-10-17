@@ -23,7 +23,7 @@ pub use audio_menu::run_audio_menu;
 pub use battery_menu::run_battery_menu;
 pub use bluetooth_menu::run_bluetooth_menu;
 pub use clipboard_menu::run_clipboard_menu;
-pub use control_center::run_control_center;
+pub use control_center::{run_control_center, run_control_center_topbar};
 pub use display_menu::run_display_menu;
 pub use launcher::run_launcher;
 pub use media_menu::run_media_menu;

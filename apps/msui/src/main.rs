@@ -501,6 +501,13 @@ fn main() -> anyhow::Result<()> {
                         }
                     }
                 }
+                Some("topbar" | "bar" | "settings") => {
+                    tracing::info!("Starting msUI Control Center (Top Bar Settings)...");
+                    let config = MsuiConfig::load_or_default();
+                    if let Err(e) = msui_launcher::run_control_center_topbar(config) {
+                        tracing::error!("msUI Control Center exited with error: {:?}", e);
+                    }
+                }
                 _ => {
                     tracing::info!("Starting msUI Quick Settings Control Center...");
                     let config = MsuiConfig::load_or_default();

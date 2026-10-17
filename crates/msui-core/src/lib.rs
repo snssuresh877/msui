@@ -41,6 +41,24 @@ mod tests {
         assert_eq!(cfg.bar.layer, "top");
         assert_eq!(cfg.launcher.width, 680);
         assert_eq!(cfg.launcher.max_results, 8);
+        assert!(cfg.bar.show_brand);
+        assert!(cfg.bar.show_clock);
+        assert!(cfg.bar.show_workspaces);
+    }
+
+    #[test]
+    fn test_bar_config_toggle_and_save() {
+        let mut cfg = MsuiConfig::default();
+        cfg.bar.show_brand = false;
+        cfg.bar.show_cpu = false;
+        cfg.bar.show_reminders_btn = false;
+
+        let toml_str = toml::to_string_pretty(&cfg).expect("Serialization failed");
+        let parsed: MsuiConfig = toml::from_str(&toml_str).expect("Deserialization failed");
+        assert!(!parsed.bar.show_brand);
+        assert!(!parsed.bar.show_cpu);
+        assert!(!parsed.bar.show_reminders_btn);
+        assert!(parsed.bar.show_workspaces);
     }
 
     #[test]

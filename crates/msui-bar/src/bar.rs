@@ -87,6 +87,7 @@ pub struct Bar {
     bluetooth_info: BluetoothInfo,
     has_removable_drive: bool,
     next_reminder: Option<ReminderItem>,
+    last_config_mtime: Option<std::time::SystemTime>,
 }
 
 #[to_layer_message]
@@ -160,6 +161,9 @@ impl Bar {
             bluetooth_info,
             has_removable_drive: StorageManager::has_removable_devices(),
             next_reminder: ReminderManager::next_expiring(),
+            last_config_mtime: MsuiConfig::default_config_path()
+                .and_then(|p| std::fs::metadata(p).ok())
+                .and_then(|m| m.modified().ok()),
         }
     }
 
@@ -208,6 +212,18 @@ impl Bar {
                 self.current_time = Local::now().format(&self.config.bar.time_format).to_string();
                 ReminderManager::check_and_trigger_expired();
                 self.next_reminder = ReminderManager::next_expiring();
+
+                // Live dynamic reload if configuration file modified on disk
+                if let Some(cfg_path) = MsuiConfig::default_config_path() {
+                    if let Ok(meta) = std::fs::metadata(&cfg_path) {
+                        if let Ok(mtime) = meta.modified() {
+                            if self.last_config_mtime.map_or(true, |last| mtime > last) {
+                                self.last_config_mtime = Some(mtime);
+                                self.config = MsuiConfig::load_or_default();
+                            }
+                        }
+                    }
+                }
             }
             Message::MetricsTick => {
                 self.system_metrics = self.system_monitor.sample();
@@ -372,12 +388,15 @@ impl Bar {
 
     fn view(&self) -> Element<'_, Message> {
         // --- Left Section: Launcher Button + Workspaces + Media ---
-        let brand_btn = button(text(" 󰣇 msUI ").size(14))
-            .style(button::primary)
-            .padding([4, 10])
-            .on_press(Message::OpenDrawer);
+        let mut left_row = row![].spacing(8).align_y(Alignment::Center);
 
-        let mut left_row = row![brand_btn].spacing(8).align_y(Alignment::Center);
+        if self.config.bar.show_brand {
+            let brand_btn = button(text(" 󰣇 msUI ").size(14))
+                .style(button::primary)
+                .padding([4, 10])
+                .on_press(Message::OpenDrawer);
+            left_row = left_row.push(brand_btn);
+        }
 
         if self.config.bar.show_workspaces {
             let mut ws_row = row![].spacing(3).align_y(Alignment::Center);
@@ -455,28 +474,32 @@ impl Bar {
         }
 
         // --- Center Section: Clock & Date + Live Reminder Countdown ---
-        let clock_widget = button(text(format!("󰃭 {}", &self.current_time)).size(14))
-            .style(button::text)
-            .padding([2, 6])
-            .on_press(Message::OpenControlCenter);
+        let mut center_row = row![].spacing(8).align_y(Alignment::Center);
 
-        let center_group = if let Some(reminder) = &self.next_reminder {
-            let rem_str = reminder.formatted_remaining();
-            let is_expired = reminder.is_expired();
-            let label = if is_expired {
-                format!(" 󰥔 Expired: {} ", reminder.title)
-            } else {
-                format!(" 󰥔 {} ({}) ", rem_str, reminder.title)
-            };
-            let timer_pill = button(text(label).size(12))
-                .style(if is_expired { button::danger } else { button::primary })
-                .padding([2, 8])
-                .on_press(Message::OpenReminders);
+        if self.config.bar.show_clock {
+            let clock_widget = button(text(format!("󰃭 {}", &self.current_time)).size(14))
+                .style(button::text)
+                .padding([2, 6])
+                .on_press(Message::OpenControlCenter);
+            center_row = center_row.push(clock_widget);
+        }
 
-            row![clock_widget, timer_pill].spacing(8).align_y(Alignment::Center)
-        } else {
-            row![clock_widget].align_y(Alignment::Center)
-        };
+        if self.config.bar.show_reminders_badge {
+            if let Some(reminder) = &self.next_reminder {
+                let rem_str = reminder.formatted_remaining();
+                let is_expired = reminder.is_expired();
+                let label = if is_expired {
+                    format!(" 󰥔 Expired: {} ", reminder.title)
+                } else {
+                    format!(" 󰥔 {} ({}) ", rem_str, reminder.title)
+                };
+                let timer_pill = button(text(label).size(12))
+                    .style(if is_expired { button::danger } else { button::primary })
+                    .padding([2, 8])
+                    .on_press(Message::OpenReminders);
+                center_row = center_row.push(timer_pill);
+            }
+        }
 
         // --- Right Section: Hardware & Status ---
         let mut right_row = row![].spacing(6).align_y(Alignment::Center);
@@ -610,7 +633,7 @@ impl Bar {
         }
 
         // Removable USB Storage indicator
-        if self.has_removable_drive {
+        if self.config.bar.show_storage && self.has_removable_drive {
             let usb_btn = button(text(" 󱊞 USB ").size(12))
                 .style(button::primary)
                 .padding([2, 6])
@@ -670,83 +693,100 @@ impl Bar {
         }
 
         // Wallpaper Picker Shortcut
-        let wall_btn = button(text(" 󰸉 ").size(13))
-            .style(button::secondary)
-            .padding([2, 6])
-            .on_press(Message::OpenWallpaper);
-        right_row = right_row.push(wall_btn);
+        if self.config.bar.show_wallpaper {
+            let wall_btn = button(text(" 󰸉 ").size(13))
+                .style(button::secondary)
+                .padding([2, 6])
+                .on_press(Message::OpenWallpaper);
+            right_row = right_row.push(wall_btn);
+        }
 
         // Theme Selector Shortcut
-        // Theme Selector Shortcut
-        let theme_btn = button(text(" 󰔎 ").size(13))
-            .style(button::secondary)
-            .padding([2, 6])
-            .on_press(Message::OpenTheme);
-        right_row = right_row.push(theme_btn);
+        if self.config.bar.show_theme {
+            let theme_btn = button(text(" 󰔎 ").size(13))
+                .style(button::secondary)
+                .padding([2, 6])
+                .on_press(Message::OpenTheme);
+            right_row = right_row.push(theme_btn);
+        }
 
         // Reminders & Timers Shortcut
-        let rem_btn = button(text(" 󰥔 ").size(13))
-            .style(button::secondary)
-            .padding([2, 6])
-            .on_press(Message::OpenReminders);
-        right_row = right_row.push(rem_btn);
+        if self.config.bar.show_reminders_btn {
+            let rem_btn = button(text(" 󰥔 ").size(13))
+                .style(button::secondary)
+                .padding([2, 6])
+                .on_press(Message::OpenReminders);
+            right_row = right_row.push(rem_btn);
+        }
 
         // Quick Screenshot Shortcut
-        let shot_btn = button(text(" 󰄀 ").size(13))
-            .style(button::secondary)
-            .padding([2, 6])
-            .on_press(Message::TakeScreenshot);
-        right_row = right_row.push(shot_btn);
+        if self.config.bar.show_screenshot {
+            let shot_btn = button(text(" 󰄀 ").size(13))
+                .style(button::secondary)
+                .padding([2, 6])
+                .on_press(Message::TakeScreenshot);
+            right_row = right_row.push(shot_btn);
+        }
 
         // Clipboard History Shortcut
-        let clip_btn = button(text(" 󰅍 Clip ").size(12))
-            .style(button::secondary)
-            .padding([2, 6])
-            .on_press(Message::OpenClipboard);
-        right_row = right_row.push(clip_btn);
+        if self.config.bar.show_clipboard {
+            let clip_btn = button(text(" 󰅍 Clip ").size(12))
+                .style(button::secondary)
+                .padding([2, 6])
+                .on_press(Message::OpenClipboard);
+            right_row = right_row.push(clip_btn);
+        }
 
         // Notification Bell Icon with Counter
-        let notif_label = if self.notification_count > 0 {
-            format!(" 󰂚 {} ", self.notification_count)
-        } else {
-            " 󰂚 ".into()
-        };
-        let notif_btn = button(text(notif_label).size(12))
-            .style(if self.notification_count > 0 {
-                button::primary
+        if self.config.bar.show_notifications {
+            let notif_label = if self.notification_count > 0 {
+                format!(" 󰂚 {} ", self.notification_count)
             } else {
-                button::secondary
-            })
-            .padding([2, 6])
-            .on_press(Message::OpenNotifications);
-        right_row = right_row.push(notif_btn);
+                " 󰂚 ".into()
+            };
+            let notif_btn = button(text(notif_label).size(12))
+                .style(if self.notification_count > 0 {
+                    button::primary
+                } else {
+                    button::secondary
+                })
+                .padding([2, 6])
+                .on_press(Message::OpenNotifications);
+            right_row = right_row.push(notif_btn);
+        }
 
         // Quick Settings Control Center Shortcut
-        let control_btn = button(text(" 󰒓 ").size(12))
-            .style(button::secondary)
-            .padding([2, 6])
-            .on_press(Message::OpenControlCenter);
-        right_row = right_row.push(control_btn);
+        if self.config.bar.show_control_center {
+            let control_btn = button(text(" 󰒓 ").size(12))
+                .style(button::secondary)
+                .padding([2, 6])
+                .on_press(Message::OpenControlCenter);
+            right_row = right_row.push(control_btn);
+        }
 
         // Terminal Shortcut
-        let term_btn = button(text(" 󰞷 Term ").size(12))
-            .style(button::secondary)
-            .padding([2, 6])
-            .on_press(Message::OpenTerminal);
-        right_row = right_row.push(term_btn);
+        if self.config.bar.show_terminal {
+            let term_btn = button(text(" 󰞷 Term ").size(12))
+                .style(button::secondary)
+                .padding([2, 6])
+                .on_press(Message::OpenTerminal);
+            right_row = right_row.push(term_btn);
+        }
 
         // Power Menu Trigger Button
-        let power_btn = button(text(" 󰐥 ").size(13))
-            .style(button::danger)
-            .padding([2, 8])
-            .on_press(Message::OpenPowerMenu);
-        right_row = right_row.push(power_btn);
+        if self.config.bar.show_power {
+            let power_btn = button(text(" 󰐥 ").size(13))
+                .style(button::danger)
+                .padding([2, 8])
+                .on_press(Message::OpenPowerMenu);
+            right_row = right_row.push(power_btn);
+        }
 
         // Assemble full bar layout
         let bar_content = row![
             left_row,
             space().width(Length::Fill),
-            center_group,
+            center_row,
             space().width(Length::Fill),
             right_row,
         ]

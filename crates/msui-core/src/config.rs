@@ -25,23 +25,49 @@ pub struct BarConfig {
     #[serde(default = "default_sysinfo_refresh")]
     pub sysinfo_refresh_seconds: u64,
     #[serde(default = "default_true")]
+    pub show_brand: bool,
+    #[serde(default = "default_true")]
     pub show_workspaces: bool,
     #[serde(default = "default_true")]
-    pub show_battery: bool,
+    pub show_media: bool,
+    #[serde(default = "default_true")]
+    pub show_clock: bool,
+    #[serde(default = "default_true")]
+    pub show_reminders_badge: bool,
+    #[serde(default = "default_true")]
+    pub show_network: bool,
+    #[serde(default = "default_true")]
+    pub show_audio: bool,
+    #[serde(default = "default_true")]
+    pub show_brightness: bool,
     #[serde(default = "default_true")]
     pub show_cpu: bool,
     #[serde(default = "default_true")]
     pub show_memory: bool,
     #[serde(default = "default_true")]
-    pub show_audio: bool,
+    pub show_storage: bool,
     #[serde(default = "default_true")]
-    pub show_network: bool,
-    #[serde(default = "default_true")]
-    pub show_brightness: bool,
-    #[serde(default = "default_true")]
-    pub show_media: bool,
+    pub show_battery: bool,
     #[serde(default = "default_true")]
     pub show_bluetooth: bool,
+    #[serde(default = "default_true")]
+    pub show_wallpaper: bool,
+    #[serde(default = "default_true")]
+    pub show_theme: bool,
+    #[serde(default = "default_true")]
+    pub show_reminders_btn: bool,
+    #[serde(default = "default_true")]
+    pub show_screenshot: bool,
+    #[serde(default = "default_true")]
+    pub show_clipboard: bool,
+    #[serde(default = "default_true")]
+    pub show_notifications: bool,
+    #[serde(default = "default_true")]
+    pub show_control_center: bool,
+    #[serde(default = "default_true")]
+    pub show_terminal: bool,
+    #[serde(default = "default_true")]
+    pub show_power: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,15 +119,28 @@ impl Default for BarConfig {
             time_format: default_time_format(),
             battery_refresh_seconds: default_battery_refresh(),
             sysinfo_refresh_seconds: default_sysinfo_refresh(),
+            show_brand: true,
             show_workspaces: true,
-            show_battery: true,
+            show_media: true,
+            show_clock: true,
+            show_reminders_badge: true,
+            show_network: true,
+            show_audio: true,
+            show_brightness: true,
             show_cpu: true,
             show_memory: true,
-            show_audio: true,
-            show_network: true,
-            show_brightness: true,
-            show_media: true,
+            show_storage: true,
+            show_battery: true,
             show_bluetooth: true,
+            show_wallpaper: true,
+            show_theme: true,
+            show_reminders_btn: true,
+            show_screenshot: true,
+            show_clipboard: true,
+            show_notifications: true,
+            show_control_center: true,
+            show_terminal: true,
+            show_power: true,
         }
     }
 }
@@ -149,5 +188,20 @@ impl MsuiConfig {
             return Some(path);
         }
         None
+    }
+
+    pub fn save_to_path<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let content = toml::to_string_pretty(self)?;
+        if let Some(parent) = path.as_ref().parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, content)?;
+        Ok(())
+    }
+
+    pub fn save_to_default_path(&self) -> Result<()> {
+        let path = Self::default_config_path()
+            .ok_or_else(|| anyhow::anyhow!("Could not determine default config path"))?;
+        self.save_to_path(path)
     }
 }

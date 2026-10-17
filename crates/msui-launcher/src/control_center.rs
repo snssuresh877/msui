@@ -1,20 +1,32 @@
 use iced::keyboard::key::Named;
 use iced::keyboard::{Event as KeyboardEvent, Key};
-use iced::widget::{button, column, container, row, slider, space, text};
+use iced::widget::{button, column, container, row, scrollable, slider, space, text};
 use iced::{Alignment, Element, Event, Font, Length, Task as Command, event};
 use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize, Margin};
 use iced_exwlshell::settings::LayerShellSettings;
 use msui_core::{
-    AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BluetoothInfo, BluetoothManager,
+    AudioInfo, AudioMonitor, BarConfig, BatteryInfo, BatteryMonitor, BluetoothInfo, BluetoothManager,
     BrightnessInfo, BrightnessMonitor, DndManager, MsuiConfig, NetworkInfo, NetworkMonitor,
     NightLightManager, PowerProfile, PowerProfileManager, SystemControl, SystemMetrics,
     SystemMonitor, ThemeManager,
 };
 
-pub fn run_control_center(_config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
-    let width = 380;
+static INITIAL_TAB: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn run_control_center(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
+    INITIAL_TAB.store(false, std::sync::atomic::Ordering::Relaxed);
+    run_control_center_internal(config)
+}
+
+pub fn run_control_center_topbar(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
+    INITIAL_TAB.store(true, std::sync::atomic::Ordering::Relaxed);
+    run_control_center_internal(config)
+}
+
+fn run_control_center_internal(_config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
+    let width = 400;
     let height = 765;
 
     application(
@@ -45,7 +57,124 @@ pub fn run_control_center(_config: MsuiConfig) -> Result<(), iced_exwlshell::Err
     .run()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ControlCenterTab {
+    QuickSettings,
+    TopBarSettings,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BarModule {
+    Brand,
+    Workspaces,
+    Media,
+    Clock,
+    RemindersBadge,
+    Network,
+    Audio,
+    Brightness,
+    Cpu,
+    Memory,
+    Storage,
+    Battery,
+    Bluetooth,
+    Wallpaper,
+    Theme,
+    RemindersBtn,
+    Screenshot,
+    Clipboard,
+    Notifications,
+    ControlCenter,
+    Terminal,
+    Power,
+}
+
+impl BarModule {
+    pub fn details(&self) -> (&'static str, &'static str, &'static str) {
+        match self {
+            BarModule::Brand => ("msUI Launcher & Apps", "󰣇", "Leftmost logo button opening app drawer"),
+            BarModule::Workspaces => ("Workspace Pager", "󰮯", "Hyprland workspace indicators (1..8)"),
+            BarModule::Clock => ("Clock & Calendar", "󰃭", "Current time and date display"),
+            BarModule::RemindersBadge => ("Timer Countdown Badge", "󰥔", "Live ticking badge for active reminders"),
+            BarModule::Network => ("Wi-Fi & Network Status", "󰤨", "Wi-Fi signal strength and SSID pill"),
+            BarModule::Audio => ("Audio Volume Controls", "󰕾", "Volume percentage, mute, and steppers"),
+            BarModule::Brightness => ("Backlight Brightness", "󰃠", "Display brightness percentage and steppers"),
+            BarModule::Cpu => ("CPU Load Telemetry", "", "Real-time processor load percentage"),
+            BarModule::Memory => ("RAM Memory Telemetry", "󰍛", "Active and total RAM consumption"),
+            BarModule::Storage => ("Removable USB Indicator", "󱊞", "Shows up when USB flash drive is attached"),
+            BarModule::Battery => ("Battery & Power Status", "󰁹", "Battery percentage and charging state"),
+            BarModule::Bluetooth => ("Bluetooth Status", "󰂯", "Bluetooth power state and active devices"),
+            BarModule::Media => ("Media Player Widget", "󰝚", "Now Playing music title & play/pause"),
+            BarModule::Wallpaper => ("Wallpaper Picker", "󰸉", "Quick wallpaper cycle and selector button"),
+            BarModule::Theme => ("Theme Switcher", "󰔎", "Catppuccin, Nord, Dracula theme picker"),
+            BarModule::RemindersBtn => ("Reminders & Timers", "󰥔", "Quick countdown timer manager button"),
+            BarModule::Screenshot => ("Screenshot Tool", "󰄀", "One-click screen capture button"),
+            BarModule::Clipboard => ("Clipboard History", "󰅍", "Clipboard manager with search"),
+            BarModule::Notifications => ("Notification Bell", "󰂚", "Notification center and unread counter"),
+            BarModule::ControlCenter => ("Quick Settings Trigger", "󰒓", "Status bar shortcut to open Control Center"),
+            BarModule::Terminal => ("Terminal Launcher", "󰞷", "Quick terminal emulator shortcut"),
+            BarModule::Power => ("Session / Power Menu", "󰐥", "System lock, sleep, reboot, and poweroff"),
+        }
+    }
+
+    pub fn is_enabled(&self, cfg: &BarConfig) -> bool {
+        match self {
+            BarModule::Brand => cfg.show_brand,
+            BarModule::Workspaces => cfg.show_workspaces,
+            BarModule::Media => cfg.show_media,
+            BarModule::Clock => cfg.show_clock,
+            BarModule::RemindersBadge => cfg.show_reminders_badge,
+            BarModule::Network => cfg.show_network,
+            BarModule::Audio => cfg.show_audio,
+            BarModule::Brightness => cfg.show_brightness,
+            BarModule::Cpu => cfg.show_cpu,
+            BarModule::Memory => cfg.show_memory,
+            BarModule::Storage => cfg.show_storage,
+            BarModule::Battery => cfg.show_battery,
+            BarModule::Bluetooth => cfg.show_bluetooth,
+            BarModule::Wallpaper => cfg.show_wallpaper,
+            BarModule::Theme => cfg.show_theme,
+            BarModule::RemindersBtn => cfg.show_reminders_btn,
+            BarModule::Screenshot => cfg.show_screenshot,
+            BarModule::Clipboard => cfg.show_clipboard,
+            BarModule::Notifications => cfg.show_notifications,
+            BarModule::ControlCenter => cfg.show_control_center,
+            BarModule::Terminal => cfg.show_terminal,
+            BarModule::Power => cfg.show_power,
+        }
+    }
+
+    pub fn toggle(&self, cfg: &mut BarConfig) {
+        match self {
+            BarModule::Brand => cfg.show_brand = !cfg.show_brand,
+            BarModule::Workspaces => cfg.show_workspaces = !cfg.show_workspaces,
+            BarModule::Media => cfg.show_media = !cfg.show_media,
+            BarModule::Clock => cfg.show_clock = !cfg.show_clock,
+            BarModule::RemindersBadge => cfg.show_reminders_badge = !cfg.show_reminders_badge,
+            BarModule::Network => cfg.show_network = !cfg.show_network,
+            BarModule::Audio => cfg.show_audio = !cfg.show_audio,
+            BarModule::Brightness => cfg.show_brightness = !cfg.show_brightness,
+            BarModule::Cpu => cfg.show_cpu = !cfg.show_cpu,
+            BarModule::Memory => cfg.show_memory = !cfg.show_memory,
+            BarModule::Storage => cfg.show_storage = !cfg.show_storage,
+            BarModule::Battery => cfg.show_battery = !cfg.show_battery,
+            BarModule::Bluetooth => cfg.show_bluetooth = !cfg.show_bluetooth,
+            BarModule::Wallpaper => cfg.show_wallpaper = !cfg.show_wallpaper,
+            BarModule::Theme => cfg.show_theme = !cfg.show_theme,
+            BarModule::RemindersBtn => cfg.show_reminders_btn = !cfg.show_reminders_btn,
+            BarModule::Screenshot => cfg.show_screenshot = !cfg.show_screenshot,
+            BarModule::Clipboard => cfg.show_clipboard = !cfg.show_clipboard,
+            BarModule::Notifications => cfg.show_notifications = !cfg.show_notifications,
+            BarModule::ControlCenter => cfg.show_control_center = !cfg.show_control_center,
+            BarModule::Terminal => cfg.show_terminal = !cfg.show_terminal,
+            BarModule::Power => cfg.show_power = !cfg.show_power,
+        }
+    }
+}
+
 pub struct ControlCenter {
+    active_tab: ControlCenterTab,
+    config: MsuiConfig,
     battery_info: Option<BatteryInfo>,
     system_metrics: SystemMetrics,
     audio_info: AudioInfo,
@@ -61,6 +190,10 @@ pub struct ControlCenter {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    SwitchTab(ControlCenterTab),
+    ToggleBarModule(BarModule),
+    EnableAllBarModules,
+    MinimalBarPreset,
     ToggleWifi,
     OpenWifiManager,
     ToggleBluetooth,
@@ -96,6 +229,7 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 
 impl ControlCenter {
     pub fn new() -> (Self, Command<Message>) {
+        let config = MsuiConfig::load_or_default();
         let battery_info = BatteryMonitor::new().read();
         let mut sys_mon = SystemMonitor::new();
         let system_metrics = sys_mon.sample();
@@ -109,7 +243,15 @@ impl ControlCenter {
         let night_light_temp = NightLightManager::get_temperature();
         let active_profile = PowerProfileManager::get_profile();
 
+        let active_tab = if INITIAL_TAB.load(std::sync::atomic::Ordering::Relaxed) {
+            ControlCenterTab::TopBarSettings
+        } else {
+            ControlCenterTab::QuickSettings
+        };
+
         let state = Self {
+            active_tab,
+            config,
             battery_info,
             system_metrics,
             audio_info,
@@ -136,6 +278,65 @@ impl ControlCenter {
 
     pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
+            Message::SwitchTab(tab) => {
+                self.active_tab = tab;
+            }
+            Message::ToggleBarModule(module) => {
+                module.toggle(&mut self.config.bar);
+                let _ = self.config.save_to_default_path();
+            }
+            Message::EnableAllBarModules => {
+                let b = &mut self.config.bar;
+                b.show_brand = true;
+                b.show_workspaces = true;
+                b.show_media = true;
+                b.show_clock = true;
+                b.show_reminders_badge = true;
+                b.show_network = true;
+                b.show_audio = true;
+                b.show_brightness = true;
+                b.show_cpu = true;
+                b.show_memory = true;
+                b.show_storage = true;
+                b.show_battery = true;
+                b.show_bluetooth = true;
+                b.show_wallpaper = true;
+                b.show_theme = true;
+                b.show_reminders_btn = true;
+                b.show_screenshot = true;
+                b.show_clipboard = true;
+                b.show_notifications = true;
+                b.show_control_center = true;
+                b.show_terminal = true;
+                b.show_power = true;
+                let _ = self.config.save_to_default_path();
+            }
+            Message::MinimalBarPreset => {
+                let b = &mut self.config.bar;
+                b.show_brand = true;
+                b.show_workspaces = true;
+                b.show_media = false;
+                b.show_clock = true;
+                b.show_reminders_badge = true;
+                b.show_network = true;
+                b.show_audio = true;
+                b.show_brightness = false;
+                b.show_cpu = false;
+                b.show_memory = false;
+                b.show_storage = false;
+                b.show_battery = true;
+                b.show_bluetooth = false;
+                b.show_wallpaper = false;
+                b.show_theme = false;
+                b.show_reminders_btn = false;
+                b.show_screenshot = false;
+                b.show_clipboard = false;
+                b.show_notifications = true;
+                b.show_control_center = true;
+                b.show_terminal = false;
+                b.show_power = true;
+                let _ = self.config.save_to_default_path();
+            }
             Message::ToggleWifi => {
                 let turn_on = !self.network_info.is_connected && self.network_info.ssid.is_none();
                 let _ = std::process::Command::new("nmcli")
@@ -261,8 +462,8 @@ impl ControlCenter {
 
     pub fn view(&self) -> Element<'_, Message> {
         // --- 1. Header: Quick Settings Title, Battery & Close ---
-        let title_icon = text("󰒓").size(18);
-        let title_label = text("Quick Settings").size(15);
+        let title_icon = text(if self.active_tab == ControlCenterTab::QuickSettings { "󰒓" } else { "󰍹" }).size(18);
+        let title_label = text(if self.active_tab == ControlCenterTab::QuickSettings { "Quick Settings" } else { "Top Bar Settings" }).size(15);
         let header_left = row![title_icon, title_label].spacing(8).align_y(Alignment::Center);
 
         let close_btn = button(text("✕").size(12))
@@ -272,6 +473,128 @@ impl ControlCenter {
 
         let header = row![header_left, space().width(Length::Fill), close_btn]
             .align_y(Alignment::Center);
+
+        // --- Tab Navigation Switcher ---
+        let is_quick = self.active_tab == ControlCenterTab::QuickSettings;
+        let tab_quick = button(
+            row![text("󰒓").size(14), text("Quick Settings").size(12)]
+                .spacing(6)
+                .align_y(Alignment::Center),
+        )
+        .width(Length::FillPortion(1))
+        .style(if is_quick { button::primary } else { button::secondary })
+        .padding([6, 10])
+        .on_press(Message::SwitchTab(ControlCenterTab::QuickSettings));
+
+        let tab_bar = button(
+            row![text("󰍹").size(14), text("Top Bar").size(12)]
+                .spacing(6)
+                .align_y(Alignment::Center),
+        )
+        .width(Length::FillPortion(1))
+        .style(if !is_quick { button::primary } else { button::secondary })
+        .padding([6, 10])
+        .on_press(Message::SwitchTab(ControlCenterTab::TopBarSettings));
+
+        let tab_row = row![tab_quick, tab_bar].spacing(8);
+
+        // --- Top Bar Settings View ---
+        if self.active_tab == ControlCenterTab::TopBarSettings {
+            let btn_enable_all = button(
+                row![text("󰐥").size(12), text("Enable All").size(11)]
+                    .spacing(4)
+                    .align_y(Alignment::Center),
+            )
+            .style(button::secondary)
+            .padding([4, 8])
+            .on_press(Message::EnableAllBarModules);
+
+            let btn_minimal = button(
+                row![text("󰅖").size(12), text("Minimal Bar").size(11)]
+                    .spacing(4)
+                    .align_y(Alignment::Center),
+            )
+            .style(button::secondary)
+            .padding([4, 8])
+            .on_press(Message::MinimalBarPreset);
+
+            let presets_row = row![
+                column![
+                    text("Top Bar Modules").size(13),
+                    text("Toggle widgets & shortcuts on bar").size(10),
+                ].spacing(1),
+                space().width(Length::Fill),
+                btn_enable_all,
+                btn_minimal,
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center);
+
+            let mut modules_col = column![].spacing(6);
+
+            // Group 1: Brand & Navigation
+            modules_col = modules_col.push(text("Brand & Navigation").size(11));
+            for m in [
+                BarModule::Brand,
+                BarModule::Workspaces,
+                BarModule::Clock,
+                BarModule::RemindersBadge,
+            ] {
+                modules_col = modules_col.push(view_module_row(m, &self.config.bar));
+            }
+
+            // Group 2: Hardware & Connectivity
+            modules_col = modules_col.push(space().height(4));
+            modules_col = modules_col.push(text("Hardware & Connectivity").size(11));
+            for m in [
+                BarModule::Network,
+                BarModule::Audio,
+                BarModule::Brightness,
+                BarModule::Cpu,
+                BarModule::Memory,
+                BarModule::Storage,
+                BarModule::Battery,
+                BarModule::Bluetooth,
+            ] {
+                modules_col = modules_col.push(view_module_row(m, &self.config.bar));
+            }
+
+            // Group 3: Shortcuts & Utilities
+            modules_col = modules_col.push(space().height(4));
+            modules_col = modules_col.push(text("Shortcuts & Utilities").size(11));
+            for m in [
+                BarModule::Media,
+                BarModule::Wallpaper,
+                BarModule::Theme,
+                BarModule::RemindersBtn,
+                BarModule::Screenshot,
+                BarModule::Clipboard,
+                BarModule::Notifications,
+                BarModule::ControlCenter,
+                BarModule::Terminal,
+                BarModule::Power,
+            ] {
+                modules_col = modules_col.push(view_module_row(m, &self.config.bar));
+            }
+
+            let scrollable_content = scrollable(modules_col)
+                .height(Length::Fill)
+                .width(Length::Fill);
+
+            let content = column![
+                header,
+                tab_row,
+                presets_row,
+                scrollable_content,
+            ]
+            .spacing(10)
+            .padding(14);
+
+            return container(content)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into();
+        }
 
         // --- 2. Quick Toggles Grid (2 columns x 3 rows) ---
         // Pill 1: Wi-Fi
@@ -613,6 +936,7 @@ impl ControlCenter {
 
         let content = column![
             header,
+            tab_row,
             toggles_box,
             sliders_card,
             profiles_card,
@@ -627,6 +951,35 @@ impl ControlCenter {
             .height(Length::Fill)
             .into()
     }
+}
+
+fn view_module_row(module: BarModule, cfg: &BarConfig) -> Element<'_, Message> {
+    let enabled = module.is_enabled(cfg);
+    let (name, icon, desc) = module.details();
+
+    let icon_txt = text(icon).size(15);
+    let title_txt = text(name).size(12);
+    let desc_txt = text(desc).size(10);
+
+    let info_col = column![title_txt, desc_txt].spacing(1);
+    let left_group = row![icon_txt, info_col].spacing(8).align_y(Alignment::Center);
+
+    let toggle_btn = button(
+        text(if enabled { "󰄴 ON" } else { "󰅖 OFF" }).size(11),
+    )
+    .style(if enabled { button::primary } else { button::secondary })
+    .padding([4, 10])
+    .on_press(Message::ToggleBarModule(module));
+
+    let item_row = row![left_group, space().width(Length::Fill), toggle_btn]
+        .spacing(6)
+        .align_y(Alignment::Center);
+
+    container(item_row)
+        .style(container::bordered_box)
+        .padding([6, 10])
+        .width(Length::Fill)
+        .into()
 }
 
 fn spawn_detached(cmd: &str) {
