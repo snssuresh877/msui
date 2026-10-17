@@ -1,5 +1,6 @@
-use msui_core::MsuiConfig;
+use msui_core::{MsuiConfig, ThemeManager, WallpaperManager};
 use std::env;
+use std::path::Path;
 
 fn main() -> anyhow::Result<()> {
     // Initialize tracing
@@ -60,6 +61,75 @@ fn main() -> anyhow::Result<()> {
                 tracing::error!("msUI Notification Center exited with error: {:?}", e);
             }
         }
+        "bluetooth" | "bt" => {
+            tracing::info!("Starting msUI Bluetooth Manager...");
+            if let Err(e) = msui_launcher::run_bluetooth_menu() {
+                tracing::error!("msUI Bluetooth Menu exited with error: {:?}", e);
+            }
+        }
+        "wallpaper" | "wall" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            match sub {
+                Some("cycle" | "next") => {
+                    if let Some(next) = WallpaperManager::cycle() {
+                        println!("Wallpaper switched to: {}", next.display());
+                    }
+                }
+                Some("random") => {
+                    if let Some(rand) = WallpaperManager::random() {
+                        println!("Random wallpaper set: {}", rand.display());
+                    }
+                }
+                Some("set") => {
+                    if let Some(path_str) = args.get(3) {
+                        let path = Path::new(path_str);
+                        if WallpaperManager::set(path) {
+                            println!("Wallpaper set to: {}", path.display());
+                        } else {
+                            eprintln!("File does not exist: {}", path.display());
+                            std::process::exit(1);
+                        }
+                    } else {
+                        eprintln!("Usage: msui wallpaper set <path>");
+                        std::process::exit(1);
+                    }
+                }
+                Some("current") => {
+                    if let Some(cur) = WallpaperManager::get_current() {
+                        println!("{}", cur.display());
+                    } else {
+                        println!("No wallpaper currently set.");
+                    }
+                }
+                _ => {
+                    tracing::info!("Starting msUI Wallpaper Selector...");
+                    if let Err(e) = msui_launcher::run_wallpaper_menu() {
+                        tracing::error!("msUI Wallpaper Menu exited with error: {:?}", e);
+                    }
+                }
+            }
+        }
+        "bg" | "wallpaper-daemon" => {
+            tracing::info!("Starting msUI Native Wallpaper Background Daemon...");
+            if let Err(e) = msui_launcher::run_wallpaper_daemon() {
+                tracing::error!("msUI Wallpaper Daemon exited with error: {:?}", e);
+            }
+        }
+        "theme" | "themes" => {
+            if let Some(name) = args.get(2) {
+                if ThemeManager::set_theme(name) {
+                    println!("Theme switched to: {}", name);
+                } else {
+                    eprintln!("Failed to set theme: {}", name);
+                    std::process::exit(1);
+                }
+            } else {
+                tracing::info!("Starting msUI Theme Selector...");
+                if let Err(e) = msui_launcher::run_theme_menu() {
+                    tracing::error!("msUI Theme Menu exited with error: {:?}", e);
+                }
+            }
+        }
         "--help" | "-h" | "help" => {
             print_help();
         }
@@ -86,6 +156,10 @@ fn print_help() {
           launcher      Open the Spotlight application launcher overlay\n  \
           clipboard     Open the Spotlight clipboard history manager\n  \
           notifications Open the Notification Center history overlay\n  \
+          bluetooth     Open the Bluetooth settings manager overlay\n  \
+          wallpaper     Open the Wallpaper changer overlay (or 'cycle', 'random', 'set <path>')\n  \
+          bg            Run the native Wayland background wallpaper daemon\n  \
+          theme         Open the Theme switcher overlay (or pass theme name)\n  \
           power         Open the Power & Session menu overlay\n  \
           toast         Run the Toast notifications overlay\n  \
           help          Display this help message\n\n\

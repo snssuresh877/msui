@@ -1,11 +1,19 @@
+pub mod bluetooth_menu;
 pub mod clipboard_menu;
 pub mod launcher;
 pub mod notification_center;
 pub mod power_menu;
+pub mod theme_menu;
 pub mod toast;
+pub mod wallpaper_daemon;
+pub mod wallpaper_menu;
 
+pub use bluetooth_menu::run_bluetooth_menu;
 pub use clipboard_menu::run_clipboard_menu;
 pub use launcher::run_launcher;
 pub use notification_center::run_notification_center;
 pub use power_menu::run_power_menu;
+pub use theme_menu::run_theme_menu;
 pub use toast::run_toast_window;
+pub use wallpaper_daemon::run_wallpaper_daemon;
+pub use wallpaper_menu::run_wallpaper_menu;

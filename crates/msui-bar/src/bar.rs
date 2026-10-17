@@ -1,6 +1,6 @@
 use chrono::Local;
 use iced::widget::{button, container, row, space, text};
-use iced::{Alignment, Element, Font, Length, Task as Command, Theme};
+use iced::{Alignment, Element, Font, Length, Task as Command};
 use iced_exwlshell::get_wlconnection;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, Layer, LayerSize};
@@ -14,9 +14,9 @@ use iced_wayland_subscriber::workspace::{
 };
 
 use msui_core::{
-    AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BrightnessInfo, BrightnessMonitor,
-    MediaInfo, MediaMonitor, MsuiConfig, NetworkInfo, NetworkMonitor, SystemControl,
-    SystemMetrics, SystemMonitor,
+    AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BluetoothInfo, BluetoothManager,
+    BrightnessInfo, BrightnessMonitor, MediaInfo, MediaMonitor, MsuiConfig, NetworkInfo,
+    NetworkMonitor, SystemControl, SystemMetrics, SystemMonitor, ThemeManager,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -45,7 +45,7 @@ pub fn run_bar(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
         Bar::update,
         Bar::view,
     )
-    .theme(Theme::CatppuccinMocha)
+    .theme(ThemeManager::current_theme())
     .default_font(Font {
         family: iced::font::Family::Name("JetBrainsMono Nerd Font"),
         ..Font::DEFAULT
@@ -83,6 +83,7 @@ pub struct Bar {
     media_info: Option<MediaInfo>,
     hyprland_workspace: i32,
     notification_count: usize,
+    bluetooth_info: BluetoothInfo,
 }
 
 #[to_layer_message]
@@ -98,6 +99,9 @@ pub enum Message {
     OpenPowerMenu,
     OpenClipboard,
     OpenNotifications,
+    OpenBluetooth,
+    OpenWallpaper,
+    OpenTheme,
     TakeScreenshot,
     ToggleMute,
     VolumeUp,
@@ -122,6 +126,7 @@ impl Bar {
         let network_info = NetworkMonitor::read();
         let brightness_info = brightness_monitor.read();
         let media_info = MediaMonitor::read();
+        let bluetooth_info = BluetoothManager::read();
 
         Self {
             config,
@@ -140,6 +145,7 @@ impl Bar {
             media_info,
             hyprland_workspace: 1,
             notification_count: 0,
+            bluetooth_info,
         }
     }
 
@@ -204,6 +210,9 @@ impl Bar {
                 if self.config.bar.show_media {
                     self.media_info = MediaMonitor::read();
                 }
+                if self.config.bar.show_bluetooth {
+                    self.bluetooth_info = BluetoothManager::read();
+                }
                 self.notification_count = {
                     let mut store = msui_core::GLOBAL_NOTIFICATIONS.lock().unwrap();
                     store.load();
@@ -235,6 +244,21 @@ impl Bar {
                 let bin = std::env::current_exe()
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
                 spawn_detached(std::process::Command::new(bin).arg("notifications"));
+            }
+            Message::OpenBluetooth => {
+                let bin = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                spawn_detached(std::process::Command::new(bin).arg("bluetooth"));
+            }
+            Message::OpenWallpaper => {
+                let bin = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                spawn_detached(std::process::Command::new(bin).arg("wallpaper"));
+            }
+            Message::OpenTheme => {
+                let bin = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                spawn_detached(std::process::Command::new(bin).arg("theme"));
             }
             Message::OpenTerminal => {
                 let term = &self.config.launcher.terminal;
@@ -496,6 +520,42 @@ impl Bar {
                 right_row = right_row.push(text(bat_str).size(13));
             }
         }
+
+        // Bluetooth Widget
+        if self.config.bar.show_bluetooth {
+            let is_connected = self.bluetooth_info.is_powered && !self.bluetooth_info.connected_devices.is_empty();
+            let (bt_icon, bt_label) = if !self.bluetooth_info.is_powered {
+                ("󰂲", " Off".to_string())
+            } else if let Some(first_conn) = self.bluetooth_info.connected_devices.first() {
+                let name = if first_conn.name.len() > 10 {
+                    format!(" {}", &first_conn.name[..10])
+                } else {
+                    format!(" {}", &first_conn.name)
+                };
+                ("󰂱", name)
+            } else {
+                ("󰂯", "".to_string())
+            };
+            let bt_btn = button(text(format!(" {}{} ", bt_icon, bt_label)).size(12))
+                .style(if is_connected { button::primary } else { button::secondary })
+                .padding([2, 6])
+                .on_press(Message::OpenBluetooth);
+            right_row = right_row.push(bt_btn);
+        }
+
+        // Wallpaper Picker Shortcut
+        let wall_btn = button(text(" 󰸉 ").size(13))
+            .style(button::secondary)
+            .padding([2, 6])
+            .on_press(Message::OpenWallpaper);
+        right_row = right_row.push(wall_btn);
+
+        // Theme Selector Shortcut
+        let theme_btn = button(text(" 󰔎 ").size(13))
+            .style(button::secondary)
+            .padding([2, 6])
+            .on_press(Message::OpenTheme);
+        right_row = right_row.push(theme_btn);
 
         // Quick Screenshot Shortcut
         let shot_btn = button(text(" 󰄀 ").size(13))

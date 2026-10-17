@@ -40,6 +40,8 @@ pub struct BarConfig {
     pub show_brightness: bool,
     #[serde(default = "default_true")]
     pub show_media: bool,
+    #[serde(default = "default_true")]
+    pub show_bluetooth: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,6 +101,7 @@ impl Default for BarConfig {
             show_network: true,
             show_brightness: true,
             show_media: true,
+            show_bluetooth: true,
         }
     }
 }

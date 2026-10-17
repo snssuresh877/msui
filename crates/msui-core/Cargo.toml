@@ -17,3 +17,4 @@ freedesktop-desktop-entry.workspace = true
 xdg.workspace = true
 zbus.workspace = true
 chrono.workspace = true
+iced.workspace = true

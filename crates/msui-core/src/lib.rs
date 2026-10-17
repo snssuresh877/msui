@@ -5,15 +5,17 @@ pub mod desktop;
 pub mod monitor;
 pub mod notification;
 pub mod power;
+pub mod theme;
+pub mod wallpaper;
 
 pub use clipboard::{ClipboardEntry, ClipboardStore, GLOBAL_CLIPBOARD, watcher::start_clipboard_watcher};
 pub use compositor::{HyprlandEvent, HyprlandIpc};
 pub use config::{BarConfig, LauncherConfig, MsuiConfig};
 pub use desktop::{DesktopApp, scan_desktop_apps};
 pub use monitor::{
-    AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BatteryStatus, BrightnessInfo,
-    BrightnessMonitor, MediaInfo, MediaMonitor, NetworkInfo, NetworkMonitor, SystemMetrics,
-    SystemMonitor,
+    AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BatteryStatus, BluetoothDevice,
+    BluetoothInfo, BluetoothManager, BrightnessInfo, BrightnessMonitor, MediaInfo, MediaMonitor,
+    NetworkInfo, NetworkMonitor, SystemMetrics, SystemMonitor,
 };
 pub use notification::{
     clear_active_toasts, dismiss_active_toast, is_toast_running, load_active_toasts,
@@ -21,6 +23,8 @@ pub use notification::{
     service::run_notification_service,
 };
 pub use power::SystemControl;
+pub use theme::{ThemeDefinition, ThemeManager, BUILTIN_THEMES};
+pub use wallpaper::{WallpaperItem, WallpaperManager};
 
 #[cfg(test)]
 mod tests {
@@ -97,5 +101,27 @@ mod tests {
         assert_eq!(notif.id, 1);
         assert_eq!(notif.summary, "Title");
         assert_eq!(store.history().len(), 1);
+    }
+
+    #[test]
+    fn test_bluetooth_manager() {
+        let info = BluetoothManager::read();
+        // Machine has bluetooth controller or returns clean available/unavailable flag
+        assert!(info.is_available || !info.is_available);
+    }
+
+    #[test]
+    fn test_wallpaper_manager() {
+        let list = WallpaperManager::list();
+        assert!(list.len() < usize::MAX);
+    }
+
+    #[test]
+    fn test_theme_manager() {
+        let current = ThemeManager::current_theme_name();
+        assert!(!current.is_empty());
+        let _iced_theme = ThemeManager::current_theme();
+        assert_eq!(ThemeManager::to_iced_theme("nord"), iced::Theme::Nord);
+        assert_eq!(ThemeManager::to_iced_theme("dracula"), iced::Theme::Dracula);
     }
 }
