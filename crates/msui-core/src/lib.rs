@@ -5,6 +5,7 @@ pub mod desktop;
 pub mod monitor;
 pub mod notification;
 pub mod power;
+pub mod reminder;
 pub mod theme;
 pub mod wallpaper;
 
@@ -25,6 +26,7 @@ pub use notification::{
     service::run_notification_service,
 };
 pub use power::SystemControl;
+pub use reminder::{ReminderItem, ReminderManager};
 pub use theme::{ThemeDefinition, ThemeManager, BUILTIN_THEMES};
 pub use wallpaper::{WallpaperItem, WallpaperManager};
 
@@ -225,5 +227,22 @@ mod tests {
         assert!(partitions.iter().any(|p| p.mount_point.as_deref() == Some("/")));
         // Test removable device check
         let _ = StorageManager::has_removable_devices();
+    }
+
+    #[test]
+    fn test_reminder_manager() {
+        let title = "Unit Test Reminder";
+        let item = ReminderManager::add_reminder(title, 10);
+        assert_eq!(item.title, title);
+        assert_eq!(item.total_duration_secs, 600);
+
+        let active = ReminderManager::list_active();
+        assert!(active.iter().any(|r| r.id == item.id));
+
+        let next = ReminderManager::next_expiring();
+        assert!(next.is_some());
+
+        let removed = ReminderManager::remove_reminder(item.id);
+        assert!(removed);
     }
 }

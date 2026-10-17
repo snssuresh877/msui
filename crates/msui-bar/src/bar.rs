@@ -16,7 +16,8 @@ use iced_wayland_subscriber::workspace::{
 use msui_core::{
     AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BluetoothInfo, BluetoothManager,
     BrightnessInfo, BrightnessMonitor, MediaInfo, MediaMonitor, MsuiConfig, NetworkInfo,
-    NetworkMonitor, StorageManager, SystemControl, SystemMetrics, SystemMonitor, ThemeManager,
+    NetworkMonitor, ReminderItem, ReminderManager, StorageManager, SystemControl, SystemMetrics,
+    SystemMonitor, ThemeManager,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -85,6 +86,7 @@ pub struct Bar {
     notification_count: usize,
     bluetooth_info: BluetoothInfo,
     has_removable_drive: bool,
+    next_reminder: Option<ReminderItem>,
 }
 
 #[to_layer_message]
@@ -111,6 +113,7 @@ pub enum Message {
     OpenDisplay,
     OpenMedia,
     OpenStorage,
+    OpenReminders,
     TakeScreenshot,
     ToggleMute,
     VolumeUp,
@@ -156,6 +159,7 @@ impl Bar {
             notification_count: 0,
             bluetooth_info,
             has_removable_drive: StorageManager::has_removable_devices(),
+            next_reminder: ReminderManager::next_expiring(),
         }
     }
 
@@ -202,6 +206,8 @@ impl Bar {
         match message {
             Message::ClockTick => {
                 self.current_time = Local::now().format(&self.config.bar.time_format).to_string();
+                ReminderManager::check_and_trigger_expired();
+                self.next_reminder = ReminderManager::next_expiring();
             }
             Message::MetricsTick => {
                 self.system_metrics = self.system_monitor.sample();
@@ -310,6 +316,11 @@ impl Bar {
                 let bin = std::env::current_exe()
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
                 spawn_detached(std::process::Command::new(bin).arg("storage"));
+            }
+            Message::OpenReminders => {
+                let bin = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                spawn_detached(std::process::Command::new(bin).arg("reminder"));
             }
             Message::OpenTerminal => {
                 let term = &self.config.launcher.terminal;
@@ -443,11 +454,29 @@ impl Bar {
             }
         }
 
-        // --- Center Section: Clock & Date ---
+        // --- Center Section: Clock & Date + Live Reminder Countdown ---
         let clock_widget = button(text(format!("󰃭 {}", &self.current_time)).size(14))
             .style(button::text)
             .padding([2, 6])
             .on_press(Message::OpenControlCenter);
+
+        let center_group = if let Some(reminder) = &self.next_reminder {
+            let rem_str = reminder.formatted_remaining();
+            let is_expired = reminder.is_expired();
+            let label = if is_expired {
+                format!(" 󰥔 Expired: {} ", reminder.title)
+            } else {
+                format!(" 󰥔 {} ({}) ", rem_str, reminder.title)
+            };
+            let timer_pill = button(text(label).size(12))
+                .style(if is_expired { button::danger } else { button::primary })
+                .padding([2, 8])
+                .on_press(Message::OpenReminders);
+
+            row![clock_widget, timer_pill].spacing(8).align_y(Alignment::Center)
+        } else {
+            row![clock_widget].align_y(Alignment::Center)
+        };
 
         // --- Right Section: Hardware & Status ---
         let mut right_row = row![].spacing(6).align_y(Alignment::Center);
@@ -648,11 +677,19 @@ impl Bar {
         right_row = right_row.push(wall_btn);
 
         // Theme Selector Shortcut
+        // Theme Selector Shortcut
         let theme_btn = button(text(" 󰔎 ").size(13))
             .style(button::secondary)
             .padding([2, 6])
             .on_press(Message::OpenTheme);
         right_row = right_row.push(theme_btn);
+
+        // Reminders & Timers Shortcut
+        let rem_btn = button(text(" 󰥔 ").size(13))
+            .style(button::secondary)
+            .padding([2, 6])
+            .on_press(Message::OpenReminders);
+        right_row = right_row.push(rem_btn);
 
         // Quick Screenshot Shortcut
         let shot_btn = button(text(" 󰄀 ").size(13))
@@ -709,7 +746,7 @@ impl Bar {
         let bar_content = row![
             left_row,
             space().width(Length::Fill),
-            clock_widget,
+            center_group,
             space().width(Length::Fill),
             right_row,
         ]

@@ -15,7 +15,7 @@ use msui_core::{
 
 pub fn run_control_center(_config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
     let width = 380;
-    let height = 710;
+    let height = 765;
 
     application(
         ControlCenter::new,
@@ -69,6 +69,8 @@ pub enum Message {
     OpenDisplayManager,
     OpenStorageManager,
     OpenMediaManager,
+    OpenReminderManager,
+    OpenAppDrawer,
     ToggleDnd,
     ToggleMute,
     VolumeChanged(u8),
@@ -169,6 +171,14 @@ impl ControlCenter {
             }
             Message::OpenMediaManager => {
                 spawn_detached("media");
+                std::process::exit(0);
+            }
+            Message::OpenReminderManager => {
+                spawn_detached("reminder");
+                std::process::exit(0);
+            }
+            Message::OpenAppDrawer => {
+                spawn_detached("drawer");
                 std::process::exit(0);
             }
             Message::ToggleDnd => {
@@ -438,7 +448,43 @@ impl ControlCenter {
 
         let row_toggles_4 = row![storage_btn, media_btn].spacing(8);
 
-        let toggles_box = column![row_toggles_1, row_toggles_2, row_toggles_3, row_toggles_4].spacing(8);
+        // Pill 9: Reminders & Countdown Timers Shortcut
+        let reminder_btn = button(
+            row![
+                text("󰥔").size(16),
+                column![
+                    text("Timers").size(12),
+                    text("Reminders & Alarms").size(10),
+                ].spacing(1),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center)
+        )
+        .width(Length::FillPortion(1))
+        .style(button::secondary)
+        .padding([8, 10])
+        .on_press(Message::OpenReminderManager);
+
+        // Pill 10: App Drawer & Window Switcher Shortcut
+        let apps_btn = button(
+            row![
+                text("󱓞").size(16),
+                column![
+                    text("Apps & Tasks").size(12),
+                    text("Window Switcher").size(10),
+                ].spacing(1),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center)
+        )
+        .width(Length::FillPortion(1))
+        .style(button::secondary)
+        .padding([8, 10])
+        .on_press(Message::OpenAppDrawer);
+
+        let row_toggles_5 = row![reminder_btn, apps_btn].spacing(8);
+
+        let toggles_box = column![row_toggles_1, row_toggles_2, row_toggles_3, row_toggles_4, row_toggles_5].spacing(8);
 
         // --- 3. Sliders Section: Volume & Brightness ---
         let vol_val = self.audio_info.volume_percent.min(100);

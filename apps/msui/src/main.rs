@@ -1,4 +1,4 @@
-use msui_core::{MsuiConfig, ThemeManager, WallpaperManager};
+use msui_core::{MsuiConfig, ReminderManager, ThemeManager, WallpaperManager};
 use std::env;
 use std::path::Path;
 
@@ -675,6 +675,85 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        "reminder" | "reminders" | "timer" | "timers" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            match sub {
+                Some("list") => {
+                    let reminders = ReminderManager::list_active();
+                    if reminders.is_empty() {
+                        println!("No active reminders or timers.");
+                    } else {
+                        println!("{:<38} {:<24} {:<12} {:<12} {:<10}", "ID", "TITLE", "REMAINING", "DURATION", "STATUS");
+                        println!("{}", "-".repeat(98));
+                        for r in reminders {
+                            let total_mins = r.total_duration_secs / 60;
+                            let dur_str = format!("{}m", total_mins);
+                            let status = if r.is_expired() { "EXPIRED" } else { "RUNNING" };
+                            println!("{:<38} {:<24} {:<12} {:<12} {:<10}", r.id, r.title, r.formatted_remaining(), dur_str, status);
+                        }
+                    }
+                }
+                Some("add") => {
+                    let arg3 = args.get(3).map(|s| s.as_str());
+                    let arg4 = args.get(4).map(|s| s.as_str());
+
+                    let (title, mins) = match (arg3, arg4) {
+                        (Some(a), Some(b)) => {
+                            if let Ok(m) = b.parse::<u64>() {
+                                (a.to_string(), m)
+                            } else if let Ok(m) = a.parse::<u64>() {
+                                (b.to_string(), m)
+                            } else {
+                                (format!("{} {}", a, b), 10)
+                            }
+                        }
+                        (Some(a), None) => {
+                            if let Ok(m) = a.parse::<u64>() {
+                                ("Timer".to_string(), m)
+                            } else {
+                                (a.to_string(), 10)
+                            }
+                        }
+                        _ => {
+                            eprintln!("Usage: msui reminder add <title> [minutes]");
+                            std::process::exit(1);
+                        }
+                    };
+
+                    let item = ReminderManager::add_reminder(&title, mins);
+                    println!("Created timer: \"{}\" for {} min(s) [ID: {}]", item.title, mins, item.id);
+                }
+                Some("delete" | "remove" | "rm") => {
+                    if let Some(id_str) = args.get(3) {
+                        if let Ok(id) = id_str.parse::<u64>() {
+                            if ReminderManager::remove_reminder(id) {
+                                println!("Deleted reminder: {}", id);
+                            } else {
+                                eprintln!("Reminder ID not found: {}", id);
+                                std::process::exit(1);
+                            }
+                        } else {
+                            eprintln!("Invalid reminder ID: {}", id_str);
+                            std::process::exit(1);
+                        }
+                    } else {
+                        eprintln!("Usage: msui reminder delete <id>");
+                        std::process::exit(1);
+                    }
+                }
+                Some("clear") => {
+                    ReminderManager::clear_all();
+                    println!("Cleared all reminders and timers.");
+                }
+                _ => {
+                    tracing::info!("Starting msUI Reminders & Countdown Timer Manager...");
+                    let config = MsuiConfig::load_or_default();
+                    if let Err(e) = msui_launcher::run_reminder_menu(config) {
+                        tracing::error!("msUI Reminder Menu exited with error: {:?}", e);
+                    }
+                }
+            }
+        }
         "--help" | "-h" | "help" => {
             print_help();
         }
@@ -701,6 +780,7 @@ fn print_help() {
           drawer        Open the App Drawer & Window Task Switcher overlay (or 'list', 'focus <addr>', 'close <addr>')\n  \
           control       Open the Unified Quick Settings Control Center popup (or 'dnd <on|off|toggle>')\n  \
           media         Open the MPRIS Now Playing Controller overlay (or 'status', 'play-pause', 'next', 'prev', 'seek <secs>')\n  \
+          reminder      Open the Reminders & Countdown Timer Manager overlay (or 'list', 'add <title> <mins>', 'delete <id>', 'clear')\n  \
           osd           Trigger volume or screen brightness OSD HUD (e.g. 'osd volume up', 'osd brightness down')\n  \
           launcher      Open the Spotlight application launcher overlay\n  \
           clipboard     Open the Spotlight clipboard history manager\n  \
