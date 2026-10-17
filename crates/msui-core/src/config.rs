@@ -32,6 +32,14 @@ pub struct BarConfig {
     pub show_cpu: bool,
     #[serde(default = "default_true")]
     pub show_memory: bool,
+    #[serde(default = "default_true")]
+    pub show_audio: bool,
+    #[serde(default = "default_true")]
+    pub show_network: bool,
+    #[serde(default = "default_true")]
+    pub show_brightness: bool,
+    #[serde(default = "default_true")]
+    pub show_media: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,6 +95,10 @@ impl Default for BarConfig {
             show_battery: true,
             show_cpu: true,
             show_memory: true,
+            show_audio: true,
+            show_network: true,
+            show_brightness: true,
+            show_media: true,
         }
     }
 }

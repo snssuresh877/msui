@@ -2,11 +2,17 @@ pub mod compositor;
 pub mod config;
 pub mod desktop;
 pub mod monitor;
+pub mod power;
 
 pub use compositor::{HyprlandEvent, HyprlandIpc};
 pub use config::{BarConfig, LauncherConfig, MsuiConfig};
 pub use desktop::{DesktopApp, scan_desktop_apps};
-pub use monitor::{BatteryInfo, BatteryMonitor, BatteryStatus, SystemMetrics, SystemMonitor};
+pub use monitor::{
+    AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BatteryStatus, BrightnessInfo,
+    BrightnessMonitor, MediaInfo, MediaMonitor, NetworkInfo, NetworkMonitor, SystemMetrics,
+    SystemMonitor,
+};
+pub use power::SystemControl;
 
 #[cfg(test)]
 mod tests {
@@ -31,8 +37,26 @@ mod tests {
     #[test]
     fn test_battery_monitor() {
         let mon = BatteryMonitor::new();
-        // May be None on desktops or Some on laptops
         let _ = mon.read();
+    }
+
+    #[test]
+    fn test_audio_monitor() {
+        let audio = AudioMonitor::read();
+        assert!(audio.volume_percent <= 150);
+    }
+
+    #[test]
+    fn test_network_monitor() {
+        let net = NetworkMonitor::read();
+        // Either connected or disconnected
+        let _ = net.is_connected;
+    }
+
+    #[test]
+    fn test_brightness_monitor() {
+        let b = BrightnessMonitor::new();
+        let _ = b.read();
     }
 
     #[test]

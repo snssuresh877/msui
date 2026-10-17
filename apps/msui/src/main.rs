@@ -23,6 +23,12 @@ fn main() -> anyhow::Result<()> {
                 tracing::error!("msUI Launcher exited with error: {:?}", e);
             }
         }
+        "power" => {
+            tracing::info!("Starting msUI Power & Session Menu...");
+            if let Err(e) = msui_launcher::run_power_menu() {
+                tracing::error!("msUI Power Menu exited with error: {:?}", e);
+            }
+        }
         "--help" | "-h" | "help" => {
             print_help();
         }
@@ -47,6 +53,7 @@ fn print_help() {
         COMMANDS:\n  \
           bar         Run the Wayland Layer Shell status bar (default)\n  \
           launcher    Open the Spotlight application launcher overlay\n  \
+          power       Open the Power & Session menu overlay\n  \
           help        Display this help message\n\n\
         OPTIONS:\n  \
           -h, --help     Print help information\n  \
