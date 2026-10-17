@@ -16,7 +16,7 @@ use iced_wayland_subscriber::workspace::{
 use msui_core::{
     AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BluetoothInfo, BluetoothManager,
     BrightnessInfo, BrightnessMonitor, MediaInfo, MediaMonitor, MsuiConfig, NetworkInfo,
-    NetworkMonitor, SystemControl, SystemMetrics, SystemMonitor, ThemeManager,
+    NetworkMonitor, StorageManager, SystemControl, SystemMetrics, SystemMonitor, ThemeManager,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -84,6 +84,7 @@ pub struct Bar {
     hyprland_workspace: i32,
     notification_count: usize,
     bluetooth_info: BluetoothInfo,
+    has_removable_drive: bool,
 }
 
 #[to_layer_message]
@@ -109,6 +110,7 @@ pub enum Message {
     OpenBattery,
     OpenDisplay,
     OpenMedia,
+    OpenStorage,
     TakeScreenshot,
     ToggleMute,
     VolumeUp,
@@ -153,6 +155,7 @@ impl Bar {
             hyprland_workspace: 1,
             notification_count: 0,
             bluetooth_info,
+            has_removable_drive: StorageManager::has_removable_devices(),
         }
     }
 
@@ -220,6 +223,7 @@ impl Bar {
                 if self.config.bar.show_bluetooth {
                     self.bluetooth_info = BluetoothManager::read();
                 }
+                self.has_removable_drive = StorageManager::has_removable_devices();
                 self.notification_count = {
                     let mut store = msui_core::GLOBAL_NOTIFICATIONS.lock().unwrap();
                     store.load();
@@ -301,6 +305,11 @@ impl Bar {
                 let bin = std::env::current_exe()
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
                 spawn_detached(std::process::Command::new(bin).arg("media"));
+            }
+            Message::OpenStorage => {
+                let bin = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                spawn_detached(std::process::Command::new(bin).arg("storage"));
             }
             Message::OpenTerminal => {
                 let term = &self.config.launcher.terminal;
@@ -564,7 +573,20 @@ impl Bar {
                 self.system_metrics.ram_used_mb as f32 / 1024.0,
                 self.system_metrics.ram_total_mb as f32 / 1024.0
             );
-            right_row = right_row.push(text(ram_str).size(13));
+            let ram_btn = button(text(ram_str).size(13))
+                .style(button::text)
+                .padding([2, 4])
+                .on_press(Message::OpenStorage);
+            right_row = right_row.push(ram_btn);
+        }
+
+        // Removable USB Storage indicator
+        if self.has_removable_drive {
+            let usb_btn = button(text(" 󱊞 USB ").size(12))
+                .style(button::primary)
+                .padding([2, 6])
+                .on_press(Message::OpenStorage);
+            right_row = right_row.push(usb_btn);
         }
 
         // Battery

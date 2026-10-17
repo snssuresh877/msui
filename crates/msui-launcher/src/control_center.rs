@@ -15,7 +15,7 @@ use msui_core::{
 
 pub fn run_control_center(_config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
     let width = 380;
-    let height = 660;
+    let height = 710;
 
     application(
         ControlCenter::new,
@@ -67,6 +67,8 @@ pub enum Message {
     OpenBluetoothManager,
     ToggleNightLight,
     OpenDisplayManager,
+    OpenStorageManager,
+    OpenMediaManager,
     ToggleDnd,
     ToggleMute,
     VolumeChanged(u8),
@@ -159,6 +161,14 @@ impl ControlCenter {
             }
             Message::OpenDisplayManager => {
                 spawn_detached("display");
+                std::process::exit(0);
+            }
+            Message::OpenStorageManager => {
+                spawn_detached("storage");
+                std::process::exit(0);
+            }
+            Message::OpenMediaManager => {
+                spawn_detached("media");
                 std::process::exit(0);
             }
             Message::ToggleDnd => {
@@ -392,7 +402,43 @@ impl ControlCenter {
 
         let row_toggles_3 = row![mute_btn, disp_btn].spacing(8);
 
-        let toggles_box = column![row_toggles_1, row_toggles_2, row_toggles_3].spacing(8);
+        // Pill 7: Storage & Removable Drives Shortcut
+        let storage_btn = button(
+            row![
+                text("󰋊").size(16),
+                column![
+                    text("Storage").size(12),
+                    text("Drives & USB").size(10),
+                ].spacing(1),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center)
+        )
+        .width(Length::FillPortion(1))
+        .style(button::secondary)
+        .padding([8, 10])
+        .on_press(Message::OpenStorageManager);
+
+        // Pill 8: Media Player Shortcut
+        let media_btn = button(
+            row![
+                text("󰝚").size(16),
+                column![
+                    text("Media").size(12),
+                    text("MPRIS Player").size(10),
+                ].spacing(1),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center)
+        )
+        .width(Length::FillPortion(1))
+        .style(button::secondary)
+        .padding([8, 10])
+        .on_press(Message::OpenMediaManager);
+
+        let row_toggles_4 = row![storage_btn, media_btn].spacing(8);
+
+        let toggles_box = column![row_toggles_1, row_toggles_2, row_toggles_3, row_toggles_4].spacing(8);
 
         // --- 3. Sliders Section: Volume & Brightness ---
         let vol_val = self.audio_info.volume_percent.min(100);

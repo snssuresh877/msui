@@ -16,7 +16,8 @@ pub use monitor::{
     AudioDevice, AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BatteryStatus, BluetoothDevice,
     BluetoothInfo, BluetoothManager, BrightnessInfo, BrightnessMonitor, DisplayManager, DisplayMonitorInfo,
     MediaInfo, MediaMonitor, NetworkInfo, NetworkMonitor, NightLightConfig, NightLightManager,
-    OsdKind, OsdManager, OsdState, PowerProfile, PowerProfileManager, SystemMetrics, SystemMonitor, WifiNetwork,
+    OsdKind, OsdManager, OsdState, PowerProfile, PowerProfileManager, StorageManager, StoragePartition,
+    SystemMetrics, SystemMonitor, WifiNetwork,
 };
 pub use notification::{
     clear_active_toasts, dismiss_active_toast, is_toast_running, load_active_toasts,
@@ -215,5 +216,14 @@ mod tests {
         assert_eq!(monitors[0].height, 1080);
         assert_eq!(monitors[0].refresh_rate, 60.0);
         assert_eq!(monitors[0].available_modes.len(), 2);
+    }
+
+    #[test]
+    fn test_storage_manager() {
+        let partitions = StorageManager::list_partitions();
+        // Machine should have root / partition
+        assert!(partitions.iter().any(|p| p.mount_point.as_deref() == Some("/")));
+        // Test removable device check
+        let _ = StorageManager::has_removable_devices();
     }
 }

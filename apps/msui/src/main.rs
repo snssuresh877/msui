@@ -599,6 +599,82 @@ fn main() -> anyhow::Result<()> {
                 tracing::error!("msUI OSD Window exited with error: {:?}", e);
             }
         }
+        "storage" | "disks" | "drives" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            match sub {
+                Some("list") => {
+                    let partitions = msui_core::StorageManager::list_partitions();
+                    if partitions.is_empty() {
+                        println!("No storage devices found.");
+                    } else {
+                        println!("{:<14} {:<20} {:<8} {:<10} {:<10} {:<6} {:<24}", "DEVICE", "MOUNTPOINT", "FSTYPE", "USED", "TOTAL", "USE%", "LABEL/MODEL");
+                        println!("{}", "-".repeat(95));
+                        for p in partitions {
+                            let mp = p.mount_point.as_deref().unwrap_or("-");
+                            let fs = p.fs_type.as_deref().unwrap_or("-");
+                            let used = p.used_formatted();
+                            let total = p.total_formatted();
+                            let pct = format!("{}%", p.use_percent);
+                            let title = if p.is_removable {
+                                format!("[USB] {}", p.drive_model.as_deref().unwrap_or("Removable"))
+                            } else {
+                                p.label.as_deref().or(p.drive_model.as_deref()).unwrap_or("-").to_string()
+                            };
+                            println!("{:<14} {:<20} {:<8} {:<10} {:<10} {:<6} {:<24}", p.device_path, mp, fs, used, total, pct, title);
+                        }
+                    }
+                }
+                Some("mount") => {
+                    if let Some(dev) = args.get(3) {
+                        match msui_core::StorageManager::mount_device(dev) {
+                            Ok(mp) => println!("Mounted {} at {}", dev, mp),
+                            Err(e) => {
+                                eprintln!("Error mounting {}: {}", dev, e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Usage: msui storage mount <device>");
+                        std::process::exit(1);
+                    }
+                }
+                Some("unmount") => {
+                    if let Some(dev) = args.get(3) {
+                        match msui_core::StorageManager::unmount_device(dev) {
+                            Ok(()) => println!("Unmounted {}", dev),
+                            Err(e) => {
+                                eprintln!("Error unmounting {}: {}", dev, e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Usage: msui storage unmount <device>");
+                        std::process::exit(1);
+                    }
+                }
+                Some("eject") => {
+                    if let Some(dev) = args.get(3) {
+                        match msui_core::StorageManager::eject_drive(dev) {
+                            Ok(()) => println!("Safely powered off / ejected {}", dev),
+                            Err(e) => {
+                                eprintln!("Error ejecting {}: {}", dev, e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Usage: msui storage eject <device>");
+                        std::process::exit(1);
+                    }
+                }
+                _ => {
+                    tracing::info!("Starting msUI Disk Storage & Removable Drives Manager...");
+                    let config = MsuiConfig::load_or_default();
+                    if let Err(e) = msui_launcher::run_storage_menu(config) {
+                        tracing::error!("msUI Storage Menu exited with error: {:?}", e);
+                    }
+                }
+            }
+        }
         "--help" | "-h" | "help" => {
             print_help();
         }
@@ -629,6 +705,7 @@ fn print_help() {
           launcher      Open the Spotlight application launcher overlay\n  \
           clipboard     Open the Spotlight clipboard history manager\n  \
           notifications Open the Notification Center history overlay\n  \
+          storage       Open the Disk Storage & Removable Drives overlay (or 'list', 'mount <dev>', 'unmount <dev>', 'eject <dev>')\n  \
           audio         Open the Audio Mixer & Device Switcher overlay (or 'sinks', 'sources', 'set-sink', 'set-source', 'volume', 'mute')\n  \
           battery       Open the Battery Diagnostics & Power Profile Manager (or 'status', 'profile set')\n  \
           display       Open the Display, Multi-Monitor & Night Light manager overlay (or 'list', 'scale', 'rotate', 'nightlight')\n  \
