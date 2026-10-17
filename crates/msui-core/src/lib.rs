@@ -1,9 +1,12 @@
+pub mod clipboard;
 pub mod compositor;
 pub mod config;
 pub mod desktop;
 pub mod monitor;
+pub mod notification;
 pub mod power;
 
+pub use clipboard::{ClipboardEntry, ClipboardStore, GLOBAL_CLIPBOARD, watcher::start_clipboard_watcher};
 pub use compositor::{HyprlandEvent, HyprlandIpc};
 pub use config::{BarConfig, LauncherConfig, MsuiConfig};
 pub use desktop::{DesktopApp, scan_desktop_apps};
@@ -11,6 +14,11 @@ pub use monitor::{
     AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BatteryStatus, BrightnessInfo,
     BrightnessMonitor, MediaInfo, MediaMonitor, NetworkInfo, NetworkMonitor, SystemMetrics,
     SystemMonitor,
+};
+pub use notification::{
+    clear_active_toasts, dismiss_active_toast, is_toast_running, load_active_toasts,
+    record_toast_pid, remove_toast_pid, GLOBAL_NOTIFICATIONS, Notification, NotificationStore,
+    service::run_notification_service,
 };
 pub use power::SystemControl;
 
@@ -49,7 +57,6 @@ mod tests {
     #[test]
     fn test_network_monitor() {
         let net = NetworkMonitor::read();
-        // Either connected or disconnected
         let _ = net.is_connected;
     }
 
@@ -67,5 +74,28 @@ mod tests {
             HyprlandEvent::WorkspaceChanged(id) => assert_eq!(id, 3),
             _ => panic!("Expected WorkspaceChanged"),
         }
+    }
+
+    #[test]
+    fn test_clipboard_store() {
+        let mut store = ClipboardStore::new_in_memory();
+        let added = store.add("Hello World Test".into());
+        assert!(added);
+        assert_eq!(store.entries().len(), 1);
+        assert_eq!(store.entries()[0].text, "Hello World Test");
+
+        // Consecutive duplicate test
+        let dup = store.add("Hello World Test".into());
+        assert!(!dup);
+        assert_eq!(store.entries().len(), 1);
+    }
+
+    #[test]
+    fn test_notification_store() {
+        let mut store = NotificationStore::new_in_memory();
+        let notif = store.add("TestApp".into(), None, "Title".into(), "Body".into(), vec![], 5000);
+        assert_eq!(notif.id, 1);
+        assert_eq!(notif.summary, "Title");
+        assert_eq!(store.history().len(), 1);
     }
 }

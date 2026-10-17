@@ -1,0 +1,211 @@
+use iced::widget::{button, column, container, row, space, text};
+use iced::{Alignment, Element, Font, Length, Task as Command, Theme};
+use iced_exwlshell::actions::ExwlShellCustomActionWithId;
+use iced_exwlshell::layershell::application;
+use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize, Margin};
+use iced_exwlshell::settings::LayerShellSettings;
+use msui_core::{
+    clear_active_toasts, dismiss_active_toast, load_active_toasts, record_toast_pid,
+    remove_toast_pid, Notification,
+};
+use std::time::Duration;
+
+pub fn run_toast_window() -> Result<(), iced_exwlshell::Error> {
+    record_toast_pid(std::process::id());
+
+    let res = application(
+        ToastApp::new,
+        ToastApp::namespace,
+        ToastApp::update,
+        ToastApp::view,
+    )
+    .theme(Theme::CatppuccinMocha)
+    .default_font(Font {
+        family: iced::font::Family::Name("JetBrainsMono Nerd Font"),
+        ..Font::DEFAULT
+    })
+    .layer_settings(LayerShellSettings {
+        size: LayerSize::px(380, 520),
+        anchor: Anchor::Top | Anchor::Right,
+        layer: Layer::Overlay,
+        margin: Margin {
+            top: 40, // Below top bar
+            right: 16,
+            bottom: 0,
+            left: 0,
+        },
+        keyboard_interactivity: KeyboardInteractivity::None,
+        ..Default::default()
+    })
+    .subscription(ToastApp::subscription)
+    .run();
+
+    remove_toast_pid();
+    clear_active_toasts();
+    res
+}
+
+pub struct ToastApp {
+    last_seen_id: u32,
+    active_notifications: Vec<(Notification, u32)>, // (Notification, ticks_remaining)
+}
+
+#[derive(Debug, Clone)]
+pub enum Message {
+    Dismiss(u32),
+    Tick,
+}
+
+impl TryInto<ExwlShellCustomActionWithId> for Message {
+    type Error = Self;
+    fn try_into(self) -> Result<ExwlShellCustomActionWithId, Self::Error> {
+        Err(self)
+    }
+}
+
+impl ToastApp {
+    fn new() -> (Self, Command<Message>) {
+        let loaded = load_active_toasts();
+        if loaded.is_empty() {
+            remove_toast_pid();
+            std::process::exit(0);
+        }
+
+        let mut max_id = 0;
+        let mut active = Vec::new();
+        for notif in loaded {
+            if notif.id > max_id {
+                max_id = notif.id;
+            }
+            // 400ms tick per step
+            let ticks = ((notif.expire_timeout_ms / 400).max(10)) as u32;
+            active.push((notif, ticks));
+        }
+
+        (
+            Self {
+                last_seen_id: max_id,
+                active_notifications: active,
+            },
+            Command::none(),
+        )
+    }
+
+    fn namespace() -> String {
+        String::from("msui-toast")
+    }
+
+    fn subscription(&self) -> iced::Subscription<Message> {
+        iced::time::every(Duration::from_millis(400)).map(|_| Message::Tick)
+    }
+
+    fn update(&mut self, message: Message) -> Command<Message> {
+        match message {
+            Message::Dismiss(id) => {
+                self.active_notifications.retain(|(n, _)| n.id != id);
+                dismiss_active_toast(id);
+                if self.active_notifications.is_empty() {
+                    remove_toast_pid();
+                    clear_active_toasts();
+                    std::process::exit(0);
+                }
+            }
+            Message::Tick => {
+                // Poll active toasts file for newly arrived notifications
+                let file_toasts = load_active_toasts();
+                for notif in file_toasts {
+                    let already_present = self.active_notifications.iter().any(|(n, _)| n.id == notif.id);
+                    if !already_present {
+                        if notif.id > self.last_seen_id {
+                            self.last_seen_id = notif.id;
+                        }
+                        let ticks = ((notif.expire_timeout_ms / 400).max(10)) as u32;
+                        self.active_notifications.insert(0, (notif, ticks));
+                    }
+                }
+
+                if self.active_notifications.len() > 6 {
+                    self.active_notifications.truncate(6);
+                }
+
+                // Decrement ticks for active toasts
+                let mut expired = Vec::new();
+                for (notif, remaining) in &mut self.active_notifications {
+                    if *remaining <= 1 {
+                        expired.push(notif.id);
+                    } else {
+                        *remaining -= 1;
+                    }
+                }
+
+                for id in expired {
+                    self.active_notifications.retain(|(n, _)| n.id != id);
+                    dismiss_active_toast(id);
+                }
+
+                if self.active_notifications.is_empty() {
+                    remove_toast_pid();
+                    clear_active_toasts();
+                    std::process::exit(0);
+                }
+            }
+        }
+        Command::none()
+    }
+
+    fn view(&self) -> Element<'_, Message> {
+        if self.active_notifications.is_empty() {
+            return space().width(Length::Shrink).height(Length::Shrink).into();
+        }
+
+        let mut cards = column![].spacing(8);
+
+        for (notif, _) in &self.active_notifications {
+            let app_title = text(format!("󰂚 {}", &notif.app_name))
+                .size(11);
+            let time_str = text(&notif.timestamp).size(11);
+
+            let close_btn = button(text("✕").size(12))
+                .style(button::text)
+                .padding([1, 6])
+                .on_press(Message::Dismiss(notif.id));
+
+            let card_header = row![
+                app_title,
+                space().width(Length::Fill),
+                time_str,
+                close_btn,
+            ]
+            .align_y(Alignment::Center);
+
+            let summary = text(&notif.summary).size(14);
+            let body = text(&notif.body).size(12);
+
+            let mut card_content = column![card_header, summary, body].spacing(4);
+
+            if !notif.actions.is_empty() {
+                let mut action_row = row![].spacing(6);
+                for action in &notif.actions {
+                    action_row = action_row.push(
+                        button(text(action).size(11))
+                            .style(button::secondary)
+                            .padding([2, 8]),
+                    );
+                }
+                card_content = card_content.push(action_row);
+            }
+
+            let card = container(card_content)
+                .width(Length::Fill)
+                .padding(12)
+                .style(container::bordered_box);
+
+            cards = cards.push(card);
+        }
+
+        container(cards)
+            .width(Length::Fill)
+            .padding(6)
+            .into()
+    }
+}

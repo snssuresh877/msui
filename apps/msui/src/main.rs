@@ -10,10 +10,35 @@ fn main() -> anyhow::Result<()> {
 
     match command {
         "bar" => {
-            tracing::info!("Starting msUI Top Bar...");
+            tracing::info!("Starting msUI Top Bar & Background Services...");
+            // Start background Tokio runtime for clipboard watcher and D-Bus notifications
+            std::thread::spawn(|| {
+                let rt = tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()
+                    .expect("Failed to create Tokio runtime");
+
+                rt.block_on(async {
+                    tokio::spawn(msui_core::start_clipboard_watcher());
+                    let _ = msui_core::run_notification_service().await;
+                });
+            });
+
             let config = MsuiConfig::load_or_default();
             if let Err(e) = msui_bar::run_bar(config) {
                 tracing::error!("msUI Bar exited with error: {:?}", e);
+            }
+        }
+        "clipboard" => {
+            tracing::info!("Starting msUI Clipboard History Manager...");
+            if let Err(e) = msui_launcher::run_clipboard_menu() {
+                tracing::error!("msUI Clipboard Menu exited with error: {:?}", e);
+            }
+        }
+        "toast" => {
+            tracing::info!("Starting msUI Toast Notification Window...");
+            if let Err(e) = msui_launcher::run_toast_window() {
+                tracing::error!("msUI Toast Window exited with error: {:?}", e);
             }
         }
         "launcher" => {
@@ -27,6 +52,12 @@ fn main() -> anyhow::Result<()> {
             tracing::info!("Starting msUI Power & Session Menu...");
             if let Err(e) = msui_launcher::run_power_menu() {
                 tracing::error!("msUI Power Menu exited with error: {:?}", e);
+            }
+        }
+        "notifications" | "notifs" => {
+            tracing::info!("Starting msUI Notification Center...");
+            if let Err(e) = msui_launcher::run_notification_center() {
+                tracing::error!("msUI Notification Center exited with error: {:?}", e);
             }
         }
         "--help" | "-h" | "help" => {
@@ -51,10 +82,13 @@ fn print_help() {
         USAGE:\n  \
           msui [COMMAND]\n\n\
         COMMANDS:\n  \
-          bar         Run the Wayland Layer Shell status bar (default)\n  \
-          launcher    Open the Spotlight application launcher overlay\n  \
-          power       Open the Power & Session menu overlay\n  \
-          help        Display this help message\n\n\
+          bar           Run the Wayland Layer Shell status bar & background daemons (default)\n  \
+          launcher      Open the Spotlight application launcher overlay\n  \
+          clipboard     Open the Spotlight clipboard history manager\n  \
+          notifications Open the Notification Center history overlay\n  \
+          power         Open the Power & Session menu overlay\n  \
+          toast         Run the Toast notifications overlay\n  \
+          help          Display this help message\n\n\
         OPTIONS:\n  \
           -h, --help     Print help information\n  \
           -v, --version  Print version information"

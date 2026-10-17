@@ -82,6 +82,7 @@ pub struct Bar {
     brightness_info: Option<BrightnessInfo>,
     media_info: Option<MediaInfo>,
     hyprland_workspace: i32,
+    notification_count: usize,
 }
 
 #[to_layer_message]
@@ -95,6 +96,8 @@ pub enum Message {
     OpenLauncher,
     OpenTerminal,
     OpenPowerMenu,
+    OpenClipboard,
+    OpenNotifications,
     TakeScreenshot,
     ToggleMute,
     VolumeUp,
@@ -136,6 +139,7 @@ impl Bar {
             brightness_info,
             media_info,
             hyprland_workspace: 1,
+            notification_count: 0,
         }
     }
 
@@ -200,6 +204,11 @@ impl Bar {
                 if self.config.bar.show_media {
                     self.media_info = MediaMonitor::read();
                 }
+                self.notification_count = {
+                    let mut store = msui_core::GLOBAL_NOTIFICATIONS.lock().unwrap();
+                    store.load();
+                    store.history().len()
+                };
             }
             Message::WorkspacesUpdated(snapshot) => {
                 self.workspaces = Some(snapshot);
@@ -215,20 +224,26 @@ impl Bar {
             Message::OpenLauncher => {
                 let bin = std::env::current_exe()
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
-                let _ = std::process::Command::new(bin)
-                    .arg("launcher")
-                    .spawn();
+                spawn_detached(std::process::Command::new(bin).arg("launcher"));
+            }
+            Message::OpenClipboard => {
+                let bin = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                spawn_detached(std::process::Command::new(bin).arg("clipboard"));
+            }
+            Message::OpenNotifications => {
+                let bin = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                spawn_detached(std::process::Command::new(bin).arg("notifications"));
             }
             Message::OpenTerminal => {
                 let term = &self.config.launcher.terminal;
-                let _ = std::process::Command::new(term).spawn();
+                spawn_detached(&mut std::process::Command::new(term));
             }
             Message::OpenPowerMenu => {
                 let bin = std::env::current_exe()
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
-                let _ = std::process::Command::new(bin)
-                    .arg("power")
-                    .spawn();
+                spawn_detached(std::process::Command::new(bin).arg("power"));
             }
             Message::TakeScreenshot => {
                 SystemControl::screenshot();
@@ -489,6 +504,29 @@ impl Bar {
             .on_press(Message::TakeScreenshot);
         right_row = right_row.push(shot_btn);
 
+        // Clipboard History Shortcut
+        let clip_btn = button(text(" 󰅍 Clip ").size(12))
+            .style(button::secondary)
+            .padding([2, 6])
+            .on_press(Message::OpenClipboard);
+        right_row = right_row.push(clip_btn);
+
+        // Notification Bell Icon with Counter
+        let notif_label = if self.notification_count > 0 {
+            format!(" 󰂚 {} ", self.notification_count)
+        } else {
+            " 󰂚 ".into()
+        };
+        let notif_btn = button(text(notif_label).size(12))
+            .style(if self.notification_count > 0 {
+                button::primary
+            } else {
+                button::secondary
+            })
+            .padding([2, 6])
+            .on_press(Message::OpenNotifications);
+        right_row = right_row.push(notif_btn);
+
         // Terminal Shortcut
         let term_btn = button(text(" 󰞷 Term ").size(12))
             .style(button::secondary)
@@ -519,5 +557,13 @@ impl Bar {
             .width(Length::Fill)
             .height(Length::Fill)
             .into()
+    }
+}
+
+fn spawn_detached(cmd: &mut std::process::Command) {
+    if let Ok(mut child) = cmd.spawn() {
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
     }
 }
