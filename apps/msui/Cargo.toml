@@ -1,0 +1,15 @@
+[package]
+name = "msui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+msui-core.workspace = true
+msui-bar.workspace = true
+msui-launcher.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true

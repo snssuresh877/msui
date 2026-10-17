@@ -1,0 +1,15 @@
+[package]
+name = "msui-launcher"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+msui-core.workspace = true
+iced.workspace = true
+iced_runtime.workspace = true
+iced_exwlshell.workspace = true
+fuzzy-matcher.workspace = true
+tracing.workspace = true
+tokio.workspace = true

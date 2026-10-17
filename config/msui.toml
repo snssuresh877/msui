@@ -1,0 +1,21 @@
+# msUI Configuration File
+
+[bar]
+height = 32
+layer = "top"
+anchor = "top"
+time_format = "%a %b %d  %I:%M %p"
+battery_refresh_seconds = 5
+sysinfo_refresh_seconds = 2
+show_workspaces = true
+show_battery = true
+show_cpu = true
+show_memory = true
+
+[launcher]
+width = 680
+height = 420
+max_results = 8
+layer = "overlay"
+placeholder = "Search applications..."
+terminal = "alacritty"

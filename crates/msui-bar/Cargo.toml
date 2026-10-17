@@ -1,0 +1,16 @@
+[package]
+name = "msui-bar"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+msui-core.workspace = true
+iced.workspace = true
+iced_runtime.workspace = true
+iced_exwlshell.workspace = true
+iced_wayland_subscriber.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+tokio.workspace = true
