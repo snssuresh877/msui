@@ -13,7 +13,7 @@ pub use compositor::{HyprlandEvent, HyprlandIpc};
 pub use config::{BarConfig, LauncherConfig, MsuiConfig};
 pub use desktop::{DesktopApp, scan_desktop_apps};
 pub use monitor::{
-    AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BatteryStatus, BluetoothDevice,
+    AudioDevice, AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BatteryStatus, BluetoothDevice,
     BluetoothInfo, BluetoothManager, BrightnessInfo, BrightnessMonitor, MediaInfo, MediaMonitor,
     NetworkInfo, NetworkMonitor, SystemMetrics, SystemMonitor, WifiNetwork,
 };
@@ -129,5 +129,52 @@ mod tests {
     fn test_network_wifi_scan() {
         let networks = NetworkMonitor::scan_wifi();
         assert!(networks.len() < usize::MAX);
+    }
+
+    #[test]
+    fn test_audio_parse_json() {
+        let sample_sinks = r#"[
+            {
+                "index": 1,
+                "name": "alsa_output.pci.speaker",
+                "description": "Built-in Speaker",
+                "mute": false,
+                "volume": {
+                    "front-left": {"value": 32768, "value_percent": "50%"}
+                }
+            }
+        ]"#;
+        let sinks = AudioMonitor::parse_sinks_from_json(sample_sinks, Some("alsa_output.pci.speaker"));
+        assert_eq!(sinks.len(), 1);
+        assert_eq!(sinks[0].name, "alsa_output.pci.speaker");
+        assert_eq!(sinks[0].volume_percent, 50);
+        assert!(!sinks[0].is_muted);
+        assert!(sinks[0].is_default);
+        assert_eq!(sinks[0].icon, "󰓃");
+
+        let sample_sources = r#"[
+            {
+                "index": 2,
+                "name": "alsa_input.pci.mic",
+                "description": "Internal Microphone",
+                "mute": true,
+                "volume": {
+                    "front-left": {"value": 49152, "value_percent": "75%"}
+                }
+            },
+            {
+                "index": 3,
+                "name": "alsa_output.pci.speaker.monitor",
+                "description": "Monitor of Speaker",
+                "mute": false
+            }
+        ]"#;
+        let sources = AudioMonitor::parse_sources_from_json(sample_sources, Some("alsa_input.pci.mic"));
+        // Monitor should be filtered out
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0].name, "alsa_input.pci.mic");
+        assert_eq!(sources[0].volume_percent, 75);
+        assert!(sources[0].is_muted);
+        assert!(sources[0].is_default);
     }
 }

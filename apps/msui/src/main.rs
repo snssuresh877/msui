@@ -178,6 +178,73 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        "audio" | "mixer" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            match sub {
+                Some("sinks") => {
+                    let sinks = msui_core::AudioMonitor::list_sinks();
+                    println!("{:<4} {:<4} {:<6} {:<6} {:<32} {}", "USE", "IDX", "VOL", "MUTE", "NAME", "DESCRIPTION");
+                    println!("{}", "-".repeat(75));
+                    for s in sinks {
+                        let active = if s.is_default { "*" } else { " " };
+                        let mute = if s.is_muted { "yes" } else { "no" };
+                        println!("{:<4} {:<4} {:<6} {:<6} {:<32} {}", active, s.index, format!("{}%", s.volume_percent), mute, s.name, s.description);
+                    }
+                }
+                Some("sources") => {
+                    let sources = msui_core::AudioMonitor::list_sources();
+                    println!("{:<4} {:<4} {:<6} {:<6} {:<32} {}", "USE", "IDX", "VOL", "MUTE", "NAME", "DESCRIPTION");
+                    println!("{}", "-".repeat(75));
+                    for s in sources {
+                        let active = if s.is_default { "*" } else { " " };
+                        let mute = if s.is_muted { "yes" } else { "no" };
+                        println!("{:<4} {:<4} {:<6} {:<6} {:<32} {}", active, s.index, format!("{}%", s.volume_percent), mute, s.name, s.description);
+                    }
+                }
+                Some("set-sink") => {
+                    if let Some(name) = args.get(3) {
+                        msui_core::AudioMonitor::set_default_sink(name);
+                        println!("Default audio output set to: {}", name);
+                    } else {
+                        eprintln!("Usage: msui audio set-sink <name-or-index>");
+                        std::process::exit(1);
+                    }
+                }
+                Some("set-source") => {
+                    if let Some(name) = args.get(3) {
+                        msui_core::AudioMonitor::set_default_source(name);
+                        println!("Default audio input set to: {}", name);
+                    } else {
+                        eprintln!("Usage: msui audio set-source <name-or-index>");
+                        std::process::exit(1);
+                    }
+                }
+                Some("volume") => {
+                    if let Some(val_str) = args.get(3) {
+                        if let Ok(pct) = val_str.parse::<u8>() {
+                            msui_core::AudioMonitor::set_volume(pct);
+                            println!("Default audio volume set to: {}%", pct);
+                        } else {
+                            eprintln!("Invalid volume percentage: {}", val_str);
+                            std::process::exit(1);
+                        }
+                    } else {
+                        eprintln!("Usage: msui audio volume <0-100>");
+                        std::process::exit(1);
+                    }
+                }
+                Some("mute") => {
+                    msui_core::AudioMonitor::toggle_mute();
+                    println!("Toggled audio mute.");
+                }
+                _ => {
+                    tracing::info!("Starting msUI Audio Mixer & Device Manager...");
+                    if let Err(e) = msui_launcher::run_audio_menu() {
+                        tracing::error!("msUI Audio Menu exited with error: {:?}", e);
+                    }
+                }
+            }
+        }
         "--help" | "-h" | "help" => {
             print_help();
         }
@@ -204,6 +271,7 @@ fn print_help() {
           launcher      Open the Spotlight application launcher overlay\n  \
           clipboard     Open the Spotlight clipboard history manager\n  \
           notifications Open the Notification Center history overlay\n  \
+          audio         Open the Audio Mixer & Device Switcher overlay (or 'sinks', 'sources', 'set-sink', 'set-source', 'volume', 'mute')\n  \
           wifi          Open the Wi-Fi network manager overlay (or 'list', 'connect', 'disconnect')\n  \
           bluetooth     Open the Bluetooth settings manager overlay\n  \
           wallpaper     Open the Wallpaper changer overlay (or 'cycle', 'random', 'set <path>')\n  \

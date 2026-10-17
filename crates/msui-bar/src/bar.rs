@@ -103,6 +103,7 @@ pub enum Message {
     OpenBluetooth,
     OpenWallpaper,
     OpenTheme,
+    OpenAudio,
     TakeScreenshot,
     ToggleMute,
     VolumeUp,
@@ -265,6 +266,11 @@ impl Bar {
                 let bin = std::env::current_exe()
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
                 spawn_detached(std::process::Command::new(bin).arg("theme"));
+            }
+            Message::OpenAudio => {
+                let bin = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                spawn_detached(std::process::Command::new(bin).arg("audio"));
             }
             Message::OpenTerminal => {
                 let term = &self.config.launcher.terminal;
@@ -436,7 +442,7 @@ impl Bar {
         // Audio Volume with Mute and +/- controls
         if self.config.bar.show_audio {
             let vol_icon = if self.audio_info.is_muted {
-                "󰝟 Muted"
+                "󰝟"
             } else if self.audio_info.volume_percent > 66 {
                 ""
             } else if self.audio_info.volume_percent > 33 {
@@ -444,13 +450,8 @@ impl Bar {
             } else {
                 ""
             };
-            let vol_str = if self.audio_info.is_muted {
-                vol_icon.to_string()
-            } else {
-                format!("{vol_icon} {}%", self.audio_info.volume_percent)
-            };
 
-            let vol_btn = button(text(vol_str).size(13))
+            let mute_btn = button(text(vol_icon).size(13))
                 .style(if self.audio_info.is_muted {
                     button::danger
                 } else {
@@ -458,6 +459,17 @@ impl Bar {
                 })
                 .padding([2, 5])
                 .on_press(Message::ToggleMute);
+
+            let vol_text = if self.audio_info.is_muted {
+                "Muted".to_string()
+            } else {
+                format!("{}%", self.audio_info.volume_percent)
+            };
+
+            let vol_btn = button(text(vol_text).size(13))
+                .style(button::text)
+                .padding([2, 4])
+                .on_press(Message::OpenAudio);
 
             let vol_down = button(text("-").size(12))
                 .style(button::secondary)
@@ -468,7 +480,7 @@ impl Bar {
                 .padding([2, 6])
                 .on_press(Message::VolumeUp);
 
-            let audio_group = row![vol_btn, vol_down, vol_up].spacing(2).align_y(Alignment::Center);
+            let audio_group = row![mute_btn, vol_btn, vol_down, vol_up].spacing(2).align_y(Alignment::Center);
             right_row = right_row.push(audio_group);
         }
 

@@ -1,3 +1,4 @@
+pub mod audio_menu;
 pub mod bluetooth_menu;
 pub mod clipboard_menu;
 pub mod launcher;
@@ -9,6 +10,7 @@ pub mod wallpaper_daemon;
 pub mod wallpaper_menu;
 pub mod wifi_menu;
 
+pub use audio_menu::run_audio_menu;
 pub use bluetooth_menu::run_bluetooth_menu;
 pub use clipboard_menu::run_clipboard_menu;
 pub use launcher::run_launcher;
