@@ -1,6 +1,6 @@
 use chrono::Local;
 use iced::widget::{button, container, row, space, text};
-use iced::{Alignment, Element, Length, Task as Command};
+use iced::{Alignment, Element, Font, Length, Task as Command, Theme};
 use iced_exwlshell::get_wlconnection;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, Layer, LayerSize};
@@ -45,6 +45,11 @@ pub fn run_bar(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
         Bar::update,
         Bar::view,
     )
+    .theme(Theme::CatppuccinMocha)
+    .default_font(Font {
+        family: iced::font::Family::Name("JetBrainsMono Nerd Font"),
+        ..Font::DEFAULT
+    })
     .subscription(Bar::subscription)
     .wl_settings(ExWlSettings {
         layer_settings: LayerShellSettings {
@@ -262,8 +267,9 @@ impl Bar {
 
     fn view(&self) -> Element<'_, Message> {
         // --- Left Section: Launcher Button + Workspaces + Media ---
-        let brand_btn = button(text("  msUI  "))
+        let brand_btn = button(text(" 󰣇 msUI ").size(14))
             .style(button::primary)
+            .padding([4, 10])
             .on_press(Message::OpenLauncher);
 
         let mut left_row = row![brand_btn].spacing(8).align_y(Alignment::Center);
@@ -276,9 +282,9 @@ impl Bar {
                     let occupant = self.occupant(slot);
                     let is_active = occupant.map_or(false, |w| w.state.contains(State::Active));
                     let label = if is_active {
-                        format!(" [{slot}] ")
+                        format!("󰮯 {slot}")
                     } else {
-                        format!("  {slot}  ")
+                        format!("󰊠 {slot}")
                     };
 
                     let btn_style = if is_active {
@@ -292,61 +298,80 @@ impl Bar {
                         .map(|w| Message::ActivateWorkspace(w.id.clone()));
 
                     ws_row = ws_row.push(
-                        button(text(label))
+                        button(text(label).size(13))
                             .style(btn_style)
+                            .padding([3, 7])
                             .on_press_maybe(press),
                     );
                 }
             } else {
                 for slot in 1..=5 {
                     let is_active = slot == self.hyprland_workspace;
-                    let label = format!("  {slot}  ");
+                    let label = if is_active {
+                        format!("󰮯 {slot}")
+                    } else {
+                        format!("󰊠 {slot}")
+                    };
                     let btn_style = if is_active {
                         button::primary
                     } else {
                         button::secondary
                     };
-                    ws_row = ws_row.push(button(text(label)).style(btn_style));
+                    ws_row = ws_row.push(
+                        button(text(label).size(13))
+                            .style(btn_style)
+                            .padding([3, 7]),
+                    );
                 }
             }
             left_row = left_row.push(ws_row);
         }
 
-        // Media Widget (if playing or paused track exists)
+        // Media Widget (when playing or paused music exists)
         if self.config.bar.show_media {
             if let Some(media) = &self.media_info {
-                let symbol = if media.is_playing { "▶" } else { "⏸" };
-                let short_title = if media.title.len() > 24 {
-                    format!("{}...", &media.title[..21])
+                let symbol = if media.is_playing { "󰐊" } else { "󰏤" };
+                let short_title = if media.title.len() > 20 {
+                    format!("{}...", &media.title[..18])
                 } else {
                     media.title.clone()
                 };
-                let media_label = format!(" {symbol} {short_title} ");
-                let media_btn = button(text(media_label))
+                let media_label = format!(" 󰝚 {short_title} {symbol} ");
+                let media_btn = button(text(media_label).size(13))
                     .style(button::secondary)
+                    .padding([3, 8])
                     .on_press(Message::MediaPlayPause);
                 left_row = left_row.push(media_btn);
             }
         }
 
-        // --- Center Section: Clock ---
-        let clock_widget = text(&self.current_time).size(14);
+        // --- Center Section: Clock & Date ---
+        let clock_widget = text(format!("󰃭 {}", &self.current_time)).size(14);
 
         // --- Right Section: Hardware & Status ---
-        let mut right_row = row![].spacing(8).align_y(Alignment::Center);
+        let mut right_row = row![].spacing(6).align_y(Alignment::Center);
 
-        // Wi-Fi / Network Status
+        // Wi-Fi / Network Status with Signal Glyph
         if self.config.bar.show_network {
             let net_text = if self.network_info.is_connected {
+                let sig_icon = if self.network_info.signal_percent > 75 {
+                    "󰤨"
+                } else if self.network_info.signal_percent > 50 {
+                    "󰤥"
+                } else if self.network_info.signal_percent > 25 {
+                    "󰤢"
+                } else {
+                    "󰤟"
+                };
                 if let Some(ssid) = &self.network_info.ssid {
-                    format!("󰤨 {} ({}%)", ssid, self.network_info.signal_percent)
+                    format!("{sig_icon} {ssid} ({}%)", self.network_info.signal_percent)
                 } else if self.network_info.is_ethernet {
                     "󰈀 Eth".into()
                 } else {
                     "󰤨 Online".into()
                 }
             } else {
-                "󰤭 Disconnected".into()
+                "󰤭 Offline".into()
             };
             right_row = right_row.push(text(net_text).size(13));
         }
@@ -355,8 +380,12 @@ impl Bar {
         if self.config.bar.show_audio {
             let vol_icon = if self.audio_info.is_muted {
                 "󰝟 Muted"
-            } else {
+            } else if self.audio_info.volume_percent > 66 {
                 ""
+            } else if self.audio_info.volume_percent > 33 {
+                ""
+            } else {
+                ""
             };
             let vol_str = if self.audio_info.is_muted {
                 vol_icon.to_string()
@@ -370,13 +399,16 @@ impl Bar {
                 } else {
                     button::text
                 })
+                .padding([2, 5])
                 .on_press(Message::ToggleMute);
 
             let vol_down = button(text("-").size(12))
                 .style(button::secondary)
+                .padding([2, 6])
                 .on_press(Message::VolumeDown);
             let vol_up = button(text("+").size(12))
                 .style(button::secondary)
+                .padding([2, 6])
                 .on_press(Message::VolumeUp);
 
             let audio_group = row![vol_btn, vol_down, vol_up].spacing(2).align_y(Alignment::Center);
@@ -386,12 +418,21 @@ impl Bar {
         // Backlight Brightness with +/- controls
         if self.config.bar.show_brightness {
             if let Some(b) = &self.brightness_info {
-                let bright_str = format!("󰃠 {}%", b.percent);
+                let bright_icon = if b.percent > 70 {
+                    "󰃠"
+                } else if b.percent > 30 {
+                    "󰃟"
+                } else {
+                    "󰃞"
+                };
+                let bright_str = format!("{bright_icon} {}%", b.percent);
                 let bright_down = button(text("-").size(12))
                     .style(button::secondary)
+                    .padding([2, 6])
                     .on_press(Message::BrightnessDown);
                 let bright_up = button(text("+").size(12))
                     .style(button::secondary)
+                    .padding([2, 6])
                     .on_press(Message::BrightnessUp);
 
                 let bright_group = row![text(bright_str).size(13), bright_down, bright_up]
@@ -403,13 +444,13 @@ impl Bar {
 
         // CPU & RAM stats
         if self.config.bar.show_cpu {
-            let cpu_str = format!("CPU {:.0}%", self.system_metrics.cpu_usage_percent);
+            let cpu_str = format!(" {:.0}%", self.system_metrics.cpu_usage_percent);
             right_row = right_row.push(text(cpu_str).size(13));
         }
 
         if self.config.bar.show_memory {
             let ram_str = format!(
-                "RAM {:.1}/{:.1}G",
+                "󰍛 {:.1}/{:.1}G",
                 self.system_metrics.ram_used_mb as f32 / 1024.0,
                 self.system_metrics.ram_total_mb as f32 / 1024.0
             );
@@ -419,27 +460,42 @@ impl Bar {
         // Battery
         if self.config.bar.show_battery {
             if let Some(bat) = &self.battery_info {
-                let charging_symbol = if bat.is_charging { "⚡" } else { "🔋" };
-                let bat_str = format!("{} {}%", charging_symbol, bat.percentage);
+                let bat_icon = if bat.is_charging {
+                    "󰂄"
+                } else if bat.percentage > 90 {
+                    "󰁹"
+                } else if bat.percentage > 70 {
+                    "󰂁"
+                } else if bat.percentage > 50 {
+                    "󰁿"
+                } else if bat.percentage > 30 {
+                    "󰁽"
+                } else {
+                    "󰁻"
+                };
+                let bat_str = format!("{bat_icon} {}%", bat.percentage);
                 right_row = right_row.push(text(bat_str).size(13));
             }
         }
 
-        // Screenshot Shortcut
-        let shot_btn = button(text("📸").size(14))
+        // Quick Screenshot Shortcut
+        let shot_btn = button(text(" 󰄀 ").size(13))
             .style(button::secondary)
+            .padding([2, 6])
             .on_press(Message::TakeScreenshot);
         right_row = right_row.push(shot_btn);
 
         // Terminal Shortcut
-        let term_btn = button(text("Term").size(12))
+        let term_btn = button(text(" 󰞷 Term ").size(12))
             .style(button::secondary)
+            .padding([2, 6])
             .on_press(Message::OpenTerminal);
         right_row = right_row.push(term_btn);
 
         // Power Menu Trigger Button
-        let power_btn = button(text(" ⏻ ").size(14))
+        let power_btn = button(text(" 󰐥 ").size(13))
             .style(button::danger)
+            .padding([2, 8])
             .on_press(Message::OpenPowerMenu);
         right_row = right_row.push(power_btn);
 
@@ -453,7 +509,7 @@ impl Bar {
         ]
         .width(Length::Fill)
         .align_y(Alignment::Center)
-        .padding([2, 12]);
+        .padding([2, 10]);
 
         container(bar_content)
             .width(Length::Fill)
