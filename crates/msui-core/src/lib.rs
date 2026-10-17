@@ -14,8 +14,9 @@ pub use config::{BarConfig, LauncherConfig, MsuiConfig};
 pub use desktop::{DesktopApp, scan_desktop_apps};
 pub use monitor::{
     AudioDevice, AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BatteryStatus, BluetoothDevice,
-    BluetoothInfo, BluetoothManager, BrightnessInfo, BrightnessMonitor, MediaInfo, MediaMonitor,
-    NetworkInfo, NetworkMonitor, PowerProfile, PowerProfileManager, SystemMetrics, SystemMonitor, WifiNetwork,
+    BluetoothInfo, BluetoothManager, BrightnessInfo, BrightnessMonitor, DisplayManager, DisplayMonitorInfo,
+    MediaInfo, MediaMonitor, NetworkInfo, NetworkMonitor, NightLightConfig, NightLightManager,
+    PowerProfile, PowerProfileManager, SystemMetrics, SystemMonitor, WifiNetwork,
 };
 pub use notification::{
     clear_active_toasts, dismiss_active_toast, is_toast_running, load_active_toasts,
@@ -186,5 +187,33 @@ mod tests {
         assert_eq!(PowerProfile::from_str_loose("performance"), Some(PowerProfile::Performance));
         assert_eq!(PowerProfile::from_str_loose("balanced"), Some(PowerProfile::Balanced));
         assert_eq!(PowerProfileManager::list_profiles().len(), 3);
+    }
+
+    #[test]
+    fn test_display_parse_json() {
+        let sample_json = r#"[
+            {
+                "id": 0,
+                "name": "eDP-1",
+                "description": "Chimei Innolux Corporation 0x140A",
+                "make": "Chimei Innolux Corporation",
+                "model": "0x140A",
+                "width": 1920,
+                "height": 1080,
+                "refreshRate": 60.0,
+                "scale": 1.0,
+                "transform": 0,
+                "focused": true,
+                "disabled": false,
+                "availableModes": ["1920x1080@60.00Hz", "1280x720@60.00Hz"]
+            }
+        ]"#;
+        let monitors = DisplayManager::parse_monitors_from_json(sample_json);
+        assert_eq!(monitors.len(), 1);
+        assert_eq!(monitors[0].name, "eDP-1");
+        assert_eq!(monitors[0].width, 1920);
+        assert_eq!(monitors[0].height, 1080);
+        assert_eq!(monitors[0].refresh_rate, 60.0);
+        assert_eq!(monitors[0].available_modes.len(), 2);
     }
 }

@@ -329,6 +329,97 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        "display" | "monitors" | "nightlight" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            match sub {
+                Some("list") => {
+                    let monitors = msui_core::DisplayManager::list_monitors();
+                    println!("{:<4} {:<8} {:<18} {:<8} {:<10} {}", "IDX", "NAME", "RESOLUTION", "SCALE", "ROTATION", "MODEL");
+                    println!("{}", "-".repeat(70));
+                    for m in monitors {
+                        let res = format!("{}x{}@{:.0}Hz", m.width, m.height, m.refresh_rate);
+                        let rot = match m.transform { 1 => "90°", 2 => "180°", 3 => "270°", _ => "0°" };
+                        let scale = format!("{:.0}%", m.scale * 100.0);
+                        println!("{:<4} {:<8} {:<18} {:<8} {:<10} {}", m.id, m.name, res, scale, rot, m.description);
+                    }
+                }
+                Some("scale") => {
+                    if let (Some(name), Some(sc_str)) = (args.get(3), args.get(4)) {
+                        if let Ok(sc) = sc_str.parse::<f32>() {
+                            if msui_core::DisplayManager::set_scale(name, sc) {
+                                println!("Set scale on {} to {:.2}x", name, sc);
+                            } else {
+                                eprintln!("Failed to set scale on {}", name);
+                                std::process::exit(1);
+                            }
+                        } else {
+                            eprintln!("Invalid scale number: {}", sc_str);
+                            std::process::exit(1);
+                        }
+                    } else {
+                        eprintln!("Usage: msui display scale <output> <1.0|1.25|1.5|2.0>");
+                        std::process::exit(1);
+                    }
+                }
+                Some("rotate") => {
+                    if let (Some(name), Some(deg_str)) = (args.get(3), args.get(4)) {
+                        if let Ok(deg) = deg_str.parse::<u32>() {
+                            if msui_core::DisplayManager::set_rotation(name, deg) {
+                                println!("Set rotation on {} to {}°", name, deg);
+                            } else {
+                                eprintln!("Failed to set rotation on {}", name);
+                                std::process::exit(1);
+                            }
+                        } else {
+                            eprintln!("Invalid degrees: {}. Choose 0, 90, 180, 270", deg_str);
+                            std::process::exit(1);
+                        }
+                    } else {
+                        eprintln!("Usage: msui display rotate <output> <0|90|180|270>");
+                        std::process::exit(1);
+                    }
+                }
+                Some("nightlight") => {
+                    let sub2 = args.get(3).map(|s| s.as_str());
+                    match sub2 {
+                        Some("on") => {
+                            let temp = msui_core::NightLightManager::get_temperature();
+                            msui_core::NightLightManager::enable(temp);
+                            println!("Night light enabled ({}K)", temp);
+                        }
+                        Some("off") => {
+                            msui_core::NightLightManager::disable();
+                            println!("Night light disabled");
+                        }
+                        Some("toggle") => {
+                            if msui_core::NightLightManager::toggle() {
+                                println!("Night light enabled");
+                            } else {
+                                println!("Night light disabled");
+                            }
+                        }
+                        Some(val) if val.parse::<u32>().is_ok() => {
+                            let temp = val.parse::<u32>().unwrap();
+                            msui_core::NightLightManager::enable(temp);
+                            println!("Night light temperature set to: {}K", temp);
+                        }
+                        _ => {
+                            let is_on = msui_core::NightLightManager::is_active();
+                            let temp = msui_core::NightLightManager::get_temperature();
+                            println!("Night Light Status: {}", if is_on { "Active (ON)" } else { "Inactive (OFF)" });
+                            println!("Configured Warmth : {}K", temp);
+                            println!("Usage: msui display nightlight <on|off|toggle|<kelvin>>");
+                        }
+                    }
+                }
+                _ => {
+                    tracing::info!("Starting msUI Display & Monitor Manager...");
+                    if let Err(e) = msui_launcher::run_display_menu() {
+                        tracing::error!("msUI Display Menu exited with error: {:?}", e);
+                    }
+                }
+            }
+        }
         "--help" | "-h" | "help" => {
             print_help();
         }
@@ -357,6 +448,7 @@ fn print_help() {
           notifications Open the Notification Center history overlay\n  \
           audio         Open the Audio Mixer & Device Switcher overlay (or 'sinks', 'sources', 'set-sink', 'set-source', 'volume', 'mute')\n  \
           battery       Open the Battery Diagnostics & Power Profile Manager (or 'status', 'profile set')\n  \
+          display       Open the Display, Multi-Monitor & Night Light manager overlay (or 'list', 'scale', 'rotate', 'nightlight')\n  \
           wifi          Open the Wi-Fi network manager overlay (or 'list', 'connect', 'disconnect')\n  \
           bluetooth     Open the Bluetooth settings manager overlay\n  \
           wallpaper     Open the Wallpaper changer overlay (or 'cycle', 'random', 'set <path>')\n  \

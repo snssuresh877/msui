@@ -105,6 +105,7 @@ pub enum Message {
     OpenTheme,
     OpenAudio,
     OpenBattery,
+    OpenDisplay,
     TakeScreenshot,
     ToggleMute,
     VolumeUp,
@@ -277,6 +278,11 @@ impl Bar {
                 let bin = std::env::current_exe()
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
                 spawn_detached(std::process::Command::new(bin).arg("battery"));
+            }
+            Message::OpenDisplay => {
+                let bin = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                spawn_detached(std::process::Command::new(bin).arg("display"));
             }
             Message::OpenTerminal => {
                 let term = &self.config.launcher.terminal;
@@ -501,6 +507,10 @@ impl Bar {
                     "󰃞"
                 };
                 let bright_str = format!("{bright_icon} {}%", b.percent);
+                let bright_btn = button(text(bright_str).size(13))
+                    .style(button::text)
+                    .padding([2, 4])
+                    .on_press(Message::OpenDisplay);
                 let bright_down = button(text("-").size(12))
                     .style(button::secondary)
                     .padding([2, 6])
@@ -510,7 +520,7 @@ impl Bar {
                     .padding([2, 6])
                     .on_press(Message::BrightnessUp);
 
-                let bright_group = row![text(bright_str).size(13), bright_down, bright_up]
+                let bright_group = row![bright_btn, bright_down, bright_up]
                     .spacing(2)
                     .align_y(Alignment::Center);
                 right_row = right_row.push(bright_group);
