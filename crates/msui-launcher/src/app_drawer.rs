@@ -203,11 +203,15 @@ impl AppDrawer {
                 if let Some(item) = self.filtered.get(idx) {
                     match item {
                         DrawerItem::Window { client, .. } => {
-                            HyprlandIpc::focus_window(&client.address);
+                            HyprlandIpc::activate_client(client);
                             std::process::exit(0);
                         }
                         DrawerItem::App { app } => {
-                            let _ = app.launch();
+                            if let Some(client) = app.find_running_client(&self.clients) {
+                                HyprlandIpc::activate_client(client);
+                            } else {
+                                let _ = app.launch();
+                            }
                             std::process::exit(0);
                         }
                     }
@@ -224,9 +228,29 @@ impl AppDrawer {
                 return Command::done(Message::Refresh);
             }
             Message::LaunchApp(idx) => {
-                if let Some(DrawerItem::App { app }) = self.filtered.get(idx) {
-                    let _ = app.launch();
-                    std::process::exit(0);
+                if let Some(item) = self.filtered.get(idx) {
+                    match item {
+                        DrawerItem::App { app } => {
+                            let _ = app.launch();
+                            std::process::exit(0);
+                        }
+                        DrawerItem::Window { client, .. } => {
+                            if let Some(app) = self.all_apps.iter().find(|a| {
+                                a.name.eq_ignore_ascii_case(&client.class)
+                                    || a.id.eq_ignore_ascii_case(&client.class)
+                                    || a.id.eq_ignore_ascii_case(&client.initial_class)
+                            }) {
+                                let _ = app.launch();
+                            } else {
+                                let _ = std::process::Command::new(&client.initial_class)
+                                    .stdin(std::process::Stdio::null())
+                                    .stdout(std::process::Stdio::null())
+                                    .stderr(std::process::Stdio::null())
+                                    .spawn();
+                            }
+                            std::process::exit(0);
+                        }
+                    }
                 }
             }
             Message::Refresh => {
@@ -386,7 +410,12 @@ impl AppDrawer {
                         let info_col = column![win_title, win_meta].spacing(2);
 
                         // Badges
-                        let ws_badge = text(format!("󰮯 WS {}", client.workspace.id)).size(11);
+                        let is_minimized = client.workspace.id < 0 || client.workspace.name.starts_with("special:");
+                        let ws_badge = if is_minimized {
+                            text("󱊖 Minimized").size(11)
+                        } else {
+                            text(format!("󰮯 WS {}", client.workspace.id)).size(11)
+                        };
                         let is_focused = client.focus_history_id == 0;
                         let active_badge = if is_focused {
                             Some(text("󰄬 Active").size(11))
@@ -394,10 +423,21 @@ impl AppDrawer {
                             None
                         };
 
-                        let focus_btn = button(text("󰁔 Switch").size(11))
+                        let focus_label = if is_minimized {
+                            "󱊖 Restore"
+                        } else {
+                            "󰁔 Switch"
+                        };
+
+                        let focus_btn = button(text(focus_label).size(11))
                             .style(button::primary)
                             .padding([3, 8])
                             .on_press(Message::FocusWindow(client.address.clone()));
+
+                        let relaunch_btn = button(text("󰐊 Relaunch").size(11))
+                            .style(button::secondary)
+                            .padding([3, 8])
+                            .on_press(Message::LaunchApp(idx));
 
                         let close_win_btn = button(text("✕ Close").size(11))
                             .style(button::danger)
@@ -414,6 +454,7 @@ impl AppDrawer {
                             item_row = item_row.push(badge);
                         }
                         item_row = item_row.push(focus_btn);
+                        item_row = item_row.push(relaunch_btn);
                         item_row = item_row.push(close_win_btn);
 
                         let item_container = button(item_row)
@@ -457,17 +498,43 @@ impl AppDrawer {
 
                         let info_col = column![app_name, app_comment].spacing(2);
 
-                        let launch_btn = button(text("󰐊 Launch").size(11))
-                            .style(button::primary)
-                            .padding([3, 8])
-                            .on_press(Message::LaunchApp(idx));
+                        let running_client = app.find_running_client(&self.clients);
+                        let running_badge = if running_client.is_some() {
+                            Some(text("󰖯 Running").size(11))
+                        } else {
+                            None
+                        };
 
                         let mut item_row = row![icon_elem, info_col]
                             .spacing(12)
                             .align_y(Alignment::Center);
 
                         item_row = item_row.push(space().width(Length::Fill));
-                        item_row = item_row.push(launch_btn);
+                        if let Some(badge) = running_badge {
+                            item_row = item_row.push(badge);
+                        }
+
+                        if let Some(client) = running_client {
+                            let is_minimized = client.workspace.id < 0 || client.workspace.name.starts_with("special:");
+                            let focus_label = if is_minimized { "󱊖 Restore" } else { "󰁔 Switch" };
+                            let focus_btn = button(text(focus_label).size(11))
+                                .style(button::primary)
+                                .padding([3, 8])
+                                .on_press(Message::FocusWindow(client.address.clone()));
+                            item_row = item_row.push(focus_btn);
+
+                            let relaunch_btn = button(text("󰐊 New Instance").size(11))
+                                .style(button::secondary)
+                                .padding([3, 8])
+                                .on_press(Message::LaunchApp(idx));
+                            item_row = item_row.push(relaunch_btn);
+                        } else {
+                            let launch_btn = button(text("󰐊 Launch").size(11))
+                                .style(button::primary)
+                                .padding([3, 8])
+                                .on_press(Message::LaunchApp(idx));
+                            item_row = item_row.push(launch_btn);
+                        }
 
                         let item_container = button(item_row)
                             .width(Length::Fill)

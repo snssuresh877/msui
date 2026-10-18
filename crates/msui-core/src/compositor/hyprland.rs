@@ -114,7 +114,80 @@ impl HyprlandIpc {
         1
     }
 
+    pub fn activate_client(client: &HyprlandClient) -> bool {
+        let active_ws = Self::get_active_workspace_id();
+
+        // 1. Unminimize / restore if on special/scratchpad workspace (id < 0 or special:*)
+        if client.workspace.id < 0 || client.workspace.name.starts_with("special:") {
+            let lua_move = format!(
+                "hl.dsp.window.move({{ window = \"address:{}\", workspace = {} }})",
+                client.address, active_ws
+            );
+            let res = std::process::Command::new("hyprctl")
+                .args(["dispatch", &lua_move])
+                .output();
+            if res.is_err() || !res.as_ref().unwrap().status.success() {
+                let _ = std::process::Command::new("hyprctl")
+                    .args(["dispatch", "movetoworkspace", &format!("{},address:{}", active_ws, client.address)])
+                    .output();
+            }
+        } else if client.workspace.id > 0 && client.workspace.id != active_ws {
+            // 2. Switch to window's workspace if on another workspace
+            let lua_ws = format!("hl.dsp.focus({{ workspace = {} }})", client.workspace.id);
+            let res = std::process::Command::new("hyprctl")
+                .args(["dispatch", &lua_ws])
+                .output();
+            if res.is_err() || !res.as_ref().unwrap().status.success() {
+                let _ = std::process::Command::new("hyprctl")
+                    .args(["dispatch", "workspace", &client.workspace.id.to_string()])
+                    .output();
+            }
+        }
+
+        // 3. Focus window
+        let lua_focus = format!("hl.dsp.focus({{ window = \"address:{}\" }})", client.address);
+        let res = std::process::Command::new("hyprctl")
+            .args(["dispatch", &lua_focus])
+            .output();
+        if res.is_err() || !res.as_ref().unwrap().status.success() {
+            let _ = std::process::Command::new("hyprctl")
+                .args(["dispatch", "focuswindow", &format!("address:{}", client.address)])
+                .output();
+        }
+
+        // 4. Bring window to the top (un-obscure from background)
+        let lua_top = format!("hl.dsp.window.bring_to_top(\"address:{}\")", client.address);
+        let res = std::process::Command::new("hyprctl")
+            .args(["dispatch", &lua_top])
+            .output();
+        if res.is_err() || !res.as_ref().unwrap().status.success() {
+            let _ = std::process::Command::new("hyprctl")
+                .args(["dispatch", "bringactivetotop"])
+                .output();
+        }
+
+        true
+    }
+
     pub fn focus_window(address: &str) -> bool {
+        let clients = Self::get_clients();
+        if let Some(client) = clients.iter().find(|c| c.address == address) {
+            return Self::activate_client(client);
+        }
+
+        // Direct focus attempt if client is not in listing
+        let lua_focus = format!("hl.dsp.focus({{ window = \"address:{}\" }})", address);
+        let res = std::process::Command::new("hyprctl")
+            .args(["dispatch", &lua_focus])
+            .output();
+        if res.is_ok() && res.as_ref().unwrap().status.success() {
+            let lua_top = format!("hl.dsp.window.bring_to_top(\"address:{}\")", address);
+            let _ = std::process::Command::new("hyprctl")
+                .args(["dispatch", &lua_top])
+                .output();
+            return true;
+        }
+
         let arg = format!("address:{}", address);
         std::process::Command::new("hyprctl")
             .args(["dispatch", "focuswindow", &arg])
@@ -124,6 +197,14 @@ impl HyprlandIpc {
     }
 
     pub fn close_window(address: &str) -> bool {
+        let lua_close = format!("hl.dsp.window.close(\"address:{}\")", address);
+        let res = std::process::Command::new("hyprctl")
+            .args(["dispatch", &lua_close])
+            .output();
+        if res.is_ok() && res.as_ref().unwrap().status.success() {
+            return true;
+        }
+
         let arg = format!("address:{}", address);
         std::process::Command::new("hyprctl")
             .args(["dispatch", "closewindow", &arg])

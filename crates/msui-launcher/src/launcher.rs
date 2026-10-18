@@ -149,7 +149,12 @@ impl Launcher {
             }
             Message::LaunchApp(idx) => {
                 if let Some(app) = self.filtered.get(idx) {
-                    let _ = app.launch();
+                    let clients = msui_core::HyprlandIpc::get_clients();
+                    if let Some(client) = app.find_running_client(&clients) {
+                        msui_core::HyprlandIpc::activate_client(client);
+                    } else {
+                        let _ = app.launch();
+                    }
                     std::process::exit(0);
                 }
             }

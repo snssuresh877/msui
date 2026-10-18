@@ -56,6 +56,36 @@ impl DesktopApp {
 
         Ok(())
     }
+
+    pub fn find_running_client<'a>(
+        &self,
+        clients: &'a [crate::HyprlandClient],
+    ) -> Option<&'a crate::HyprlandClient> {
+        let app_id_lower = self.id.to_lowercase();
+        let app_name_lower = self.name.to_lowercase();
+        let exec_bin = self.exec_cmds.first().map(|b| {
+            std::path::Path::new(b)
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or(b)
+                .to_lowercase()
+        });
+
+        clients.iter().find(|c| {
+            let cls = c.class.to_lowercase();
+            let init_cls = c.initial_class.to_lowercase();
+            let title = c.title.to_lowercase();
+
+            cls == app_id_lower
+                || init_cls == app_id_lower
+                || (exec_bin.as_ref().is_some_and(|b| &cls == b || &init_cls == b))
+                || cls == app_name_lower
+                || init_cls == app_name_lower
+                || app_id_lower.ends_with(&format!(".{}", cls))
+                || cls.ends_with(&format!(".{}", app_id_lower))
+                || title.starts_with(&app_name_lower)
+        })
+    }
 }
 
 fn get_icon_path_from_xdgicon(iconname: &str) -> Option<PathBuf> {
