@@ -79,6 +79,17 @@ impl ModalManager {
             IpcCommand::WallpaperCycle => {
                 WallpaperManager::cycle();
             }
+            IpcCommand::NotificationAction { id, action } => {
+                tokio::spawn(async move {
+                    let _ = msui_core::emit_action_invoked(id, &action).await;
+                    let _ = msui_core::emit_notification_closed(id, 2).await;
+                });
+            }
+            IpcCommand::NotificationClose { id, reason } => {
+                tokio::spawn(async move {
+                    let _ = msui_core::emit_notification_closed(id, reason).await;
+                });
+            }
             IpcCommand::Ping | IpcCommand::Unknown(_) => {}
         }
     }

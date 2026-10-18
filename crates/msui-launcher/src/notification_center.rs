@@ -2,12 +2,12 @@ use iced::keyboard::key::Named;
 use iced::keyboard::{Event as KeyboardEvent, Key};
 use iced::widget::operation::focus;
 use iced::widget::{button, column, container, row, scrollable, space, text, text_input};
-use iced::{Alignment, Element, Event, Font, Length, Task as Command, Theme, event};
+use iced::{event, Alignment, Element, Event, Font, Length, Task as Command, Theme};
 use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
-use msui_core::{Notification, GLOBAL_NOTIFICATIONS};
+use msui_core::{IpcClient, IpcCommand, Notification, GLOBAL_NOTIFICATIONS};
 use std::sync::LazyLock;
 
 static INPUT_ID: LazyLock<iced::widget::Id> = LazyLock::new(iced::widget::Id::unique);
@@ -47,6 +47,7 @@ pub enum Message {
     QueryChanged(String),
     SelectPrevious,
     SelectNext,
+    Activate(u32),
     DeleteNotification(u32),
     ClearAll,
     Close,
@@ -65,6 +66,7 @@ impl NotificationCenter {
         let all_notifications = {
             let mut store = GLOBAL_NOTIFICATIONS.lock().unwrap();
             store.load();
+            store.mark_all_read();
             store.history()
         };
         let filtered = all_notifications.clone();
@@ -129,6 +131,20 @@ impl NotificationCenter {
                     }
                 }
             }
+            Message::Activate(id) => {
+                if let Some(notif) = self.filtered.iter().find(|n| n.id == id) {
+                    let actions = notif.parsed_actions();
+                    let action_key = actions
+                        .first()
+                        .map(|a| a.key.clone())
+                        .unwrap_or_else(|| "default".to_string());
+                    let _ = IpcClient::send_blocking(&IpcCommand::NotificationAction {
+                        id,
+                        action: action_key,
+                    });
+                }
+                std::process::exit(0);
+            }
             Message::DeleteNotification(id) => {
                 {
                     let mut store = GLOBAL_NOTIFICATIONS.lock().unwrap();
@@ -152,6 +168,11 @@ impl NotificationCenter {
                 match key {
                     Key::Named(Named::Escape) => {
                         return Command::done(Message::Close);
+                    }
+                    Key::Named(Named::Enter) => {
+                        if let Some(entry) = self.filtered.get(self.selected_idx) {
+                            return Command::done(Message::Activate(entry.id));
+                        }
                     }
                     Key::Named(Named::ArrowDown) => {
                         return Command::done(Message::SelectNext);
@@ -212,10 +233,24 @@ impl NotificationCenter {
                 ]
                 .align_y(Alignment::Center);
 
-                let summary = text(&notif.summary).size(14);
-                let body = text(&notif.body).size(12);
+                let summary = text(&notif.summary).size(13);
+                let body = text(&notif.body).size(11);
 
-                let card_content = column![card_header, summary, body].spacing(4);
+                let mut card_content = column![card_header, summary, body].spacing(4);
+
+                let actions = notif.parsed_actions();
+                if !actions.is_empty() {
+                    let mut action_row = row![].spacing(6);
+                    for action in actions {
+                        action_row = action_row.push(
+                            button(text(action.label).size(11))
+                                .style(button::secondary)
+                                .padding([2, 8])
+                                .on_press(Message::Activate(notif.id)),
+                        );
+                    }
+                    card_content = card_content.push(action_row);
+                }
 
                 let card_style = if is_selected {
                     container::bordered_box
@@ -240,7 +275,7 @@ impl NotificationCenter {
         let footer = row![
             text(format!("{} notifications", self.filtered.len())).size(11),
             space().width(Length::Fill),
-            text("↑↓ Navigate • Del Remove • Esc Close").size(11),
+            text("↑↓ Navigate • Enter Open • Del Remove • Esc Close").size(11),
             space().width(Length::Fill),
             clear_btn,
         ]

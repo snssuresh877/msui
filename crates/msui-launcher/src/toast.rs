@@ -6,12 +6,21 @@ use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize, 
 use iced_exwlshell::settings::LayerShellSettings;
 use msui_core::{
     clear_active_toasts, dismiss_active_toast, load_active_toasts, record_toast_pid,
-    remove_toast_pid, Notification,
+    remove_toast_pid, IpcClient, IpcCommand, Notification,
 };
+use std::collections::HashSet;
 use std::time::Duration;
 
 pub fn run_toast_window() -> Result<(), iced_exwlshell::Error> {
     record_toast_pid(std::process::id());
+
+    let loaded = load_active_toasts();
+    if loaded.is_empty() {
+        remove_toast_pid();
+        return Ok(());
+    }
+
+    let initial_height = ((loaded.len() as u32).min(4) * 115 + 20).clamp(100, 500);
 
     let res = application(
         ToastApp::new,
@@ -25,7 +34,7 @@ pub fn run_toast_window() -> Result<(), iced_exwlshell::Error> {
         ..Font::DEFAULT
     })
     .layer_settings(LayerShellSettings {
-        size: LayerSize::px(380, 520),
+        size: LayerSize::px(380, initial_height),
         anchor: Anchor::Top | Anchor::Right,
         layer: Layer::Overlay,
         margin: Margin {
@@ -46,12 +55,14 @@ pub fn run_toast_window() -> Result<(), iced_exwlshell::Error> {
 }
 
 pub struct ToastApp {
-    last_seen_id: u32,
+    seen_ids: HashSet<u32>,
+    dismissed_ids: HashSet<u32>,
     active_notifications: Vec<(Notification, u32)>, // (Notification, ticks_remaining)
 }
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    Action(u32, String),
     Dismiss(u32),
     Tick,
 }
@@ -71,20 +82,19 @@ impl ToastApp {
             std::process::exit(0);
         }
 
-        let mut max_id = 0;
+        let mut seen = HashSet::new();
         let mut active = Vec::new();
         for notif in loaded {
-            if notif.id > max_id {
-                max_id = notif.id;
-            }
-            // 400ms tick per step
+            seen.insert(notif.id);
+            // 400ms tick per step (minimum 10 ticks = 4s)
             let ticks = ((notif.expire_timeout_ms / 400).max(10)) as u32;
             active.push((notif, ticks));
         }
 
         (
             Self {
-                last_seen_id: max_id,
+                seen_ids: seen,
+                dismissed_ids: HashSet::new(),
                 active_notifications: active,
             },
             Command::none(),
@@ -101,9 +111,28 @@ impl ToastApp {
 
     fn update(&mut self, message: Message) -> Command<Message> {
         match message {
-            Message::Dismiss(id) => {
+            Message::Action(id, key) => {
+                self.dismissed_ids.insert(id);
                 self.active_notifications.retain(|(n, _)| n.id != id);
                 dismiss_active_toast(id);
+                let _ = IpcClient::send_blocking(&IpcCommand::NotificationAction {
+                    id,
+                    action: key,
+                });
+                if self.active_notifications.is_empty() {
+                    remove_toast_pid();
+                    clear_active_toasts();
+                    std::process::exit(0);
+                }
+            }
+            Message::Dismiss(id) => {
+                self.dismissed_ids.insert(id);
+                self.active_notifications.retain(|(n, _)| n.id != id);
+                dismiss_active_toast(id);
+                let _ = IpcClient::send_blocking(&IpcCommand::NotificationClose {
+                    id,
+                    reason: 2, // 2 = dismissed by user
+                });
                 if self.active_notifications.is_empty() {
                     remove_toast_pid();
                     clear_active_toasts();
@@ -114,11 +143,15 @@ impl ToastApp {
                 // Poll active toasts file for newly arrived notifications
                 let file_toasts = load_active_toasts();
                 for notif in file_toasts {
-                    let already_present = self.active_notifications.iter().any(|(n, _)| n.id == notif.id);
-                    if !already_present {
-                        if notif.id > self.last_seen_id {
-                            self.last_seen_id = notif.id;
-                        }
+                    if self.dismissed_ids.contains(&notif.id) {
+                        continue;
+                    }
+                    let already_present = self
+                        .active_notifications
+                        .iter()
+                        .any(|(n, _)| n.id == notif.id);
+                    if !already_present && !self.seen_ids.contains(&notif.id) {
+                        self.seen_ids.insert(notif.id);
                         let ticks = ((notif.expire_timeout_ms / 400).max(10)) as u32;
                         self.active_notifications.insert(0, (notif, ticks));
                     }
@@ -139,8 +172,13 @@ impl ToastApp {
                 }
 
                 for id in expired {
+                    self.dismissed_ids.insert(id);
                     self.active_notifications.retain(|(n, _)| n.id != id);
                     dismiss_active_toast(id);
+                    let _ = IpcClient::send_blocking(&IpcCommand::NotificationClose {
+                        id,
+                        reason: 1, // 1 = expired
+                    });
                 }
 
                 if self.active_notifications.is_empty() {
@@ -178,18 +216,20 @@ impl ToastApp {
             ]
             .align_y(Alignment::Center);
 
-            let summary = text(&notif.summary).size(14);
-            let body = text(&notif.body).size(12);
+            let summary = text(&notif.summary).size(13);
+            let body = text(&notif.body).size(11);
 
             let mut card_content = column![card_header, summary, body].spacing(4);
 
-            if !notif.actions.is_empty() {
+            let actions = notif.parsed_actions();
+            if !actions.is_empty() {
                 let mut action_row = row![].spacing(6);
-                for action in &notif.actions {
+                for action in actions {
                     action_row = action_row.push(
-                        button(text(action).size(11))
+                        button(text(action.label).size(11))
                             .style(button::secondary)
-                            .padding([2, 8]),
+                            .padding([2, 8])
+                            .on_press(Message::Action(notif.id, action.key)),
                     );
                 }
                 card_content = card_content.push(action_row);
@@ -197,7 +237,7 @@ impl ToastApp {
 
             let card = container(card_content)
                 .width(Length::Fill)
-                .padding(12)
+                .padding(10)
                 .style(container::bordered_box);
 
             cards = cards.push(card);

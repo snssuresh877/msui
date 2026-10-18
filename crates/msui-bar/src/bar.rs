@@ -236,7 +236,7 @@ impl Bar {
                 self.notification_count = {
                     let mut store = msui_core::GLOBAL_NOTIFICATIONS.lock().unwrap();
                     store.load();
-                    store.history().len()
+                    store.unread_count()
                 };
             }
             Message::SwitchWorkspace(id) => {
@@ -268,6 +268,11 @@ impl Bar {
                 spawn_detached(std::process::Command::new(bin).arg("clipboard"));
             }
             Message::OpenNotifications => {
+                {
+                    let mut store = msui_core::GLOBAL_NOTIFICATIONS.lock().unwrap();
+                    store.mark_all_read();
+                }
+                self.notification_count = 0;
                 let bin = std::env::current_exe()
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
                 spawn_detached(std::process::Command::new(bin).arg("notifications"));
@@ -731,15 +736,20 @@ impl Bar {
             right_row = right_row.push(tray_group);
         }
 
-        // Notification Bell Icon with Counter
+        // Notification Bell Icon with Counter & DND status
         if self.config.bar.show_notifications {
-            let notif_label = if self.notification_count > 0 {
+            let is_dnd = msui_core::DndManager::is_dnd_enabled();
+            let notif_label = if is_dnd {
+                " 󰂛 ".into()
+            } else if self.notification_count > 0 {
                 format!(" 󰂚 {} ", self.notification_count)
             } else {
                 " 󰂚 ".into()
             };
             let notif_btn = button(text(notif_label).size(12))
-                .style(if self.notification_count > 0 {
+                .style(if is_dnd {
+                    button::danger
+                } else if self.notification_count > 0 {
                     button::primary
                 } else {
                     button::secondary

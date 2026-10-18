@@ -9,6 +9,12 @@ use std::sync::{Arc, LazyLock, Mutex};
 use tokio::sync::broadcast;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NotificationAction {
+    pub key: String,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Notification {
     pub id: u32,
     pub app_name: String,
@@ -18,15 +24,46 @@ pub struct Notification {
     pub actions: Vec<String>,
     pub expire_timeout_ms: i32,
     pub timestamp: String,
+    #[serde(default = "default_unread")]
+    pub unread: bool,
+}
+
+fn default_unread() -> bool {
+    true
+}
+
+impl Notification {
+    /// Parse FreeDesktop actions `[key1, label1, key2, label2]` into structured NotificationAction list
+    pub fn parsed_actions(&self) -> Vec<NotificationAction> {
+        let mut result = Vec::new();
+        let mut i = 0;
+        while i + 1 < self.actions.len() {
+            let key = &self.actions[i];
+            let label = &self.actions[i + 1];
+            if !label.trim().is_empty() {
+                result.push(NotificationAction {
+                    key: key.clone(),
+                    label: label.clone(),
+                });
+            }
+            i += 2;
+        }
+        // Fallback for single actions like ["default"] with no separate label
+        if result.is_empty() && self.actions.len() == 1 {
+            result.push(NotificationAction {
+                key: self.actions[0].clone(),
+                label: "Open".to_string(),
+            });
+        }
+        result
+    }
 }
 
 pub struct NotificationStore {
     next_id: u32,
     history: VecDeque<Notification>,
-    active_toasts: Vec<Notification>,
     sender: broadcast::Sender<Notification>,
     cache_path: Option<PathBuf>,
-    active_path: Option<PathBuf>,
 }
 
 pub static GLOBAL_NOTIFICATIONS: LazyLock<Arc<Mutex<NotificationStore>>> = LazyLock::new(|| {
@@ -40,15 +77,12 @@ impl NotificationStore {
         let (sender, _) = broadcast::channel(32);
         let cache_dir = dirs_cache_dir();
         let cache_path = cache_dir.as_ref().map(|d| d.join("notifications_history.json"));
-        let active_path = cache_dir.as_ref().map(|d| d.join("active_toasts.json"));
 
         Self {
             next_id: 1,
             history: VecDeque::with_capacity(100),
-            active_toasts: Vec::with_capacity(10),
             sender,
             cache_path,
-            active_path,
         }
     }
 
@@ -57,10 +91,8 @@ impl NotificationStore {
         Self {
             next_id: 1,
             history: VecDeque::with_capacity(100),
-            active_toasts: Vec::with_capacity(10),
             sender,
             cache_path: None,
-            active_path: None,
         }
     }
 
@@ -110,6 +142,7 @@ impl NotificationStore {
             actions,
             expire_timeout_ms: if expire_timeout_ms <= 0 { 5000 } else { expire_timeout_ms },
             timestamp: Local::now().format("%I:%M %p").to_string(),
+            unread: true,
         };
 
         if self.history.len() >= 100 {
@@ -117,27 +150,28 @@ impl NotificationStore {
         }
         self.history.push_back(notif.clone());
 
-        self.active_toasts.insert(0, notif.clone());
-        if self.active_toasts.len() > 8 {
-            self.active_toasts.truncate(8);
-        }
-
         self.save();
-        self.save_active_toasts();
+        add_active_toast(&notif);
 
         let _ = self.sender.send(notif.clone());
         notif
     }
 
-    fn save_active_toasts(&self) {
-        if let Some(path) = &self.active_path {
-            if let Some(parent) = path.parent() {
-                let _ = fs::create_dir_all(parent);
-            }
-            if let Ok(json) = serde_json::to_string_pretty(&self.active_toasts) {
-                let _ = fs::write(path, json);
+    pub fn mark_all_read(&mut self) {
+        let mut changed = false;
+        for n in &mut self.history {
+            if n.unread {
+                n.unread = false;
+                changed = true;
             }
         }
+        if changed {
+            self.save();
+        }
+    }
+
+    pub fn unread_count(&self) -> usize {
+        self.history.iter().filter(|n| n.unread).count()
     }
 
     pub fn delete_history(&mut self, id: u32) {
@@ -183,14 +217,34 @@ pub fn load_active_toasts() -> Vec<Notification> {
     Vec::new()
 }
 
-pub fn dismiss_active_toast(id: u32) {
+pub fn save_active_toasts(toasts: &[Notification]) {
     if let Some(dir) = dirs_cache_dir() {
         let path = dir.join("active_toasts.json");
-        let mut toasts = load_active_toasts();
-        toasts.retain(|n| n.id != id);
-        if let Ok(json) = serde_json::to_string_pretty(&toasts) {
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if let Ok(json) = serde_json::to_string_pretty(toasts) {
             let _ = fs::write(&path, json);
         }
+    }
+}
+
+pub fn add_active_toast(notif: &Notification) {
+    let mut toasts = load_active_toasts();
+    toasts.retain(|n| n.id != notif.id);
+    toasts.insert(0, notif.clone());
+    if toasts.len() > 6 {
+        toasts.truncate(6);
+    }
+    save_active_toasts(&toasts);
+}
+
+pub fn dismiss_active_toast(id: u32) {
+    let mut toasts = load_active_toasts();
+    let before_len = toasts.len();
+    toasts.retain(|n| n.id != id);
+    if toasts.len() != before_len {
+        save_active_toasts(&toasts);
     }
 }
 
@@ -275,8 +329,27 @@ mod tests {
         assert!(DndManager::is_dnd_enabled());
         DndManager::set_dnd(false);
         assert!(!DndManager::is_dnd_enabled());
-        // Restore initial
         DndManager::set_dnd(initial);
     }
-}
 
+    #[test]
+    fn test_parsed_actions() {
+        let notif = Notification {
+            id: 1,
+            app_name: "test".into(),
+            app_icon: None,
+            summary: "s".into(),
+            body: "b".into(),
+            actions: vec!["default".into(), "View".into(), "close".into(), "Dismiss".into()],
+            expire_timeout_ms: 5000,
+            timestamp: "12:00".into(),
+            unread: true,
+        };
+        let actions = notif.parsed_actions();
+        assert_eq!(actions.len(), 2);
+        assert_eq!(actions[0].key, "default");
+        assert_eq!(actions[0].label, "View");
+        assert_eq!(actions[1].key, "close");
+        assert_eq!(actions[1].label, "Dismiss");
+    }
+}

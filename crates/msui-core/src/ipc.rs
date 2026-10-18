@@ -26,6 +26,8 @@ pub enum IpcCommand {
     DndToggle,
     DndSet(bool),
     WallpaperCycle,
+    NotificationAction { id: u32, action: String },
+    NotificationClose { id: u32, reason: u32 },
     Ping,
     Unknown(String),
 }
@@ -41,6 +43,23 @@ impl IpcCommand {
             ["dnd", "on"] | ["dnd", "enable"] => IpcCommand::DndSet(true),
             ["dnd", "off"] | ["dnd", "disable"] => IpcCommand::DndSet(false),
             ["wallpaper", "cycle"] => IpcCommand::WallpaperCycle,
+            ["notif-action", id_str, action] => {
+                if let Ok(id) = id_str.parse::<u32>() {
+                    IpcCommand::NotificationAction {
+                        id,
+                        action: action.to_string(),
+                    }
+                } else {
+                    IpcCommand::Unknown(s.trim().to_string())
+                }
+            }
+            ["notif-close", id_str, reason_str] => {
+                if let (Ok(id), Ok(reason)) = (id_str.parse::<u32>(), reason_str.parse::<u32>()) {
+                    IpcCommand::NotificationClose { id, reason }
+                } else {
+                    IpcCommand::Unknown(s.trim().to_string())
+                }
+            }
             ["ping"] => IpcCommand::Ping,
             _ => IpcCommand::Unknown(s.trim().to_string()),
         }
@@ -55,6 +74,12 @@ impl IpcCommand {
             IpcCommand::DndSet(true) => "dnd on".to_string(),
             IpcCommand::DndSet(false) => "dnd off".to_string(),
             IpcCommand::WallpaperCycle => "wallpaper cycle".to_string(),
+            IpcCommand::NotificationAction { id, action } => {
+                format!("notif-action {} {}", id, action)
+            }
+            IpcCommand::NotificationClose { id, reason } => {
+                format!("notif-close {} {}", id, reason)
+            }
             IpcCommand::Ping => "ping".to_string(),
             IpcCommand::Unknown(cmd) => cmd.clone(),
         }

@@ -26,9 +26,10 @@ pub use monitor::{
     SystemMetrics, SystemMonitor, WifiNetwork,
 };
 pub use notification::{
-    clear_active_toasts, dismiss_active_toast, is_toast_running, load_active_toasts,
-    record_toast_pid, remove_toast_pid, DndManager, GLOBAL_NOTIFICATIONS, Notification, NotificationStore,
-    service::run_notification_service,
+    add_active_toast, clear_active_toasts, dismiss_active_toast, is_toast_running, load_active_toasts,
+    record_toast_pid, remove_toast_pid, DndManager, GLOBAL_NOTIFICATIONS, Notification, NotificationAction,
+    NotificationStore,
+    service::{emit_action_invoked, emit_notification_closed, run_notification_service},
 };
 pub use power::SystemControl;
 pub use reminder::{ReminderItem, ReminderManager};
