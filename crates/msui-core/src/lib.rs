@@ -2,8 +2,10 @@ pub mod clipboard;
 pub mod compositor;
 pub mod config;
 pub mod desktop;
+pub mod ipc;
 pub mod monitor;
 pub mod notification;
+pub mod polkit;
 pub mod power;
 pub mod reminder;
 pub mod theme;
@@ -13,6 +15,8 @@ pub use clipboard::{ClipboardEntry, ClipboardStore, GLOBAL_CLIPBOARD, watcher::s
 pub use compositor::{HyprlandClient, HyprlandEvent, HyprlandIpc, HyprlandWorkspaceRef};
 pub use config::{BarConfig, LauncherConfig, MsuiConfig};
 pub use desktop::{find_icon_for_class, DesktopApp, scan_desktop_apps};
+pub use ipc::{get_socket_path, IpcClient, IpcCommand, IpcServer};
+pub use polkit::{run_polkit_agent, verify_polkit_credentials, PolkitAgent};
 pub use monitor::{
     AudioDevice, AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BatteryStatus, BluetoothDevice,
     BluetoothInfo, BluetoothManager, BrightnessInfo, BrightnessMonitor, DisplayManager, DisplayMonitorInfo,
@@ -262,5 +266,24 @@ mod tests {
 
         let removed = ReminderManager::remove_reminder(item.id);
         assert!(removed);
+    }
+
+    #[test]
+    fn test_ipc_command_parsing() {
+        let cmd = IpcCommand::parse("toggle control");
+        assert_eq!(cmd, IpcCommand::Toggle("control".to_string()));
+        assert_eq!(cmd.to_wire(), "toggle control");
+
+        let cmd = IpcCommand::parse("open launcher");
+        assert_eq!(cmd, IpcCommand::Open("launcher".to_string()));
+
+        let cmd = IpcCommand::parse("close");
+        assert_eq!(cmd, IpcCommand::Close);
+
+        let cmd = IpcCommand::parse("dnd toggle");
+        assert_eq!(cmd, IpcCommand::DndToggle);
+
+        let cmd = IpcCommand::parse("ping");
+        assert_eq!(cmd, IpcCommand::Ping);
     }
 }

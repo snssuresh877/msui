@@ -79,6 +79,8 @@ msui/
 │   │   ├── notification/               # D-Bus org.freedesktop.Notifications daemon
 │   │   ├── reminder/                   # Countdown timer manager & alarm alerts
 │   │   ├── config.rs                   # TOML configuration parser & persistence
+│   │   ├── ipc.rs                      # Unix domain socket IPC client, server & protocol
+│   │   ├── polkit.rs                   # Pure Rust D-Bus Polkit 1 authentication agent
 │   │   ├── power.rs                    # Systemd session power management
 │   │   ├── theme.rs                    # Catppuccin, Tokyo Night, Nord palettes
 │   │   └── wallpaper.rs                # Wallpaper directory scanner & switcher
@@ -96,6 +98,7 @@ msui/
 │       ├── media_menu.rs               # MPRIS music playback overlay
 │       ├── notification_center.rs      # Notification history overlay
 │       ├── osd_window.rs               # Volume & screen brightness HUD
+│       ├── polkit_dialog.rs            # Native Polkit 1 root elevation modal dialog
 │       ├── power_menu.rs               # Lock, suspend, reboot, shutdown modal
 │       ├── reminder_menu.rs            # Reminders & Pomodoro timer manager modal
 │       ├── storage_menu.rs             # Disk drives & USB mount/eject modal
@@ -204,6 +207,16 @@ msui/
 ### 18. On-Screen Display HUD (`msui osd`)
 - Floating volume and screen brightness indicator HUD that triggers upon hardware hotkeys.
 
+### 19. Instantaneous IPC Socket & Modal Manager (`msui toggle` / `msui open` / `msui close`)
+- Sub-5ms modal toggling via Unix Domain Socket (`$XDG_RUNTIME_DIR/msui.sock`).
+- Re-executing modal commands (`msui launcher`, `msui control`, `msui clipboard`, etc.) cleanly toggles open/close state without redundant process overhead.
+- Instant mutual exclusion: opening a new modal cleanly dismisses any active modal without overlapping layer shell surfaces.
+
+### 20. Native Polkit 1 Authentication Agent (`msui polkit`)
+- Pure Rust `org.freedesktop.PolicyKit1.AuthenticationAgent` implementation over system D-Bus via `zbus 5`.
+- Directly replaces external C++ agents (`hyprpolkitagent`, `polkit-gnome`).
+- Beautiful Catppuccin Macchiato elevation dialog with Wayland exclusive keyboard focus, shield indicator, bullet-masked password input, and PAM socket communication (`/run/polkit/agent-helper.socket`).
+
 ---
 
 ## CLI Reference & Subcommands
@@ -212,7 +225,13 @@ The unified `msui` binary can be run interactively or as a non-interactive CLI u
 
 | Command | Subcommands / Usage | Description |
 |---|---|---|
-| `msui bar` | *(default)* | Run the Wayland status bar & background daemons |
+| `msui bar` | *(default)* | Run the Wayland status bar, IPC socket server & background daemons |
+| `msui polkit` | — | Run the native PolicyKit 1 elevation agent daemon |
+| `msui polkit-dialog` | `<action> <msg> <user> <cookie>` | Native Polkit elevation modal dialog |
+| `msui toggle` | `<target>` | Toggle any modal (launcher, control, clipboard, etc.) via IPC |
+| `msui open` | `<target>` | Open or focus modal via IPC |
+| `msui close` | — | Dismiss any currently open modal via IPC |
+| `msui ping` | — | Test IPC socket daemon connectivity and latency |
 | `msui launcher` | — | Open the Spotlight application launcher overlay |
 | `msui control` | `[dnd <on\|off\|toggle>]` / `[topbar]` | Open Quick Settings or toggle DND / Top Bar settings |
 | `msui clipboard` | — | Open the Spotlight clipboard history manager |
@@ -287,10 +306,13 @@ msUI integrates natively into **Hyprland** (0.55+ Lua configuration):
 ### 1. Autostart (`~/.config/hypr/modules/autostart.lua`)
 ```lua
 hl.on("hyprland.start", function()
+    -- Start native Polkit 1 authentication agent
+    hl.exec_cmd("pgrep -f '[m]sui polkit' >/dev/null || setsid msui polkit >/tmp/msui-polkit.log 2>&1 &")
+
     -- Start native wallpaper daemon
     hl.exec_cmd("pgrep -f '[m]sui bg' >/dev/null || setsid msui bg >/tmp/msui-bg.log 2>&1 &")
 
-    -- Start top status bar & background daemons (clipboard & notifications)
+    -- Start top status bar & background daemons (clipboard, notifications, and IPC socket)
     hl.exec_cmd("pgrep -f '[m]sui bar' >/dev/null || setsid msui bar >/tmp/msui-bar.log 2>&1 &")
 end)
 ```

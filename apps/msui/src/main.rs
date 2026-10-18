@@ -1,6 +1,101 @@
+use msui_core::ipc::{IpcClient, IpcCommand, IpcServer};
 use msui_core::{MsuiConfig, ReminderManager, ThemeManager, WallpaperManager};
 use std::env;
 use std::path::Path;
+
+struct ModalManager {
+    current: Option<(String, tokio::process::Child)>,
+}
+
+impl ModalManager {
+    fn new() -> Self {
+        Self { current: None }
+    }
+
+    async fn handle_command(&mut self, cmd: IpcCommand) {
+        match cmd {
+            IpcCommand::Toggle(target) => {
+                if let Some((current_target, mut child)) = self.current.take() {
+                    match child.try_wait() {
+                        Ok(None) => {
+                            let _ = child.kill().await;
+                            let _ = child.wait().await;
+                            if current_target == target {
+                                return;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
+                let bin = env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                let mut cmd = tokio::process::Command::new(bin);
+                cmd.arg(&target);
+                cmd.env("MSUI_DIRECT", "1");
+                match cmd.spawn() {
+                    Ok(child) => {
+                        self.current = Some((target, child));
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to spawn modal {}: {:?}", target, e);
+                    }
+                }
+            }
+            IpcCommand::Open(target) => {
+                if let Some((current_target, mut child)) = self.current.take() {
+                    match child.try_wait() {
+                        Ok(None) => {
+                            if current_target == target {
+                                self.current = Some((current_target, child));
+                                return;
+                            }
+                            let _ = child.kill().await;
+                            let _ = child.wait().await;
+                        }
+                        _ => {}
+                    }
+                }
+
+                let bin = env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("msui"));
+                let mut cmd = tokio::process::Command::new(bin);
+                cmd.arg(&target);
+                cmd.env("MSUI_DIRECT", "1");
+                if let Ok(child) = cmd.spawn() {
+                    self.current = Some((target, child));
+                }
+            }
+            IpcCommand::Close => {
+                if let Some((_, mut child)) = self.current.take() {
+                    let _ = child.kill().await;
+                    let _ = child.wait().await;
+                }
+            }
+            IpcCommand::DndToggle => {
+                msui_core::DndManager::toggle_dnd();
+            }
+            IpcCommand::DndSet(on) => {
+                msui_core::DndManager::set_dnd(on);
+            }
+            IpcCommand::WallpaperCycle => {
+                WallpaperManager::cycle();
+            }
+            IpcCommand::Ping | IpcCommand::Unknown(_) => {}
+        }
+    }
+}
+
+fn try_ipc_toggle(target: &str) -> bool {
+    if env::var("MSUI_DIRECT").is_ok() {
+        return false;
+    }
+    match IpcClient::send_blocking(&IpcCommand::Toggle(target.to_string())) {
+        Ok(resp) => {
+            tracing::debug!("IPC toggle {} success: {}", target, resp);
+            true
+        }
+        Err(_) => false,
+    }
+}
 
 fn main() -> anyhow::Result<()> {
     // Initialize tracing
@@ -12,7 +107,7 @@ fn main() -> anyhow::Result<()> {
     match command {
         "bar" => {
             tracing::info!("Starting msUI Top Bar & Background Services...");
-            // Start background Tokio runtime for clipboard watcher and D-Bus notifications
+            // Start background Tokio runtime for clipboard watcher, D-Bus notifications, and IPC socket
             std::thread::spawn(|| {
                 let rt = tokio::runtime::Builder::new_multi_thread()
                     .enable_all()
@@ -21,7 +116,23 @@ fn main() -> anyhow::Result<()> {
 
                 rt.block_on(async {
                     tokio::spawn(msui_core::start_clipboard_watcher());
-                    let _ = msui_core::run_notification_service().await;
+                    tokio::spawn(msui_core::run_notification_service());
+
+                    let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+                    let server = IpcServer::new();
+                    if let Err(e) = server.start(tx).await {
+                        tracing::warn!("Failed to start IPC server: {:?}", e);
+                    } else {
+                        tokio::spawn(async move {
+                            let mut modal_mgr = ModalManager::new();
+                            while let Some(cmd) = rx.recv().await {
+                                modal_mgr.handle_command(cmd).await;
+                            }
+                        });
+                    }
+
+                    std::future::pending::<()>().await;
+                    drop(server);
                 });
             });
 
@@ -31,6 +142,9 @@ fn main() -> anyhow::Result<()> {
             }
         }
         "clipboard" => {
+            if try_ipc_toggle("clipboard") {
+                return Ok(());
+            }
             tracing::info!("Starting msUI Clipboard History Manager...");
             if let Err(e) = msui_launcher::run_clipboard_menu() {
                 tracing::error!("msUI Clipboard Menu exited with error: {:?}", e);
@@ -43,6 +157,9 @@ fn main() -> anyhow::Result<()> {
             }
         }
         "launcher" => {
+            if try_ipc_toggle("launcher") {
+                return Ok(());
+            }
             tracing::info!("Starting msUI Application Launcher...");
             let config = MsuiConfig::load_or_default();
             if let Err(e) = msui_launcher::run_launcher(config) {
@@ -50,18 +167,28 @@ fn main() -> anyhow::Result<()> {
             }
         }
         "power" => {
+            if try_ipc_toggle("power") {
+                return Ok(());
+            }
             tracing::info!("Starting msUI Power & Session Menu...");
             if let Err(e) = msui_launcher::run_power_menu() {
                 tracing::error!("msUI Power Menu exited with error: {:?}", e);
             }
         }
         "notifications" | "notifs" => {
+            if try_ipc_toggle("notifications") {
+                return Ok(());
+            }
             tracing::info!("Starting msUI Notification Center...");
             if let Err(e) = msui_launcher::run_notification_center() {
                 tracing::error!("msUI Notification Center exited with error: {:?}", e);
             }
         }
         "bluetooth" | "bt" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            if sub.is_none() && try_ipc_toggle("bluetooth") {
+                return Ok(());
+            }
             tracing::info!("Starting msUI Bluetooth Manager...");
             if let Err(e) = msui_launcher::run_bluetooth_menu() {
                 tracing::error!("msUI Bluetooth Menu exited with error: {:?}", e);
@@ -108,6 +235,9 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 _ => {
+                    if try_ipc_toggle("wifi") {
+                        return Ok(());
+                    }
                     tracing::info!("Starting msUI Wi-Fi Network Manager...");
                     if let Err(e) = msui_launcher::run_wifi_menu() {
                         tracing::error!("msUI Wi-Fi Menu exited with error: {:?}", e);
@@ -150,6 +280,9 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 _ => {
+                    if try_ipc_toggle("wallpaper") {
+                        return Ok(());
+                    }
                     tracing::info!("Starting msUI Wallpaper Selector...");
                     if let Err(e) = msui_launcher::run_wallpaper_menu() {
                         tracing::error!("msUI Wallpaper Menu exited with error: {:?}", e);
@@ -172,6 +305,9 @@ fn main() -> anyhow::Result<()> {
                     std::process::exit(1);
                 }
             } else {
+                if try_ipc_toggle("theme") {
+                    return Ok(());
+                }
                 tracing::info!("Starting msUI Theme Selector...");
                 if let Err(e) = msui_launcher::run_theme_menu() {
                     tracing::error!("msUI Theme Menu exited with error: {:?}", e);
@@ -238,6 +374,9 @@ fn main() -> anyhow::Result<()> {
                     println!("Toggled audio mute.");
                 }
                 _ => {
+                    if try_ipc_toggle("audio") {
+                        return Ok(());
+                    }
                     tracing::info!("Starting msUI Audio Mixer & Device Manager...");
                     if let Err(e) = msui_launcher::run_audio_menu() {
                         tracing::error!("msUI Audio Menu exited with error: {:?}", e);
@@ -322,6 +461,9 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 _ => {
+                    if try_ipc_toggle("battery") {
+                        return Ok(());
+                    }
                     tracing::info!("Starting msUI Battery & Power Profile Manager...");
                     if let Err(e) = msui_launcher::run_battery_menu() {
                         tracing::error!("msUI Battery Menu exited with error: {:?}", e);
@@ -413,6 +555,9 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 _ => {
+                    if try_ipc_toggle("display") {
+                        return Ok(());
+                    }
                     tracing::info!("Starting msUI Display & Monitor Manager...");
                     if let Err(e) = msui_launcher::run_display_menu() {
                         tracing::error!("msUI Display Menu exited with error: {:?}", e);
@@ -468,6 +613,9 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 _ => {
+                    if try_ipc_toggle("drawer") {
+                        return Ok(());
+                    }
                     tracing::info!("Starting msUI App Drawer & Task Switcher...");
                     let config = MsuiConfig::load_or_default();
                     if let Err(e) = msui_launcher::run_app_drawer(config) {
@@ -509,6 +657,9 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 _ => {
+                    if try_ipc_toggle("control") {
+                        return Ok(());
+                    }
                     tracing::info!("Starting msUI Quick Settings Control Center...");
                     let config = MsuiConfig::load_or_default();
                     if let Err(e) = msui_launcher::run_control_center(config) {
@@ -573,6 +724,9 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 _ => {
+                    if try_ipc_toggle("media") {
+                        return Ok(());
+                    }
                     tracing::info!("Starting msUI Media Player Overlay...");
                     let config = MsuiConfig::load_or_default();
                     if let Err(e) = msui_launcher::run_media_menu(config) {
@@ -674,6 +828,9 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 _ => {
+                    if try_ipc_toggle("storage") {
+                        return Ok(());
+                    }
                     tracing::info!("Starting msUI Disk Storage & Removable Drives Manager...");
                     let config = MsuiConfig::load_or_default();
                     if let Err(e) = msui_launcher::run_storage_menu(config) {
@@ -753,12 +910,121 @@ fn main() -> anyhow::Result<()> {
                     println!("Cleared all reminders and timers.");
                 }
                 _ => {
+                    if try_ipc_toggle("reminder") {
+                        return Ok(());
+                    }
                     tracing::info!("Starting msUI Reminders & Countdown Timer Manager...");
                     let config = MsuiConfig::load_or_default();
                     if let Err(e) = msui_launcher::run_reminder_menu(config) {
                         tracing::error!("msUI Reminder Menu exited with error: {:?}", e);
                     }
                 }
+            }
+        }
+        "toggle" => {
+            if let Some(target) = args.get(2) {
+                match IpcClient::send_blocking(&IpcCommand::Toggle(target.to_string())) {
+                    Ok(res) => println!("{}", res),
+                    Err(e) => {
+                        eprintln!("Failed to send toggle over IPC: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            } else {
+                eprintln!("Usage: msui toggle <target>");
+                std::process::exit(1);
+            }
+        }
+        "open" => {
+            if let Some(target) = args.get(2) {
+                match IpcClient::send_blocking(&IpcCommand::Open(target.to_string())) {
+                    Ok(res) => println!("{}", res),
+                    Err(e) => {
+                        eprintln!("Failed to send open over IPC: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            } else {
+                eprintln!("Usage: msui open <target>");
+                std::process::exit(1);
+            }
+        }
+        "close" => {
+            match IpcClient::send_blocking(&IpcCommand::Close) {
+                Ok(res) => println!("{}", res),
+                Err(e) => {
+                    eprintln!("Failed to send close over IPC: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        "ping" => {
+            match IpcClient::send_blocking(&IpcCommand::Ping) {
+                Ok(res) => println!("Daemon response: {}", res),
+                Err(e) => {
+                    eprintln!("Daemon not responding: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        "polkit" => {
+            tracing::info!("Starting msUI Native Polkit 1 Authentication Agent...");
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()?;
+            rt.block_on(async {
+                if let Err(e) = msui_core::run_polkit_agent().await {
+                    tracing::error!("msUI Polkit Agent error: {:?}", e);
+                    std::process::exit(1);
+                }
+            });
+        }
+        "polkit-dialog" => {
+            let mut action_id = String::new();
+            let mut message = String::new();
+            let mut icon_name = String::new();
+            let mut user = String::new();
+            let mut cookie = String::new();
+            let mut command_str = String::new();
+
+            let mut i = 2;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--action-id" => {
+                        if let Some(v) = args.get(i + 1) { action_id = v.clone(); i += 1; }
+                    }
+                    "--message" => {
+                        if let Some(v) = args.get(i + 1) { message = v.clone(); i += 1; }
+                    }
+                    "--icon" => {
+                        if let Some(v) = args.get(i + 1) { icon_name = v.clone(); i += 1; }
+                    }
+                    "--user" => {
+                        if let Some(v) = args.get(i + 1) { user = v.clone(); i += 1; }
+                    }
+                    "--cookie" => {
+                        if let Some(v) = args.get(i + 1) { cookie = v.clone(); i += 1; }
+                    }
+                    "--command" => {
+                        if let Some(v) = args.get(i + 1) { command_str = v.clone(); i += 1; }
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
+
+            let dialog_args = msui_launcher::PolkitDialogArgs {
+                action_id,
+                message,
+                icon_name,
+                user,
+                cookie,
+                command: command_str,
+            };
+
+            if let Err(e) = msui_launcher::run_polkit_dialog(dialog_args) {
+                tracing::error!("msUI Polkit Dialog error: {:?}", e);
+                std::process::exit(1);
             }
         }
         "--help" | "-h" | "help" => {
@@ -802,6 +1068,11 @@ fn print_help() {
           bg            Run the native Wayland background wallpaper daemon\n  \
           theme         Open the Theme switcher overlay (or pass theme name)\n  \
           power         Open the Power & Session menu overlay\n  \
+          polkit        Run the native D-Bus PolicyKit 1 authentication agent daemon\n  \
+          toggle        Toggle a modal overlay via instant IPC socket (e.g. 'msui toggle launcher')\n  \
+          open          Open a modal overlay via instant IPC socket\n  \
+          close         Close the currently active modal overlay via instant IPC socket\n  \
+          ping          Ping the running msUI IPC daemon\n  \
           toast         Run the Toast notifications overlay\n  \
           help          Display this help message\n\n\
         OPTIONS:\n  \
