@@ -10,6 +10,7 @@ use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
 use msui_core::{
     find_icon_for_class, scan_desktop_apps, DesktopApp, HyprlandClient, HyprlandIpc, MsuiConfig,
+    TrayItem,
 };
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -56,6 +57,10 @@ pub enum DrawerItem {
         client: HyprlandClient,
         icon: Option<PathBuf>,
     },
+    Tray {
+        item: TrayItem,
+        icon: Option<PathBuf>,
+    },
     App {
         app: DesktopApp,
     },
@@ -66,6 +71,7 @@ pub struct AppDrawer {
     tab: DrawerTab,
     query: String,
     clients: Vec<HyprlandClient>,
+    tray_items: Vec<TrayItem>,
     all_apps: Vec<DesktopApp>,
     filtered: Vec<DrawerItem>,
     selected_idx: usize,
@@ -79,6 +85,7 @@ pub enum Message {
     SelectPrevious,
     SelectNext,
     ActivateItem(usize),
+    ActivateTray(String, String),
     FocusWindow(String),
     CloseWindow(String),
     LaunchApp(usize),
@@ -97,6 +104,7 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 impl AppDrawer {
     pub fn new(config: MsuiConfig) -> (Self, Command<Message>) {
         let clients = HyprlandIpc::get_clients();
+        let tray_items = msui_core::get_tray_items();
         let all_apps = scan_desktop_apps();
 
         let mut drawer = Self {
@@ -104,6 +112,7 @@ impl AppDrawer {
             tab: DrawerTab::Running,
             query: String::new(),
             clients,
+            tray_items,
             all_apps,
             filtered: Vec::new(),
             selected_idx: 0,
@@ -114,6 +123,7 @@ impl AppDrawer {
 
         (drawer, iced::widget::operation::focus(INPUT_ID.clone()))
     }
+
 
     pub fn namespace() -> String {
         "msui-app-drawer".to_string()
@@ -148,7 +158,35 @@ impl AppDrawer {
                     });
                 }
             }
+
+            // 1b. Background Tray Services (WeChat, Proton VPN, Steam, etc.)
+            for tray_item in &self.tray_items {
+                let matches = if q.is_empty() {
+                    true
+                } else {
+                    self.matcher.fuzzy_match(&tray_item.title, &q).is_some()
+                        || self.matcher.fuzzy_match(&tray_item.id, &q).is_some()
+                        || self.matcher.fuzzy_match(&tray_item.tooltip, &q).is_some()
+                };
+
+                if matches {
+                    let icon = find_icon_for_class(&tray_item.id)
+                        .or_else(|| find_icon_for_class(&tray_item.title))
+                        .or_else(|| {
+                            if !tray_item.icon_name.is_empty() {
+                                find_icon_for_class(&tray_item.icon_name)
+                            } else {
+                                None
+                            }
+                        });
+                    items.push(DrawerItem::Tray {
+                        item: tray_item.clone(),
+                        icon,
+                    });
+                }
+            }
         }
+
 
         // 2. Apps (if tab is Installed or All)
         if self.tab == DrawerTab::Installed || self.tab == DrawerTab::All {
@@ -206,6 +244,10 @@ impl AppDrawer {
                             HyprlandIpc::activate_client(client);
                             std::process::exit(0);
                         }
+                        DrawerItem::Tray { item, .. } => {
+                            msui_core::activate_tray_item(&item.service, &item.path);
+                            std::process::exit(0);
+                        }
                         DrawerItem::App { app } => {
                             if let Some(client) = app.find_running_client(&self.clients) {
                                 HyprlandIpc::activate_client(client);
@@ -216,6 +258,10 @@ impl AppDrawer {
                         }
                     }
                 }
+            }
+            Message::ActivateTray(service, path) => {
+                msui_core::activate_tray_item(&service, &path);
+                std::process::exit(0);
             }
             Message::FocusWindow(addr) => {
                 HyprlandIpc::focus_window(&addr);
@@ -232,6 +278,10 @@ impl AppDrawer {
                     match item {
                         DrawerItem::App { app } => {
                             let _ = app.launch();
+                            std::process::exit(0);
+                        }
+                        DrawerItem::Tray { item, .. } => {
+                            msui_core::activate_tray_item(&item.service, &item.path);
                             std::process::exit(0);
                         }
                         DrawerItem::Window { client, .. } => {
@@ -255,6 +305,7 @@ impl AppDrawer {
             }
             Message::Refresh => {
                 self.clients = HyprlandIpc::get_clients();
+                self.tray_items = msui_core::get_tray_items();
                 self.rebuild_filtered();
             }
             Message::Close => {
@@ -305,7 +356,7 @@ impl AppDrawer {
         let header_title = row![title_icon, title_label].spacing(8).align_y(Alignment::Center);
 
         // Tab buttons
-        let running_count = self.clients.len();
+        let running_count = self.clients.len() + self.tray_items.len();
         let running_label = format!("󰖯 Running ({})", running_count);
         let btn_running = button(text(running_label).size(12))
             .style(if self.tab == DrawerTab::Running { button::primary } else { button::secondary })
@@ -456,6 +507,79 @@ impl AppDrawer {
                         item_row = item_row.push(focus_btn);
                         item_row = item_row.push(relaunch_btn);
                         item_row = item_row.push(close_win_btn);
+
+                        let item_container = button(item_row)
+                            .width(Length::Fill)
+                            .style(if is_selected {
+                                button::primary
+                            } else {
+                                button::secondary
+                            })
+                            .padding([6, 10])
+                            .on_press(Message::ActivateItem(idx));
+
+                        list_col = list_col.push(item_container);
+                    }
+                    DrawerItem::Tray { item, icon } => {
+                        let icon_elem: Element<'_, Message> = match icon {
+                            Some(p) if p.extension().is_some_and(|e| e == "svg") => {
+                                svg(svg::Handle::from_path(p))
+                                    .width(Length::Fixed(28.0))
+                                    .height(Length::Fixed(28.0))
+                                    .into()
+                            }
+                            Some(p) if p.extension().is_some_and(|e| e == "png") => {
+                                image(image::Handle::from_path(p))
+                                    .width(Length::Fixed(28.0))
+                                    .height(Length::Fixed(28.0))
+                                    .into()
+                            }
+                            _ => {
+                                let glyph = if item.id.to_lowercase().contains("wechat")
+                                    || item.title.to_lowercase().contains("wechat")
+                                {
+                                    "󰘑"
+                                } else if item.id.to_lowercase().contains("proton")
+                                    || item.title.to_lowercase().contains("proton")
+                                    || item.id.to_lowercase().contains("vpn")
+                                {
+                                    "󰖟"
+                                } else if item.id.to_lowercase().contains("steam") {
+                                    "󰓓"
+                                } else if item.id.to_lowercase().contains("discord") {
+                                    "󰙯"
+                                } else if item.id.to_lowercase().contains("telegram") {
+                                    "󰲸"
+                                } else {
+                                    "󰍜"
+                                };
+                                text(glyph).size(24).into()
+                            }
+                        };
+
+                        let item_title = text(&item.title).size(14);
+                        let meta_str = if !item.tooltip.is_empty() && item.tooltip != item.title {
+                            format!("System Tray • {}", item.tooltip)
+                        } else {
+                            "System Tray • Background Service".to_string()
+                        };
+                        let item_meta = text(meta_str).size(11);
+                        let info_col = column![item_title, item_meta].spacing(2);
+
+                        let tray_badge = text("󱊖 Background Tray").size(11);
+
+                        let open_btn = button(text("󰁔 Open Window").size(11))
+                            .style(button::primary)
+                            .padding([3, 8])
+                            .on_press(Message::ActivateTray(item.service.clone(), item.path.clone()));
+
+                        let mut item_row = row![icon_elem, info_col]
+                            .spacing(12)
+                            .align_y(Alignment::Center);
+
+                        item_row = item_row.push(space().width(Length::Fill));
+                        item_row = item_row.push(tray_badge);
+                        item_row = item_row.push(open_btn);
 
                         let item_container = button(item_row)
                             .width(Length::Fill)

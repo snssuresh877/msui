@@ -12,7 +12,7 @@ use msui_core::{
     AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BluetoothInfo, BluetoothManager,
     BrightnessInfo, BrightnessMonitor, MediaInfo, MediaMonitor, MsuiConfig, NetworkInfo,
     NetworkMonitor, ReminderItem, ReminderManager, StorageManager, SystemControl, SystemMetrics,
-    SystemMonitor, ThemeManager,
+    SystemMonitor, ThemeManager, TrayItem,
 };
 use std::time::Duration;
 
@@ -87,6 +87,7 @@ pub struct Bar {
     bluetooth_info: BluetoothInfo,
     has_removable_drive: bool,
     next_reminder: Option<ReminderItem>,
+    tray_items: Vec<TrayItem>,
     last_config_mtime: Option<std::time::SystemTime>,
 }
 
@@ -121,8 +122,10 @@ pub enum Message {
     BrightnessUp,
     BrightnessDown,
     MediaPlayPause,
+    ActivateTray(String, String),
     Ignored,
 }
+
 
 impl Bar {
     fn new(config: MsuiConfig, shell_events: ShellReceiver) -> Self {
@@ -159,6 +162,7 @@ impl Bar {
             bluetooth_info,
             has_removable_drive: StorageManager::has_removable_devices(),
             next_reminder: ReminderManager::next_expiring(),
+            tray_items: msui_core::get_tray_items(),
             last_config_mtime: MsuiConfig::default_config_path()
                 .and_then(|p| std::fs::metadata(p).ok())
                 .and_then(|m| m.modified().ok()),
@@ -191,6 +195,7 @@ impl Bar {
                 ReminderManager::check_and_trigger_expired();
                 self.next_reminder = ReminderManager::next_expiring();
                 self.hyprland_workspace = msui_core::HyprlandIpc::get_active_workspace_id();
+                self.tray_items = msui_core::get_tray_items();
 
                 // Live dynamic reload if configuration file modified on disk
                 if let Some(cfg_path) = MsuiConfig::default_config_path() {
@@ -207,6 +212,8 @@ impl Bar {
             Message::MetricsTick => {
                 self.system_metrics = self.system_monitor.sample();
                 self.hyprland_workspace = msui_core::HyprlandIpc::get_active_workspace_id();
+                self.tray_items = msui_core::get_tray_items();
+
                 if self.config.bar.show_battery {
                     self.battery_info = self.battery_monitor.read();
                 }
@@ -357,6 +364,9 @@ impl Bar {
                 if let Some(m) = &mut self.media_info {
                     m.is_playing = !m.is_playing;
                 }
+            }
+            Message::ActivateTray(service, path) => {
+                msui_core::activate_tray_item(&service, &path);
             }
             Message::Ignored => {}
             _ => {}
@@ -687,6 +697,39 @@ impl Bar {
                 .padding([2, 6])
                 .on_press(Message::OpenClipboard);
             right_row = right_row.push(clip_btn);
+        }
+
+        // FreeDesktop / KDE System Tray (WeChat, Proton VPN, Steam, Discord, etc.)
+        if !self.tray_items.is_empty() {
+            let mut tray_group = row![].spacing(3).align_y(Alignment::Center);
+            for item in &self.tray_items {
+                let glyph = if item.id.to_lowercase().contains("wechat")
+                    || item.title.to_lowercase().contains("wechat")
+                {
+                    "󰘑"
+                } else if item.id.to_lowercase().contains("proton")
+                    || item.title.to_lowercase().contains("proton")
+                    || item.id.to_lowercase().contains("vpn")
+                {
+                    "󰖟"
+                } else if item.id.to_lowercase().contains("steam") {
+                    "󰓓"
+                } else if item.id.to_lowercase().contains("discord") {
+                    "󰙯"
+                } else if item.id.to_lowercase().contains("telegram") {
+                    "󰲸"
+                } else {
+                    "󰍜"
+                };
+
+                let tray_btn = button(text(format!(" {glyph} ")).size(13))
+                    .style(button::primary)
+                    .padding([2, 5])
+                    .on_press(Message::ActivateTray(item.service.clone(), item.path.clone()));
+
+                tray_group = tray_group.push(tray_btn);
+            }
+            right_row = right_row.push(tray_group);
         }
 
         // Notification Bell Icon with Counter

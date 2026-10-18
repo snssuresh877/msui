@@ -117,6 +117,7 @@ fn main() -> anyhow::Result<()> {
                 rt.block_on(async {
                     tokio::spawn(msui_core::start_clipboard_watcher());
                     tokio::spawn(msui_core::run_notification_service());
+                    tokio::spawn(msui_core::run_tray_watcher());
 
                     let (tx, mut rx) = tokio::sync::mpsc::channel(32);
                     let server = IpcServer::new();

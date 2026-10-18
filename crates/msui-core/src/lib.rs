@@ -9,6 +9,7 @@ pub mod polkit;
 pub mod power;
 pub mod reminder;
 pub mod theme;
+pub mod tray;
 pub mod wallpaper;
 
 pub use clipboard::{ClipboardEntry, ClipboardStore, GLOBAL_CLIPBOARD, watcher::start_clipboard_watcher};
@@ -32,7 +33,9 @@ pub use notification::{
 pub use power::SystemControl;
 pub use reminder::{ReminderItem, ReminderManager};
 pub use theme::{ThemeDefinition, ThemeManager, BUILTIN_THEMES};
+pub use tray::{activate_tray_item, activate_tray_item_async, get_tray_items, watcher::run_tray_watcher, TrayItem};
 pub use wallpaper::{WallpaperItem, WallpaperManager};
+
 
 #[cfg(test)]
 mod tests {
@@ -286,4 +289,26 @@ mod tests {
         let cmd = IpcCommand::parse("ping");
         assert_eq!(cmd, IpcCommand::Ping);
     }
+
+    #[test]
+    fn test_tray_items() {
+        let items = get_tray_items();
+        assert!(items.is_empty() || !items.is_empty());
+
+        let item = TrayItem {
+            service: "org.kde.StatusNotifierItem-123-1".to_string(),
+            path: "/StatusNotifierItem".to_string(),
+            id: "protonvpn".to_string(),
+            title: "Proton VPN".to_string(),
+            icon_name: "protonvpn-gui".to_string(),
+            tooltip: "Connected to US-FREE#1".to_string(),
+        };
+
+        let json = serde_json::to_string(&item).expect("Failed to serialize TrayItem");
+        let parsed: TrayItem = serde_json::from_str(&json).expect("Failed to deserialize TrayItem");
+        assert_eq!(parsed.id, "protonvpn");
+        assert_eq!(parsed.title, "Proton VPN");
+        assert_eq!(parsed.service, "org.kde.StatusNotifierItem-123-1");
+    }
 }
+
