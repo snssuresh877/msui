@@ -351,7 +351,7 @@ hl.bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("msui osd brightness up"))
 hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("msui osd brightness down"))
 ```
 
-### 3. Layer Blur Rules (`~/.config/hypr/modules/rules.lua`)
+### 3. Layer Blur & Instant Startup Rules (`~/.config/hypr/modules/rules.lua`)
 ```lua
 -- Apply smooth frosted glass blur to all msUI overlays
 hl.layer_rule({
@@ -360,6 +360,15 @@ hl.layer_rule({
     },
     blur = true,
     ignore_alpha = 0.25,
+})
+
+-- Prevent alpha fade delays on startup for background wallpaper and top bar
+hl.layer_rule({
+    name = "msui-instant-layers",
+    match = {
+        namespace = "^(msui-bar|msui-wallpaper-daemon)$",
+    },
+    no_anim = true,
 })
 ```
 
