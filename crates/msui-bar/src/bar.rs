@@ -241,10 +241,9 @@ impl Bar {
             }
             Message::SwitchWorkspace(id) => {
                 self.hyprland_workspace = id;
-                let _ = std::process::Command::new("hyprctl")
-                    .args(["dispatch", "workspace", &id.to_string()])
-                    .spawn();
+                msui_core::HyprlandIpc::switch_workspace_sync(id);
             }
+
             Message::OutputChanged(output) => {
                 self.output = output;
             }

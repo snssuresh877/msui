@@ -213,21 +213,64 @@ impl HyprlandIpc {
             .unwrap_or(false)
     }
 
+    pub fn switch_workspace_sync(workspace_id: i32) -> bool {
+        // 1. Try direct Unix socket write with Lua dispatcher
+        if let Some(path) = Self::socket1_path() {
+            use std::io::Write;
+            if let Ok(mut stream) = std::os::unix::net::UnixStream::connect(path) {
+                let _ = stream.set_write_timeout(Some(std::time::Duration::from_millis(100)));
+                let _ = stream.set_read_timeout(Some(std::time::Duration::from_millis(100)));
+                let lua_cmd = format!("dispatch hl.dsp.focus({{ workspace = {} }})\n", workspace_id);
+                if stream.write_all(lua_cmd.as_bytes()).is_ok() {
+                    return true;
+                }
+            }
+        }
+
+        // 2. Try hyprctl with Lua dispatch
+        let lua_focus = format!("hl.dsp.focus({{ workspace = {} }})", workspace_id);
+        if let Ok(res) = std::process::Command::new("hyprctl")
+            .args(["dispatch", &lua_focus])
+            .output()
+        {
+            if res.status.success() {
+                return true;
+            }
+        }
+
+        // 3. Fallback to standard hyprctl
+        let _ = std::process::Command::new("hyprctl")
+            .args(["dispatch", "workspace", &workspace_id.to_string()])
+            .spawn();
+
+        true
+    }
+
     pub async fn switch_workspace(workspace_id: i32) -> anyhow::Result<()> {
         if let Some(path) = Self::socket1_path() {
             if let Ok(mut stream) = UnixStream::connect(path).await {
-                let cmd = format!("dispatch workspace {}\n", workspace_id);
-                stream.write_all(cmd.as_bytes()).await?;
-                return Ok(());
+                let lua_cmd = format!("dispatch hl.dsp.focus({{ workspace = {} }})\n", workspace_id);
+                if stream.write_all(lua_cmd.as_bytes()).await.is_ok() {
+                    return Ok(());
+                }
             }
         }
-        // Fallback to hyprctl
+        let lua_focus = format!("hl.dsp.focus({{ workspace = {} }})", workspace_id);
+        let res = tokio::process::Command::new("hyprctl")
+            .args(["dispatch", &lua_focus])
+            .output()
+            .await;
+        if res.is_ok() && res.as_ref().unwrap().status.success() {
+            return Ok(());
+        }
+        // Fallback to standard hyprctl
         let _ = tokio::process::Command::new("hyprctl")
             .args(["dispatch", "workspace", &workspace_id.to_string()])
             .output()
             .await;
         Ok(())
     }
+
 
     pub async fn listen_events<F>(mut on_event: F) -> anyhow::Result<()>
     where
