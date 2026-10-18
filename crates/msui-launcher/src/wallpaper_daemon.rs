@@ -3,12 +3,18 @@ use iced::{ContentFit, Element, Length, Task as Command, Theme};
 use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
-use iced_exwlshell::settings::LayerShellSettings;
+use iced_exwlshell::settings::{LayerShellSettings, StartMode};
 use msui_core::WallpaperManager;
 use std::path::PathBuf;
 use std::time::Duration;
 
 pub fn run_wallpaper_daemon() -> Result<(), iced_exwlshell::Error> {
+    let start_mode = if let Some(target) = msui_core::DisplayManager::get_primary_monitor_name() {
+        StartMode::TargetScreen(target)
+    } else {
+        StartMode::Active
+    };
+
     application(
         WallpaperDaemon::new,
         WallpaperDaemon::namespace,
@@ -22,6 +28,7 @@ pub fn run_wallpaper_daemon() -> Result<(), iced_exwlshell::Error> {
         layer: Layer::Background,
         keyboard_interactivity: KeyboardInteractivity::None,
         exclusive_zone: -1,
+        start_mode,
         ..Default::default()
     })
     .subscription(WallpaperDaemon::subscription)

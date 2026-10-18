@@ -99,6 +99,21 @@ impl HyprlandIpc {
         }
     }
 
+    pub fn get_active_workspace_id() -> i32 {
+        let output = std::process::Command::new("hyprctl")
+            .args(["activeworkspace", "-j"])
+            .output();
+
+        if let Ok(out) = output {
+            if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&out.stdout) {
+                if let Some(id) = val.get("id").and_then(|v| v.as_i64()) {
+                    return id as i32;
+                }
+            }
+        }
+        1
+    }
+
     pub fn focus_window(address: &str) -> bool {
         let arg = format!("address:{}", address);
         std::process::Command::new("hyprctl")

@@ -22,6 +22,36 @@ pub struct DisplayMonitorInfo {
 pub struct DisplayManager;
 
 impl DisplayManager {
+    pub fn get_primary_monitor_name() -> Option<String> {
+        let monitors = Self::list_monitors();
+        if let Some(m) = monitors.iter().find(|m| m.is_focused && !m.is_disabled) {
+            return Some(m.name.clone());
+        }
+        if let Some(m) = monitors.iter().find(|m| !m.is_disabled) {
+            return Some(m.name.clone());
+        }
+
+        // Direct kernel DRM fallback (e.g. before hyprctl is ready)
+        if let Ok(entries) = std::fs::read_dir("/sys/class/drm") {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let status_file = path.join("status");
+                if let Ok(status) = std::fs::read_to_string(status_file) {
+                    if status.trim() == "connected" {
+                        if let Some(fname) = path.file_name().and_then(|n| n.to_str()) {
+                            // Format: card1-eDP-1 or card0-HDMI-A-1 -> eDP-1 or HDMI-A-1
+                            if let Some(idx) = fname.find('-') {
+                                return Some(fname[idx + 1..].to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
     pub fn list_monitors() -> Vec<DisplayMonitorInfo> {
         let output = Command::new("hyprctl")
             .args(["monitors", "all", "-j"])

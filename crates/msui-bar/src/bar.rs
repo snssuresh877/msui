@@ -1,17 +1,12 @@
 use chrono::Local;
 use iced::widget::{button, container, row, space, text};
 use iced::{Alignment, Element, Font, Length, Task as Command};
-use iced_exwlshell::get_wlconnection;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, Layer, LayerSize};
 use iced_exwlshell::settings::{ExWlSettings, LayerShellSettings, StartMode};
 use iced_exwlshell::to_layer_message;
 use iced_wayland_subscriber::OutputId;
 use iced_wayland_subscriber::shell::{ShellEvent, ShellReceiver};
-use iced_wayland_subscriber::workspace::{
-    State, Workspace, WorkspaceCapabilities, WorkspaceEvent, WorkspaceGroup,
-    WorkspaceId, WorkspaceSnapshot,
-};
 
 use msui_core::{
     AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BluetoothInfo, BluetoothManager,
@@ -19,7 +14,6 @@ use msui_core::{
     NetworkMonitor, ReminderItem, ReminderManager, StorageManager, SystemControl, SystemMetrics,
     SystemMonitor, ThemeManager,
 };
-use std::sync::Arc;
 use std::time::Duration;
 
 pub fn run_bar(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
@@ -40,6 +34,13 @@ pub fn run_bar(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
 
     let cfg_clone = config.clone();
 
+    let start_mode = if let Some(target) = msui_core::DisplayManager::get_primary_monitor_name() {
+        tracing::info!("Targeting primary display output: {}", target);
+        StartMode::TargetScreen(target)
+    } else {
+        StartMode::Active
+    };
+
     application(
         move || Bar::new(cfg_clone.clone(), shell_events.clone()),
         Bar::namespace,
@@ -58,7 +59,7 @@ pub fn run_bar(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
             exclusive_zone: height as i32,
             anchor,
             layer,
-            start_mode: StartMode::Active,
+            start_mode,
             ..Default::default()
         },
         shell_broadcast,
@@ -70,7 +71,6 @@ pub fn run_bar(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
 pub struct Bar {
     config: MsuiConfig,
     shell_events: ShellReceiver,
-    workspaces: Option<Arc<WorkspaceSnapshot>>,
     output: Option<OutputId>,
     battery_monitor: BatteryMonitor,
     system_monitor: SystemMonitor,
@@ -95,8 +95,7 @@ pub struct Bar {
 pub enum Message {
     ClockTick,
     MetricsTick,
-    WorkspacesUpdated(Arc<WorkspaceSnapshot>),
-    ActivateWorkspace(WorkspaceId),
+    SwitchWorkspace(i32),
     OutputChanged(Option<OutputId>),
     OpenLauncher,
     OpenDrawer,
@@ -144,7 +143,6 @@ impl Bar {
         Self {
             config,
             shell_events,
-            workspaces: None,
             output: None,
             battery_monitor,
             system_monitor,
@@ -156,7 +154,7 @@ impl Bar {
             network_info,
             brightness_info,
             media_info,
-            hyprland_workspace: 1,
+            hyprland_workspace: msui_core::HyprlandIpc::get_active_workspace_id(),
             notification_count: 0,
             bluetooth_info,
             has_removable_drive: StorageManager::has_removable_devices(),
@@ -176,13 +174,6 @@ impl Bar {
         let metrics = iced::time::every(Duration::from_secs(self.config.bar.sysinfo_refresh_seconds))
             .map(|_| Message::MetricsTick);
 
-        let wayland_workspaces = iced_wayland_subscriber::workspace::listen(get_wlconnection()).map(
-            |event| match event {
-                WorkspaceEvent::Updated(snapshot) => Message::WorkspacesUpdated(snapshot),
-                _ => Message::Ignored,
-            },
-        );
-
         let shell_listener = self.shell_events.listen().filter_map(|event| match event {
             ShellEvent::WindowOutputChanged { output, .. } => {
                 Some(Message::OutputChanged(output.as_ref().map(OutputId::from)))
@@ -190,20 +181,7 @@ impl Bar {
             _ => None,
         });
 
-        iced::Subscription::batch([clock, metrics, wayland_workspaces, shell_listener])
-    }
-
-    fn group(&self) -> Option<&WorkspaceGroup> {
-        self.workspaces.as_ref()?.group_for_output(self.output?)
-    }
-
-    fn occupant(&self, slot: u32) -> Option<&Workspace> {
-        let snapshot = self.workspaces.as_ref()?;
-        let group = self.group()?;
-        let slot = slot.to_string();
-        snapshot
-            .workspaces_in(&group.id)
-            .find(|workspace| workspace.name == slot)
+        iced::Subscription::batch([clock, metrics, shell_listener])
     }
 
     fn update(&mut self, message: Message) -> Command<Message> {
@@ -212,6 +190,7 @@ impl Bar {
                 self.current_time = Local::now().format(&self.config.bar.time_format).to_string();
                 ReminderManager::check_and_trigger_expired();
                 self.next_reminder = ReminderManager::next_expiring();
+                self.hyprland_workspace = msui_core::HyprlandIpc::get_active_workspace_id();
 
                 // Live dynamic reload if configuration file modified on disk
                 if let Some(cfg_path) = MsuiConfig::default_config_path() {
@@ -227,6 +206,7 @@ impl Bar {
             }
             Message::MetricsTick => {
                 self.system_metrics = self.system_monitor.sample();
+                self.hyprland_workspace = msui_core::HyprlandIpc::get_active_workspace_id();
                 if self.config.bar.show_battery {
                     self.battery_info = self.battery_monitor.read();
                 }
@@ -252,16 +232,14 @@ impl Bar {
                     store.history().len()
                 };
             }
-            Message::WorkspacesUpdated(snapshot) => {
-                self.workspaces = Some(snapshot);
+            Message::SwitchWorkspace(id) => {
+                self.hyprland_workspace = id;
+                let _ = std::process::Command::new("hyprctl")
+                    .args(["dispatch", "workspace", &id.to_string()])
+                    .spawn();
             }
             Message::OutputChanged(output) => {
                 self.output = output;
-            }
-            Message::ActivateWorkspace(id) => {
-                if let Some(snapshot) = &self.workspaces {
-                    let _ = snapshot.activate(&id);
-                }
             }
             Message::OpenLauncher => {
                 let bin = std::env::current_exe()
@@ -401,52 +379,26 @@ impl Bar {
         if self.config.bar.show_workspaces {
             let mut ws_row = row![].spacing(3).align_y(Alignment::Center);
 
-            if self.workspaces.is_some() {
-                for slot in 1..=8 {
-                    let occupant = self.occupant(slot);
-                    let is_active = occupant.map_or(false, |w| w.state.contains(State::Active));
-                    let label = if is_active {
-                        format!("󰮯 {slot}")
-                    } else {
-                        format!("󰊠 {slot}")
-                    };
+            for slot in 1..=8 {
+                let is_active = slot == self.hyprland_workspace;
+                let label = if is_active {
+                    format!("󰮯 {slot}")
+                } else {
+                    format!("󰊠 {slot}")
+                };
 
-                    let btn_style = if is_active {
-                        button::primary
-                    } else {
-                        button::secondary
-                    };
+                let btn_style = if is_active {
+                    button::primary
+                } else {
+                    button::secondary
+                };
 
-                    let press = occupant
-                        .filter(|w| w.capabilities.contains(WorkspaceCapabilities::Activate))
-                        .map(|w| Message::ActivateWorkspace(w.id.clone()));
-
-                    ws_row = ws_row.push(
-                        button(text(label).size(13))
-                            .style(btn_style)
-                            .padding([3, 7])
-                            .on_press_maybe(press),
-                    );
-                }
-            } else {
-                for slot in 1..=5 {
-                    let is_active = slot == self.hyprland_workspace;
-                    let label = if is_active {
-                        format!("󰮯 {slot}")
-                    } else {
-                        format!("󰊠 {slot}")
-                    };
-                    let btn_style = if is_active {
-                        button::primary
-                    } else {
-                        button::secondary
-                    };
-                    ws_row = ws_row.push(
-                        button(text(label).size(13))
-                            .style(btn_style)
-                            .padding([3, 7]),
-                    );
-                }
+                ws_row = ws_row.push(
+                    button(text(label).size(13))
+                        .style(btn_style)
+                        .padding([3, 7])
+                        .on_press(Message::SwitchWorkspace(slot)),
+                );
             }
             left_row = left_row.push(ws_row);
         }
