@@ -1,0 +1,37 @@
+[bar]
+height = 32
+layer = "top"
+anchor = "top"
+time_format = "%a %b %d  %I:%M %p"
+battery_refresh_seconds = 5
+sysinfo_refresh_seconds = 2
+show_brand = true
+show_workspaces = true
+show_media = true
+show_clock = true
+show_reminders_badge = true
+show_network = false
+show_audio = false
+show_brightness = false
+show_cpu = true
+show_memory = true
+show_storage = true
+show_battery = true
+show_bluetooth = false
+show_wallpaper = false
+show_theme = false
+show_reminders_btn = true
+show_screenshot = true
+show_clipboard = false
+show_notifications = true
+show_control_center = true
+show_terminal = false
+show_power = true
+
+[launcher]
+width = 680
+height = 420
+max_results = 8
+layer = "overlay"
+placeholder = "Search applications..."
+terminal = "alacritty"

@@ -1,0 +1,1 @@
+/home/m/.config/fish/completions/zenithctl.fish

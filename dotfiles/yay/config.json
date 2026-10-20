@@ -1,0 +1,9 @@
+{
+  "batchInstall": true,
+  "editmenu": false,
+  "cleanAfter": true,
+  "answerclean": "All",
+  "answerdiff": "None",
+  "answeredit": "None",
+  "useask": false
+}

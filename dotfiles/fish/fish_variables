@@ -1,0 +1,5 @@
+# This file contains fish universal variable definitions.
+# VERSION: 3.0
+SETUVAR fish_greeting:\x1d
+SETUVAR fish_history:main
+SETUVAR fish_user_paths:/usr/bin\x1e/usr/local/bin\x1e/usr/local/sbin\x1e/usr/lib/rustup/bin\x1e/var/lib/flatpak/exports/bin\x1e/home/m/\x2elocal/share/nvim/mason/bin\x1e/home/m/\x2ecargo/bin\x1e/home/m/\x2elocal/bin
