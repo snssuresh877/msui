@@ -158,8 +158,7 @@ msg "Backing up ~/.config"
 
 for dir in \
   hypr \
-  zenithshell \
-  waybar \
+  msui \
   foot \
   kitty \
   ghostty \
@@ -168,9 +167,6 @@ for dir in \
   yazi \
   Thunar \
   xfce4 \
-  rofi \
-  swaync \
-  wlogout \
   fastfetch \
   aria2 \
   btop \

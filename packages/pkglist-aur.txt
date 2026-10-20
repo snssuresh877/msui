@@ -1,0 +1,12 @@
+antigravity
+bibata-cursor-theme
+fresh-editor-bin
+hyprshade
+localsend-bin
+openssl-1.1
+ps_mem
+rate-mirrors-bin
+ttf-ms-fonts
+ttf-victor-mono
+yay-bin
+zen-browser-bin

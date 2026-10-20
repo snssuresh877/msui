@@ -66,7 +66,7 @@ cp -f "$HOME/.gitconfig" "$BACKUP_DIR/" 2>/dev/null || true
 echo "==> Backing up key config folders..."
 mkdir -p "$BACKUP_DIR/config"
 
-for cfg in hypr zenithshell waybar foot kitty fish nvim yazi Thunar xfce4 fastfetch btop; do
+for cfg in hypr msui foot kitty ghostty fish nvim yazi Thunar xfce4 fastfetch btop aria2; do
   cp -r "$HOME/.config/$cfg" "$BACKUP_DIR/config/" 2>/dev/null || true
 done
 
