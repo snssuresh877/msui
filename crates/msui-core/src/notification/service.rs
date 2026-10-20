@@ -79,9 +79,7 @@ impl NotificationServer {
 
     async fn close_notification(&self, id: u32) {
         dismiss_active_toast(id);
-        tokio::spawn(async move {
-            let _ = emit_notification_closed(id, 3).await; // 3 = closed by call to CloseNotification
-        });
+        let _ = emit_notification_closed(id, 3).await; // 3 = closed by call to CloseNotification
     }
 
     async fn get_capabilities(&self) -> Vec<&'static str> {

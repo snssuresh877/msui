@@ -14,11 +14,12 @@ pub const WATCHER_INTERFACE: &str = "org.kde.StatusNotifierWatcher";
 
 pub struct StatusNotifierWatcherServer {
     conn: Connection,
+    handle: tokio::runtime::Handle,
 }
 
 impl StatusNotifierWatcherServer {
-    pub fn new(conn: Connection) -> Self {
-        Self { conn }
+    pub fn new(conn: Connection, handle: tokio::runtime::Handle) -> Self {
+        Self { conn, handle }
     }
 }
 
@@ -69,7 +70,7 @@ impl StatusNotifierWatcherServer {
 
         // Query full properties asynchronously so client application is immediately unblocked
         let conn_clone = self.conn.clone();
-        tokio::spawn(async move {
+        self.handle.spawn(async move {
             if let Some(item) =
                 query_tray_item_properties(&conn_clone, &actual_service, &actual_path).await
             {
@@ -331,7 +332,8 @@ pub async fn run_tray_watcher() -> anyhow::Result<()> {
         .build()
         .await?;
 
-    let server = StatusNotifierWatcherServer::new(conn.clone());
+    let handle = tokio::runtime::Handle::current();
+    let server = StatusNotifierWatcherServer::new(conn.clone(), handle);
 
     conn.object_server()
         .at(WATCHER_OBJECT_PATH, server)

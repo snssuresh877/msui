@@ -22,23 +22,10 @@ hl.on("hyprland.start", function()
 	hl.exec_cmd("$HOME/.config/hypr/scripts/ui/sync_flatpak_desktop.sh &")
 
 	--------------------------------------------------------
-	-- POLKIT (MSUI NATIVE RUST + ICED AUTHENTICATION AGENT)
+	-- MSUI DESKTOP SUITE (POLKIT, WALLPAPER, BAR)
 	--------------------------------------------------------
 
-	hl.exec_cmd("pgrep -f 'msui polkit' >/dev/null || setsid $HOME/.local/bin/msui polkit >/tmp/msui-polkit.log 2>&1 &")
-
-	--------------------------------------------------------
-	-- WALLPAPER (MSUI NATIVE WAYLAND WALLPAPER DAEMON)
-	--------------------------------------------------------
-
-	hl.exec_cmd("pgrep -f 'msui bg' >/dev/null || (sleep 0.2 && setsid $HOME/.local/bin/msui bg >/tmp/msui-bg.log 2>&1) &")
-
-	--------------------------------------------------------
-	-- DESKTOP UI SHELL (MSUI NATIVE RUST + ICED)
-	--------------------------------------------------------
-
-	hl.exec_cmd("pgrep -f 'msui bar' >/dev/null || (sleep 0.3 && setsid $HOME/.local/bin/msui bar >/tmp/msui-bar.log 2>&1) &")
-	hl.exec_cmd("(sleep 2 && date '+%Y-%m-%d %H:%M:%S Boot Verification' && pgrep -a msui) >/tmp/msui-boot.log 2>&1 &")
+	hl.exec_cmd("$HOME/.config/hypr/scripts/ui/start_msui.sh &")
 
 	--------------------------------------------------------
 	-- SYSTEM UPDATES NOTIFIER
