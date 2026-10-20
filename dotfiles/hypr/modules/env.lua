@@ -11,6 +11,7 @@ hl.config({
 		"XDG_CURRENT_DESKTOP,Hyprland",
 		"XDG_SESSION_TYPE,wayland",
 		"XDG_SESSION_DESKTOP,Hyprland",
+		"PATH,/home/m/.local/bin:/home/m/.cargo/bin:/usr/local/bin:/usr/bin:/bin",
 		"EDITOR,nvim",
 		"VISUAL,nvim",
 
