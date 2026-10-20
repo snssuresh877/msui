@@ -25,19 +25,19 @@ hl.on("hyprland.start", function()
 	-- POLKIT (MSUI NATIVE RUST + ICED AUTHENTICATION AGENT)
 	--------------------------------------------------------
 
-	hl.exec_cmd("pgrep -fx 'msui polkit' >/dev/null || setsid msui polkit >/tmp/msui-polkit.log 2>&1 &")
+	hl.exec_cmd("pgrep -f 'msui polkit' >/dev/null || setsid $HOME/.local/bin/msui polkit >/tmp/msui-polkit.log 2>&1 &")
 
 	--------------------------------------------------------
 	-- WALLPAPER (MSUI NATIVE WAYLAND WALLPAPER DAEMON)
 	--------------------------------------------------------
 
-	hl.exec_cmd("pgrep -fx 'msui bg' >/dev/null || (sleep 0.2 && setsid msui bg >/tmp/msui-bg.log 2>&1) &")
+	hl.exec_cmd("pgrep -f 'msui bg' >/dev/null || (sleep 0.2 && setsid $HOME/.local/bin/msui bg >/tmp/msui-bg.log 2>&1) &")
 
 	--------------------------------------------------------
 	-- DESKTOP UI SHELL (MSUI NATIVE RUST + ICED)
 	--------------------------------------------------------
 
-	hl.exec_cmd("pgrep -fx 'msui bar' >/dev/null || (sleep 0.3 && setsid msui bar >/tmp/msui-bar.log 2>&1) &")
+	hl.exec_cmd("pgrep -f 'msui bar' >/dev/null || (sleep 0.3 && setsid $HOME/.local/bin/msui bar >/tmp/msui-bar.log 2>&1) &")
 
 	--------------------------------------------------------
 	-- SYSTEM UPDATES NOTIFIER
