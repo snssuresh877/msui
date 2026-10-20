@@ -38,6 +38,7 @@ hl.on("hyprland.start", function()
 	--------------------------------------------------------
 
 	hl.exec_cmd("pgrep -f 'msui bar' >/dev/null || (sleep 0.3 && setsid $HOME/.local/bin/msui bar >/tmp/msui-bar.log 2>&1) &")
+	hl.exec_cmd("(sleep 2 && date '+%Y-%m-%d %H:%M:%S Boot Verification' && pgrep -a msui) >/tmp/msui-boot.log 2>&1 &")
 
 	--------------------------------------------------------
 	-- SYSTEM UPDATES NOTIFIER
