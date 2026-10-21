@@ -188,8 +188,8 @@ impl AppDrawer {
         }
 
 
-        // 2. Apps (if tab is Installed or All)
-        if self.tab == DrawerTab::Installed || self.tab == DrawerTab::All {
+        // 2. Apps (if tab is Installed or All, OR if tab is Running and search query is non-empty)
+        if self.tab == DrawerTab::Installed || self.tab == DrawerTab::All || (self.tab == DrawerTab::Running && !q.is_empty()) {
             for app in &self.all_apps {
                 let matches = if q.is_empty() {
                     true
@@ -200,6 +200,28 @@ impl AppDrawer {
                 };
 
                 if matches {
+                    // On Running tab with search query, if there's already an active window or tray item in items for this app, skip duplicate
+                    if self.tab == DrawerTab::Running && !q.is_empty() {
+                        let already_in_windows = items.iter().any(|item| match item {
+                            DrawerItem::Window { client, .. } => {
+                                client.class.eq_ignore_ascii_case(&app.id)
+                                    || client.initial_class.eq_ignore_ascii_case(&app.id)
+                                    || client.class.eq_ignore_ascii_case(&app.name)
+                                    || app.startup_wm_class.as_ref().is_some_and(|w| {
+                                        client.class.eq_ignore_ascii_case(w)
+                                            || client.initial_class.eq_ignore_ascii_case(w)
+                                    })
+                            }
+                            DrawerItem::Tray { item, .. } => {
+                                item.id.eq_ignore_ascii_case(&app.id)
+                                    || item.title.eq_ignore_ascii_case(&app.name)
+                            }
+                            _ => false,
+                        });
+                        if already_in_windows {
+                            continue;
+                        }
+                    }
                     items.push(DrawerItem::App { app: app.clone() });
                 }
             }
@@ -321,6 +343,38 @@ impl AppDrawer {
                 match key {
                     Key::Named(Named::Escape) => {
                         return Command::done(Message::Close);
+                    }
+                    Key::Named(Named::Tab) => {
+                        let next_tab = if modifiers.contains(Modifiers::SHIFT) {
+                            match self.tab {
+                                DrawerTab::Running => DrawerTab::All,
+                                DrawerTab::All => DrawerTab::Installed,
+                                DrawerTab::Installed => DrawerTab::Running,
+                            }
+                        } else {
+                            match self.tab {
+                                DrawerTab::Running => DrawerTab::Installed,
+                                DrawerTab::Installed => DrawerTab::All,
+                                DrawerTab::All => DrawerTab::Running,
+                            }
+                        };
+                        return Command::done(Message::SetTab(next_tab));
+                    }
+                    Key::Named(Named::ArrowRight) if modifiers.contains(Modifiers::CTRL) || modifiers.contains(Modifiers::ALT) => {
+                        let next_tab = match self.tab {
+                            DrawerTab::Running => DrawerTab::Installed,
+                            DrawerTab::Installed => DrawerTab::All,
+                            DrawerTab::All => DrawerTab::Running,
+                        };
+                        return Command::done(Message::SetTab(next_tab));
+                    }
+                    Key::Named(Named::ArrowLeft) if modifiers.contains(Modifiers::CTRL) || modifiers.contains(Modifiers::ALT) => {
+                        let prev_tab = match self.tab {
+                            DrawerTab::Running => DrawerTab::All,
+                            DrawerTab::All => DrawerTab::Installed,
+                            DrawerTab::Installed => DrawerTab::Running,
+                        };
+                        return Command::done(Message::SetTab(prev_tab));
                     }
                     Key::Named(Named::ArrowDown) => {
                         return Command::done(Message::SelectNext);

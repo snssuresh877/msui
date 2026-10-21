@@ -15,6 +15,7 @@ pub struct DesktopApp {
     pub exec_cmds: Vec<String>,
     pub icon: Option<PathBuf>,
     pub categories: Option<Vec<String>>,
+    pub startup_wm_class: Option<String>,
 }
 
 impl DesktopApp {
@@ -56,12 +57,49 @@ impl DesktopApp {
             })
             .collect();
 
-        std::process::Command::new(bin)
-            .args(&args)
+        // If launching Antigravity and no client window exists, ensure any lingering
+        // headless instance is cleaned up so singleInstanceLock doesn't block window creation.
+        if self.id.eq_ignore_ascii_case("antigravity")
+            || self.name.eq_ignore_ascii_case("antigravity")
+            || bin.ends_with("antigravity")
+        {
+            let clients = crate::HyprlandIpc::get_clients();
+            let has_window = clients.iter().any(|c| {
+                c.class.eq_ignore_ascii_case("antigravity")
+                    || c.initial_class.eq_ignore_ascii_case("antigravity")
+            });
+            if !has_window {
+                let _ = std::process::Command::new("pkill")
+                    .args(["-f", "/opt/Antigravity/antigravity|/usr/bin/antigravity"])
+                    .output();
+                std::thread::sleep(std::time::Duration::from_millis(150));
+            }
+        }
+
+        use std::os::unix::process::CommandExt;
+        let mut cmd = std::process::Command::new(bin);
+        cmd.args(&args)
+            .process_group(0)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()?;
+            .stderr(std::process::Stdio::null());
+
+        if let Ok(home) = std::env::var("HOME") {
+            cmd.current_dir(home);
+        }
+
+        // Ensure Wayland environment hints for Electron & Wayland apps
+        if std::env::var("OZONE_PLATFORM").is_err() {
+            cmd.env("OZONE_PLATFORM", "wayland");
+        }
+        if std::env::var("ELECTRON_OZONE_PLATFORM_HINT").is_err() {
+            cmd.env("ELECTRON_OZONE_PLATFORM_HINT", "wayland");
+        }
+        if std::env::var("MOZ_ENABLE_WAYLAND").is_err() {
+            cmd.env("MOZ_ENABLE_WAYLAND", "1");
+        }
+
+        cmd.spawn()?;
 
         Ok(())
     }
@@ -104,6 +142,7 @@ impl DesktopApp {
     ) -> Option<&'a crate::HyprlandClient> {
         let app_id_lower = self.id.to_lowercase();
         let app_name_lower = self.name.to_lowercase();
+        let wm_cls_lower = self.startup_wm_class.as_deref().map(|s| s.to_lowercase());
         let exec_bin = self.exec_cmds.first().map(|b| {
             std::path::Path::new(b)
                 .file_name()
@@ -119,6 +158,7 @@ impl DesktopApp {
 
             cls == app_id_lower
                 || init_cls == app_id_lower
+                || wm_cls_lower.as_ref().is_some_and(|w| &cls == w || &init_cls == w)
                 || (exec_bin.as_ref().is_some_and(|b| &cls == b || &init_cls == b))
                 || cls == app_name_lower
                 || init_cls == app_name_lower
@@ -214,6 +254,7 @@ pub fn scan_desktop_apps() -> Vec<DesktopApp> {
             let categories = entry
                 .categories()
                 .map(|c| c.iter().map(|i| i.to_string()).collect());
+            let startup_wm_class = entry.startup_wm_class().map(|s| s.to_string());
 
             let icon = entry.icon().and_then(|icon_str| {
                 resolve_icon(IconSource::from_unknown(icon_str))
@@ -226,6 +267,7 @@ pub fn scan_desktop_apps() -> Vec<DesktopApp> {
                 exec_cmds,
                 icon,
                 categories,
+                startup_wm_class,
             })
         })
         .collect();
@@ -259,5 +301,13 @@ mod tests {
         let found_tray = app.find_running_tray_item(&mock_tray);
         assert!(found_tray.is_some(), "Should find WeChat tray item");
         assert_eq!(found_tray.unwrap().id, "wechat");
+    }
+
+    #[test]
+    fn test_scan_antigravity() {
+        let apps = scan_desktop_apps();
+        let antigravity = apps.iter().find(|a| a.name.to_lowercase().contains("antigravity") || a.id.to_lowercase().contains("antigravity"));
+        println!("Antigravity found in scan_desktop_apps: {:?}", antigravity);
+        assert!(antigravity.is_some(), "Antigravity desktop entry should be found by scanner");
     }
 }
