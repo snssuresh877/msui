@@ -10,4 +10,10 @@ prepend_keymap = [
 
 	# Interactive chmod on selected files
 	{ on = [ "c", "m" ], run = "plugin chmod", desc = "Chmod on selected files" },
+
+	# Open hovered file or directory in Neovim
+	{ on = [ "e" ], run = "shell --block '${EDITOR:-nvim} \"$@\"'", desc = "Open in Neovim" },
+
+	# Open current working directory in Neovim
+	{ on = [ "E" ], run = "shell --block '${EDITOR:-nvim} .'", desc = "Open cwd in Neovim" },
 ]

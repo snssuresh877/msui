@@ -26,22 +26,36 @@ ueberzug_offset = [ 0, 0, 0, 0 ]
 
 [opener]
 edit = [
-    { run = '${EDITOR:-nvim} "$@"', desc = "Edit", block = true, for = "unix" },
+    { run = '${EDITOR:-nvim} "$@"', desc = "Edit with Neovim", block = true, for = "unix" },
 ]
 open = [
-    { run = 'xdg-open "$@"', desc = "Open", for = "unix" },
+    { run = 'xdg-open "$@"', desc = "Open with System Default", for = "unix" },
 ]
 reveal = [
-    { run = 'nautilus "$1"', desc = "Reveal in GUI", for = "unix" },
+    { run = 'nautilus "$1"', desc = "Reveal in Nautilus", for = "unix" },
 ]
 
 [open]
 prepend_rules = [
+    # Any directory: can be opened directly in Neovim
+    { url = "*/", use = [ "edit", "open", "reveal" ] },
+    # Text, code, and configuration files
     { mime = "text/*", use = [ "edit", "reveal" ] },
     { url = "*.json", use = [ "edit", "reveal" ] },
+    { url = "*.toml", use = [ "edit", "reveal" ] },
+    { url = "*.yaml", use = [ "edit", "reveal" ] },
+    { url = "*.yml", use = [ "edit", "reveal" ] },
+    { url = "*.conf", use = [ "edit", "reveal" ] },
+    { url = "*.cfg", use = [ "edit", "reveal" ] },
+    { url = "*.ini", use = [ "edit", "reveal" ] },
+    { url = "*.sh", use = [ "edit", "reveal" ] },
     { mime = "application/json", use = [ "edit", "reveal" ] },
+    { mime = "application/x-yaml", use = [ "edit", "reveal" ] },
+    { mime = "application/toml", use = [ "edit", "reveal" ] },
     { mime = "*/javascript", use = [ "edit", "reveal" ] },
-    { url = "*/", use = [ "edit", "open", "reveal" ] },
+    { mime = "*/x-shellscript", use = [ "edit", "reveal" ] },
+    # Universal fallback: any file opens in Neovim by default
+    { url = "*", use = [ "edit", "open", "reveal" ] },
 ]
 
 [plugin]
