@@ -111,8 +111,21 @@ impl Launcher {
             .filter_map(|app| {
                 let score_name = self.matcher.fuzzy_match(&app.name, &self.query);
                 let score_comment = self.matcher.fuzzy_match(&app.comment, &self.query);
-                let best = score_name.max(score_comment)?;
-                Some((best, app.clone()))
+                let score_id = self.matcher.fuzzy_match(&app.id, &self.query);
+                let score_cats = app.categories.as_ref().and_then(|cats| {
+                    cats.iter().filter_map(|c| self.matcher.fuzzy_match(c, &self.query)).max()
+                });
+                let mut best = score_name;
+                if let Some(s) = score_comment {
+                    best = Some(best.map_or(s, |b| b.max(s)));
+                }
+                if let Some(s) = score_id {
+                    best = Some(best.map_or(s, |b| b.max(s)));
+                }
+                if let Some(s) = score_cats {
+                    best = Some(best.map_or(s, |b| b.max(s)));
+                }
+                Some((best?, app.clone()))
             })
             .collect();
 
@@ -155,10 +168,9 @@ impl Launcher {
                     } else {
                         let tray_items = msui_core::get_tray_items();
                         if let Some(tray) = app.find_running_tray_item(&tray_items) {
-                            msui_core::activate_tray_item(&tray.service, &tray.path);
-                        } else {
-                            let _ = app.launch();
+                            msui_core::activate_tray_item_blocking(&tray.service, &tray.path);
                         }
+                        let _ = app.launch();
                     }
                     std::process::exit(0);
                 }

@@ -78,7 +78,7 @@ pub async fn fetch_tray_items_async() -> Vec<TrayItem> {
 }
 
 
-/// Activate a tray item over D-Bus (calls Activate(0, 0) and application activation)
+/// Activate a tray item over D-Bus asynchronously in a background thread
 pub fn activate_tray_item(service: &str, path: &str) {
     let s = service.to_string();
     let p = path.to_string();
@@ -90,6 +90,24 @@ pub fn activate_tray_item(service: &str, path: &str) {
             rt.block_on(activate_tray_item_async(&s, &p));
         }
     });
+}
+
+/// Activate a tray item over D-Bus synchronously (waits up to 300ms before returning)
+pub fn activate_tray_item_blocking(service: &str, path: &str) {
+    let s = service.to_string();
+    let p = path.to_string();
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build();
+    if let Ok(rt) = rt {
+        let _ = rt.block_on(async {
+            tokio::time::timeout(
+                std::time::Duration::from_millis(300),
+                activate_tray_item_async(&s, &p),
+            )
+            .await
+        });
+    }
 }
 
 pub async fn activate_tray_item_async(service: &str, path: &str) {
@@ -107,6 +125,14 @@ pub async fn activate_tray_item_async(service: &str, path: &str) {
         service, actual_path
     );
 
+    let known_id_title = {
+        let items = GLOBAL_TRAY_ITEMS.read().unwrap();
+        items
+            .iter()
+            .find(|i| i.service == service && i.path == actual_path)
+            .map(|i| (i.id.clone(), i.title.clone()))
+    };
+
     if let Ok(conn) = Connection::session().await {
         // 1. Standard SNI Activate(0, 0)
         let _ = conn
@@ -123,7 +149,7 @@ pub async fn activate_tray_item_async(service: &str, path: &str) {
         let mut app_service = service.to_string();
         if app_service.starts_with("org.kde.StatusNotifierItem-") {
             let parts: Vec<&str> = app_service.split('-').collect();
-            if parts.len() >= 3 {
+            if parts.len() >= 3 && !parts[1].chars().all(|c| c.is_ascii_digit()) {
                 app_service = parts[1].to_string();
             }
         }
@@ -144,7 +170,17 @@ pub async fn activate_tray_item_async(service: &str, path: &str) {
         }
 
         // 3. Focus corresponding window in Hyprland if it surfaces
-        crate::HyprlandIpc::focus_window(&format!("class:{}", app_service));
-        debug!("Dispatched activation and window focus for {}", app_service);
+        if let Some((id, title)) = known_id_title {
+            if !id.is_empty() && !id.starts_with(':') {
+                crate::HyprlandIpc::focus_window(&id);
+            }
+            if !title.is_empty() {
+                crate::HyprlandIpc::focus_window(&title);
+            }
+        }
+        if !app_service.is_empty() && !app_service.chars().all(|c| c.is_ascii_digit()) {
+            crate::HyprlandIpc::focus_window(&app_service);
+        }
+        debug!("Dispatched activation and window focus for {}", service);
     }
 }

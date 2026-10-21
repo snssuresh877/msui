@@ -169,28 +169,41 @@ impl HyprlandIpc {
         true
     }
 
-    pub fn focus_window(address: &str) -> bool {
+    pub fn focus_window(target: &str) -> bool {
         let clients = Self::get_clients();
-        if let Some(client) = clients.iter().find(|c| c.address == address) {
+        let target_clean = target.strip_prefix("class:").unwrap_or(target);
+        if let Some(client) = clients.iter().find(|c| {
+            c.address == target
+                || c.address == target_clean
+                || c.class.eq_ignore_ascii_case(target_clean)
+                || c.initial_class.eq_ignore_ascii_case(target_clean)
+                || c.title.eq_ignore_ascii_case(target_clean)
+        }) {
             return Self::activate_client(client);
         }
 
         // Direct focus attempt if client is not in listing
-        let lua_focus = format!("hl.dsp.focus({{ window = \"address:{}\" }})", address);
+        let addr = if target.starts_with("0x") {
+            format!("address:{}", target)
+        } else if target.starts_with("address:") {
+            target.to_string()
+        } else {
+            format!("class:{}", target_clean)
+        };
+        let lua_focus = format!("hl.dsp.focus({{ window = \"{}\" }})", addr);
         let res = std::process::Command::new("hyprctl")
             .args(["dispatch", &lua_focus])
             .output();
         if res.is_ok() && res.as_ref().unwrap().status.success() {
-            let lua_top = format!("hl.dsp.window.bring_to_top(\"address:{}\")", address);
+            let lua_top = format!("hl.dsp.window.bring_to_top(\"{}\")", addr);
             let _ = std::process::Command::new("hyprctl")
                 .args(["dispatch", &lua_top])
                 .output();
             return true;
         }
 
-        let arg = format!("address:{}", address);
         std::process::Command::new("hyprctl")
-            .args(["dispatch", "focuswindow", &arg])
+            .args(["dispatch", "focuswindow", &addr])
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false)

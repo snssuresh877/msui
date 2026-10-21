@@ -34,7 +34,7 @@ pub use notification::{
 pub use power::SystemControl;
 pub use reminder::{ReminderItem, ReminderManager};
 pub use theme::{ThemeDefinition, ThemeManager, BUILTIN_THEMES};
-pub use tray::{activate_tray_item, activate_tray_item_async, get_tray_items, watcher::run_tray_watcher, TrayItem};
+pub use tray::{activate_tray_item, activate_tray_item_async, activate_tray_item_blocking, get_tray_items, watcher::run_tray_watcher, TrayItem};
 pub use wallpaper::{WallpaperItem, WallpaperManager};
 
 

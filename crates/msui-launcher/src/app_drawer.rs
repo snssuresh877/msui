@@ -267,15 +267,16 @@ impl AppDrawer {
                             std::process::exit(0);
                         }
                         DrawerItem::Tray { item, .. } => {
-                            msui_core::activate_tray_item(&item.service, &item.path);
+                            msui_core::activate_tray_item_blocking(&item.service, &item.path);
                             std::process::exit(0);
                         }
                         DrawerItem::App { app } => {
                             if let Some(client) = app.find_running_client(&self.clients) {
                                 HyprlandIpc::activate_client(client);
-                            } else if let Some(tray) = app.find_running_tray_item(&self.tray_items) {
-                                msui_core::activate_tray_item(&tray.service, &tray.path);
                             } else {
+                                if let Some(tray) = app.find_running_tray_item(&self.tray_items) {
+                                    msui_core::activate_tray_item_blocking(&tray.service, &tray.path);
+                                }
                                 let _ = app.launch();
                             }
                             std::process::exit(0);
@@ -284,7 +285,7 @@ impl AppDrawer {
                 }
             }
             Message::ActivateTray(service, path) => {
-                msui_core::activate_tray_item(&service, &path);
+                msui_core::activate_tray_item_blocking(&service, &path);
                 std::process::exit(0);
             }
             Message::FocusWindow(addr) => {
@@ -301,11 +302,25 @@ impl AppDrawer {
                 if let Some(item) = self.filtered.get(idx) {
                     match item {
                         DrawerItem::App { app } => {
-                            let _ = app.launch();
+                            if let Some(client) = app.find_running_client(&self.clients) {
+                                HyprlandIpc::activate_client(client);
+                            } else {
+                                if let Some(tray) = app.find_running_tray_item(&self.tray_items) {
+                                    msui_core::activate_tray_item_blocking(&tray.service, &tray.path);
+                                }
+                                let _ = app.launch();
+                            }
                             std::process::exit(0);
                         }
                         DrawerItem::Tray { item, .. } => {
-                            msui_core::activate_tray_item(&item.service, &item.path);
+                            msui_core::activate_tray_item_blocking(&item.service, &item.path);
+                            if let Some(app) = self.all_apps.iter().find(|a| {
+                                a.id.eq_ignore_ascii_case(&item.id)
+                                    || a.name.eq_ignore_ascii_case(&item.title)
+                                    || a.name.eq_ignore_ascii_case(&item.id)
+                            }) {
+                                let _ = app.launch();
+                            }
                             std::process::exit(0);
                         }
                         DrawerItem::Window { client, .. } => {
