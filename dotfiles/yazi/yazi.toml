@@ -32,7 +32,7 @@ open = [
     { run = 'xdg-open "$@"', desc = "Open with System Default", for = "unix" },
 ]
 reveal = [
-    { run = 'nautilus "$1"', desc = "Reveal in Nautilus", for = "unix" },
+    { run = 'thunar --window "$1"', desc = "Reveal in Thunar", for = "unix" },
 ]
 
 [open]

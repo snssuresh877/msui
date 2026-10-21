@@ -25,12 +25,47 @@
 	<other-files/>
 </action>
 <action>
+	<icon>nvim</icon>
+	<name>Open Directory in Neovim</name>
+	<submenu></submenu>
+	<unique-id>1700000000000003-3</unique-id>
+	<command>foot -D %f -e nvim .</command>
+	<description>Open folder in Neovim workspace</description>
+	<range></range>
+	<patterns>*</patterns>
+	<directories/>
+</action>
+<action>
 	<icon>folder</icon>
 	<name>Open in Yazi</name>
 	<submenu></submenu>
-	<unique-id>1700000000000003-3</unique-id>
+	<unique-id>1700000000000004-4</unique-id>
 	<command>foot -D %f -e yazi</command>
 	<description>Open folder in Yazi TUI file manager</description>
+	<range></range>
+	<patterns>*</patterns>
+	<directories/>
+</action>
+<action>
+	<icon>antigravity</icon>
+	<name>Open in Antigravity</name>
+	<submenu></submenu>
+	<unique-id>1700000000000005-5</unique-id>
+	<command>antigravity %F</command>
+	<description>Open file or project in Antigravity IDE</description>
+	<range></range>
+	<patterns>*</patterns>
+	<directories/>
+	<text-files/>
+	<other-files/>
+</action>
+<action>
+	<icon>git</icon>
+	<name>Open in Lazygit</name>
+	<submenu></submenu>
+	<unique-id>1700000000000006-6</unique-id>
+	<command>foot -D %f -e lazygit</command>
+	<description>Open Git repository in Lazygit</description>
 	<range></range>
 	<patterns>*</patterns>
 	<directories/>
@@ -39,8 +74,8 @@
 	<icon>edit-copy</icon>
 	<name>Copy Path to Clipboard</name>
 	<submenu></submenu>
-	<unique-id>1700000000000004-4</unique-id>
-	<command>sh -c 'printf "%s" "$*" | wl-copy' _ %F</command>
+	<unique-id>1700000000000007-7</unique-id>
+	<command>sh -c 'printf "%s" "$*" | wl-copy --trim-newline; notify-send -i edit-copy "Thunar" "Path copied to clipboard"' _ %F</command>
 	<description>Copy full file path(s) to Wayland clipboard</description>
 	<range></range>
 	<patterns>*</patterns>
@@ -52,14 +87,67 @@
 	<video-files/>
 </action>
 <action>
-	<icon>preferences-desktop-wallpaper</icon>
-	<name>Set as Wallpaper</name>
+	<icon>edit-copy</icon>
+	<name>Copy File Content</name>
 	<submenu></submenu>
-	<unique-id>1700000000000005-5</unique-id>
-	<command>sh -c 'if command -v zenithctl >/dev/null 2>&amp;1; then zenithctl wallpaper set "$1"; else awww img "$1" &amp;&amp; wal -n -q -i "$1"; fi; notify-send "Wallpaper changed" "$(basename "$1")"' _ %f</command>
-	<description>Set image as desktop wallpaper</description>
+	<unique-id>1700000000000008-8</unique-id>
+	<command>sh -c 'cat "$1" | wl-copy; notify-send -i edit-copy "Thunar" "Content of $(basename "$1") copied"' _ %f</command>
+	<description>Copy text file content directly to clipboard</description>
+	<range></range>
+	<patterns>*</patterns>
+	<text-files/>
+</action>
+<action>
+	<icon>drag-and-drop</icon>
+	<name>Drag &amp; Drop (Ripdrag)</name>
+	<submenu></submenu>
+	<unique-id>1700000000000009-9</unique-id>
+	<command>ripdrag -a -x %F</command>
+	<description>Drag and drop selected files via ripdrag</description>
+	<range></range>
+	<patterns>*</patterns>
+	<directories/>
+	<audio-files/>
+	<image-files/>
+	<other-files/>
+	<text-files/>
+	<video-files/>
+</action>
+<action>
+	<icon>preferences-desktop-wallpaper</icon>
+	<name>Set as Wallpaper (msUI)</name>
+	<submenu></submenu>
+	<unique-id>1700000000000010-10</unique-id>
+	<command>sh -c 'msui wallpaper set "$1" &amp;&amp; notify-send -i preferences-desktop-wallpaper "msUI Wallpaper" "Wallpaper set to $(basename "$1")"' _ %f</command>
+	<description>Set selected image as desktop wallpaper</description>
 	<range></range>
 	<patterns>*.png;*.jpg;*.jpeg;*.webp;*.PNG;*.JPG;*.JPEG;*.WEBP</patterns>
 	<image-files/>
 </action>
+<action>
+	<icon>package-x-generic</icon>
+	<name>Compress to Tar.zst</name>
+	<submenu></submenu>
+	<unique-id>1700000000000011-11</unique-id>
+	<command>sh -c 'archive="${1%/}.tar.zst"; tar -I "zstd -T0 -3" -cf "$archive" "$@"; notify-send -i package-x-generic "Thunar" "Created $(basename "$archive")"' _ %F</command>
+	<description>Create high-speed zstd compressed archive</description>
+	<range></range>
+	<patterns>*</patterns>
+	<directories/>
+	<other-files/>
+	<text-files/>
+	<image-files/>
+</action>
+<action>
+	<icon>archive-extract</icon>
+	<name>Extract Archive Here</name>
+	<submenu></submenu>
+	<unique-id>1700000000000012-12</unique-id>
+	<command>sh -c '7z x "$1" -o"$(dirname "$1")" &amp;&amp; notify-send -i archive-extract "Thunar" "Extracted $(basename "$1")"' _ %f</command>
+	<description>Extract archive into current directory</description>
+	<range></range>
+	<patterns>*.zip;*.tar.gz;*.tgz;*.tar.zst;*.tar.bz2;*.tar.xz;*.7z;*.rar;*.ZIP;*.TAR.GZ;*.TGZ;*.TAR.ZST;*.7Z</patterns>
+	<other-files/>
+</action>
 </actions>
+
