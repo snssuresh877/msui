@@ -45,16 +45,57 @@ impl DesktopApp {
         }
 
         let bin = &self.exec_cmds[0];
-        let args = &self.exec_cmds[1..];
+        let args: Vec<&str> = self.exec_cmds[1..]
+            .iter()
+            .map(|s| s.as_str())
+            .filter(|arg| {
+                !matches!(
+                    *arg,
+                    "@@u" | "@@f" | "@@" | "%u" | "%U" | "%f" | "%F" | "%i" | "%c" | "%k"
+                )
+            })
+            .collect();
 
         std::process::Command::new(bin)
-            .args(args)
+            .args(&args)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn()?;
 
         Ok(())
+    }
+
+    pub fn find_running_tray_item<'a>(
+        &self,
+        tray_items: &'a [crate::TrayItem],
+    ) -> Option<&'a crate::TrayItem> {
+        let app_id_lower = self.id.to_lowercase();
+        let app_name_lower = self.name.to_lowercase();
+        let exec_bin = self.exec_cmds.first().map(|b| {
+            std::path::Path::new(b)
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or(b)
+                .to_lowercase()
+        });
+
+        tray_items.iter().find(|t| {
+            let id = t.id.to_lowercase();
+            let title = t.title.to_lowercase();
+            let tooltip = t.tooltip.to_lowercase();
+            let service = t.service.to_lowercase();
+
+            id == app_id_lower
+                || id == app_name_lower
+                || app_id_lower.ends_with(&format!(".{}", id))
+                || id.ends_with(&format!(".{}", app_id_lower))
+                || (exec_bin.as_ref().is_some_and(|b| &id == b))
+                || title == app_name_lower
+                || title.starts_with(&app_name_lower)
+                || tooltip.contains(&app_name_lower)
+                || service.contains(&app_name_lower)
+        })
     }
 
     pub fn find_running_client<'a>(
@@ -191,4 +232,32 @@ pub fn scan_desktop_apps() -> Vec<DesktopApp> {
 
     apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     apps
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scan_wechat() {
+        let apps = scan_desktop_apps();
+        let wechat = apps.iter().find(|a| a.name.to_lowercase().contains("wechat") || a.id.to_lowercase().contains("wechat"));
+        println!("WeChat found in scan_desktop_apps: {:?}", wechat);
+        assert!(wechat.is_some(), "WeChat desktop entry should be found by scanner");
+
+        let app = wechat.unwrap();
+        let mock_tray = vec![
+            crate::TrayItem {
+                service: "org.kde.StatusNotifierItem-2-2".into(),
+                path: "/StatusNotifierItem".into(),
+                id: "wechat".into(),
+                title: "wechat".into(),
+                icon_name: "".into(),
+                tooltip: "WeChat".into(),
+            }
+        ];
+        let found_tray = app.find_running_tray_item(&mock_tray);
+        assert!(found_tray.is_some(), "Should find WeChat tray item");
+        assert_eq!(found_tray.unwrap().id, "wechat");
+    }
 }

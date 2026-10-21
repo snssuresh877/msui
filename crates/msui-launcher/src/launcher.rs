@@ -153,7 +153,12 @@ impl Launcher {
                     if let Some(client) = app.find_running_client(&clients) {
                         msui_core::HyprlandIpc::activate_client(client);
                     } else {
-                        let _ = app.launch();
+                        let tray_items = msui_core::get_tray_items();
+                        if let Some(tray) = app.find_running_tray_item(&tray_items) {
+                            msui_core::activate_tray_item(&tray.service, &tray.path);
+                        } else {
+                            let _ = app.launch();
+                        }
                     }
                     std::process::exit(0);
                 }

@@ -251,6 +251,8 @@ impl AppDrawer {
                         DrawerItem::App { app } => {
                             if let Some(client) = app.find_running_client(&self.clients) {
                                 HyprlandIpc::activate_client(client);
+                            } else if let Some(tray) = app.find_running_tray_item(&self.tray_items) {
+                                msui_core::activate_tray_item(&tray.service, &tray.path);
                             } else {
                                 let _ = app.launch();
                             }
