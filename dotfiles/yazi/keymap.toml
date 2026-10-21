@@ -7,4 +7,7 @@ prepend_keymap = [
 	# Drag and drop selected or hovered files with ripdrag
 	{ on = [ "<C-d>" ], run = "plugin drag", desc = "Drag and drop files (ripdrag)" },
 	{ on = [ "<C-n>" ], run = "plugin drag", desc = "Drag and drop files (ripdrag)" },
+
+	# Interactive chmod on selected files
+	{ on = [ "c", "m" ], run = "plugin chmod", desc = "Chmod on selected files" },
 ]

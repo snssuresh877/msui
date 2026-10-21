@@ -45,6 +45,10 @@ prepend_rules = [
 ]
 
 [plugin]
+prepend_fetchers = [
+    { url = "*", run = "git", group = "git" },
+    { url = "*/", run = "git", group = "git" },
+]
 preloaders = [
   { mime = "image/*", run = "preview" },
 ]
