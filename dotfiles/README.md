@@ -17,6 +17,7 @@ This directory contains configuration files for the **msUI** desktop environment
 | `msui/` | `~/.config/msui/` | Active runtime msUI bar and module toggles |
 | `nvim/` | `~/.config/nvim/` | Neovim Lua setup, plugins, and keymaps |
 | `Thunar/` | `~/.config/Thunar/` | Thunar file manager custom actions and accelerators |
+| `yazi/` | `~/.config/yazi/` | Yazi modern terminal file manager configuration |
 | `yay/` | `~/.config/yay/` | Yay AUR helper preferences |
 
 ## Quick Restore / Installation
