@@ -43,7 +43,9 @@ if [ "$MODE" = "tui" ] || [ "$MODE" = "yazi" ]; then
 fi
 
 # GUI Mode
-if command -v nautilus >/dev/null 2>&1; then
+if command -v flux-fm >/dev/null 2>&1; then
+    exec flux-fm "$TARGET_DIR"
+elif command -v nautilus >/dev/null 2>&1; then
     exec nautilus "$TARGET_DIR"
 elif command -v thunar >/dev/null 2>&1; then
     exec thunar --window "$TARGET_DIR"

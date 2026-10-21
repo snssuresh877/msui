@@ -310,4 +310,14 @@ mod tests {
         println!("Antigravity found in scan_desktop_apps: {:?}", antigravity);
         assert!(antigravity.is_some(), "Antigravity desktop entry should be found by scanner");
     }
+
+    #[test]
+    fn test_scan_flux() {
+        let apps = scan_desktop_apps();
+        let flux = apps.iter().find(|a| a.name.to_lowercase() == "flux" || a.id.to_lowercase().contains("flux"));
+        println!("Flux found in scan_desktop_apps: {:?}", flux);
+        assert!(flux.is_some(), "Flux desktop entry should be found by scanner");
+        let app = flux.unwrap();
+        assert_eq!(app.startup_wm_class.as_deref(), Some("flux-fm"));
+    }
 }

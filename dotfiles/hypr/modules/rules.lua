@@ -219,6 +219,26 @@ hl.window_rule({
 	rounding = 14,
 })
 
+-- Flux-FM File Manager Windows & Dialogs
+hl.window_rule({
+	match = {
+		class = "^(flux-fm|flux|io\\.github\\.killown\\.flux)$",
+	},
+
+	rounding = 14,
+})
+
+hl.window_rule({
+	match = {
+		class = "^(flux-fm|flux|io\\.github\\.killown\\.flux)$",
+		title = "^(Preferences|Settings|Properties|Confirm.*|File Operation.*|Conflict.*|Compress.*|Archive.*|Extract.*|Shred.*|Convert.*|Video Cutter.*|Join Videos.*|Mix Audio.*|PDF Converter.*)$",
+	},
+
+	float = true,
+	center = true,
+	rounding = 14,
+})
+
 ------------------------------------------------------------
 -- 03. PICTURE IN PICTURE
 ------------------------------------------------------------

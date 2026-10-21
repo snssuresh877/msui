@@ -1,0 +1,135 @@
+[ui]
+diff_editor = "nvim"
+max_content_search_results = 100
+default_icon_size = 96
+startup_window_width = 1280
+startup_window_height = 800
+sidebar_width = 200
+single_click = false
+show_xdg_dirs = false
+default_sort = "Name"
+show_hidden_by_default = false
+folders_first = true
+theme = "default"
+show_csd = true
+window_controls_left = true
+start_maximized = true
+show_thumbnails = true
+
+[ui.terminal]
+height = 50
+fg_color = ""
+bg_color = ""
+font = "JetBrains Mono 11"
+
+[ui.thumbnail_types]
+images = true
+videos = true
+fonts = true
+pdfs = true
+
+[ui.folder_sort]
+
+[ui.device_renames]
+"/path/to/device/" = { name = "Storage", icon = "drive-harddisk-solid-symbolic" }
+
+[ui.folder_icon_size]
+
+[shortcuts]
+# -- Navigation --
+
+# Returns to the previous folder in the linear history stack.
+back = "BackSpace"
+
+# Moves forward in the history stack.
+forward = "<Alt>Right"
+
+# Activates the selected file or enters the selected directory.
+open = "Return"
+
+# -- File Operations --
+
+# Moves selected items to the trash.
+delete = "Delete"
+
+# -- View & Application --
+
+# Triggers a reload of the current directory.
+refresh = "F5"
+
+# Toggles folder grouping placement (first vs last) in the current directory.
+toggle_folders_first = "F7"
+
+# Focuses the search/filter entry bar.
+search = "<Primary>f"
+
+# Toggles the visibility of hidden files (dotfiles).
+toggle_hidden = "<Primary>h"
+
+[[sidebar]]
+name = "Default"
+kind = "label"
+icon = ""
+path = ""
+
+[[sidebar]]
+name = "Flux"
+icon = "folder-documents-symbolic"
+path = "~/.config/flux"
+
+
+[[sidebar]]
+name = "Shortcuts"
+kind = "label"
+icon = ""
+path = ""
+
+[[sidebar]]
+name = "Tags"
+icon = "tag-symbolic"
+path = "tags://"
+
+[[sidebar]]
+name = "Search"
+icon = "system-search-symbolic"
+path = "search://"
+
+[[sidebar]]
+name = "Actions"
+icon = "application-x-executable-symbolic"
+path = "actions://"
+[[sidebar]]
+name = "Home"
+icon = "user-home-symbolic"
+path = "~"
+
+[[sidebar]]
+name = "Downloads"
+icon = "folder-download-symbolic"
+path = "~/Downloads"
+
+[[sidebar]]
+name = "Documents"
+icon = "folder-documents-symbolic"
+path = "~/Documents"
+
+[[sidebar]]
+name = "Pictures"
+icon = "folder-pictures-symbolic"
+path = "~/Pictures"
+
+[[sidebar]]
+name = "Videos"
+icon = "folder-videos-symbolic"
+path = "~/Videos"
+
+[[sidebar]]
+name = "Music"
+icon = "folder-music-symbolic"
+path = "~/Music"
+
+[[sidebar]]
+name = "Trash"
+icon = "user-trash-symbolic"
+path = "trash:///"
+

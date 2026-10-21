@@ -166,6 +166,7 @@ for dir in \
   nvim \
   yazi \
   Thunar \
+  flux \
   xfce4 \
   fastfetch \
   aria2 \
