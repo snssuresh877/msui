@@ -36,15 +36,12 @@ reveal = [
 ]
 
 [open]
-rules = [
-    { name = "*/", use = [ "edit", "open", "reveal" ] },
+prepend_rules = [
     { mime = "text/*", use = [ "edit", "reveal" ] },
-    { mime = "image/*", use = [ "open", "reveal" ] },
-    { mime = "video/*", use = [ "open", "reveal" ] },
-    { mime = "audio/*", use = [ "open", "reveal" ] },
+    { url = "*.json", use = [ "edit", "reveal" ] },
     { mime = "application/json", use = [ "edit", "reveal" ] },
     { mime = "*/javascript", use = [ "edit", "reveal" ] },
-    { mime = "*", use = [ "open", "reveal" ] },
+    { url = "*/", use = [ "edit", "open", "reveal" ] },
 ]
 
 [plugin]

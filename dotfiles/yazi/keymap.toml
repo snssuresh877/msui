@@ -1,0 +1,10 @@
+# =========================================================
+# 🦅 Yazi Modern Keymap Configuration
+# =========================================================
+
+[mgr]
+prepend_keymap = [
+	# Drag and drop selected or hovered files with ripdrag
+	{ on = [ "<C-d>" ], run = "plugin drag", desc = "Drag and drop files (ripdrag)" },
+	{ on = [ "<C-n>" ], run = "plugin drag", desc = "Drag and drop files (ripdrag)" },
+]
