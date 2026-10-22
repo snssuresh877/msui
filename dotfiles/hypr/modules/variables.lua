@@ -32,7 +32,7 @@ Apps = {
 
 	browser = "firefox",
 
-	fileManager = "flux-fm",
+	fileManager = "thunar",
 
 	codeEditor = "foot -e nvim",
 
