@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# 🎨 Thunar Modern Theme Switcher (Dark Mode / Light Mode)
+# ==============================================================================
+
+set -euo pipefail
+
+MODE="${1:-toggle}"
+CONFIG_DIR="$HOME/.config/gtk-3.0"
+SETTINGS_FILE="$CONFIG_DIR/settings.ini"
+GTK_CSS="$CONFIG_DIR/gtk.css"
+DARK_CSS="$CONFIG_DIR/thunar-dark.css"
+LIGHT_CSS="$CONFIG_DIR/thunar-light.css"
+STATE_FILE="$CONFIG_DIR/.thunar_mode"
+
+current_mode="dark"
+if [ -f "$STATE_FILE" ]; then
+    current_mode=$(cat "$STATE_FILE")
+fi
+
+case "$MODE" in
+    dark)
+        target_mode="dark"
+        ;;
+    light)
+        target_mode="light"
+        ;;
+    toggle)
+        if [ "$current_mode" = "dark" ]; then
+            target_mode="light"
+        else
+            target_mode="dark"
+        fi
+        ;;
+    *)
+        echo "Usage: thunar-theme <dark|light|toggle>"
+        exit 1
+        ;;
+esac
+
+if [ "$target_mode" = "dark" ]; then
+    cp "$DARK_CSS" "$GTK_CSS"
+    if [ -f "$SETTINGS_FILE" ]; then
+        sed -i 's/^gtk-theme-name=.*/gtk-theme-name=Orchis-Dark/' "$SETTINGS_FILE" || true
+        sed -i 's/^gtk-application-prefer-dark-theme=.*/gtk-application-prefer-dark-theme=1/' "$SETTINGS_FILE" || true
+    fi
+    echo "dark" > "$STATE_FILE"
+    echo "Applied Thunar Dark Mode (Ice-Blue Pill & Muted Slate Frame)"
+else
+    cp "$LIGHT_CSS" "$GTK_CSS"
+    if [ -f "$SETTINGS_FILE" ]; then
+        sed -i 's/^gtk-theme-name=.*/gtk-theme-name=Orchis-Light/' "$SETTINGS_FILE" || true
+        sed -i 's/^gtk-application-prefer-dark-theme=.*/gtk-application-prefer-dark-theme=0/' "$SETTINGS_FILE" || true
+    fi
+    echo "light" > "$STATE_FILE"
+    echo "Applied Thunar Light Mode (Vibrant Cyan Pill & Glacier Frame)"
+fi
+
+# Reload Thunar daemon so running instances take effect
+if pgrep -x thunar >/dev/null 2>&1; then
+    thunar -q || true
+fi

@@ -1,0 +1,275 @@
+/* ==========================================================================
+   Thunar - Custom Dark Mode (Matching User Image 2)
+   ========================================================================== */
+
+@define-color frame_bg #222b30;
+@define-color content_bg #161e1f;
+@define-color pill_bg #bde6fc;
+@define-color pill_fg #161e1f;
+@define-color row_selected_bg #4a5b65;
+@define-color row_selected_fg #ffffff;
+@define-color text_fg #e2e8f0;
+@define-color muted_fg #94a3b8;
+@define-color header_fg #78909c;
+@define-color border_color rgba(255, 255, 255, 0.07);
+@define-color hover_bg rgba(255, 255, 255, 0.08);
+@define-color hover_fg #ffffff;
+@define-color button_bg rgba(255, 255, 255, 0.06);
+@define-color active_crumb_bg #313d44;
+@define-color active_crumb_border #4a5b65;
+@define-color active_crumb_fg #ffffff;
+@define-color row_hover_bg rgba(255, 255, 255, 0.04);
+
+* {
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Base Window Frame */
+window.thunar,
+window.thunar .background,
+window.thunar > box.vertical {
+    background-color: @frame_bg;
+    color: @text_fg;
+}
+
+/* Rubberband Selection Box */
+window.thunar rubberband,
+window.thunar .rubberband,
+window.thunar treeview.view rubberband {
+    background-color: rgba(189, 230, 252, 0.2);
+    border: 1.5px solid @pill_bg;
+    border-radius: 4px;
+}
+
+/* Menubar */
+window.thunar menubar {
+    background-color: @frame_bg;
+    border: none;
+    padding: 3px 6px;
+}
+
+window.thunar menubar > menuitem {
+    padding: 4px 8px;
+    color: @text_fg;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+window.thunar menubar > menuitem:hover {
+    background-color: @hover_bg;
+    border-radius: 4px;
+    color: @hover_fg;
+}
+
+/* Toolbar & Breadcrumb Bar */
+window.thunar toolbar {
+    background-color: @frame_bg;
+    border-top: none;
+    border-bottom: 1px solid @border_color;
+    padding: 4px 10px;
+}
+
+window.thunar toolbar button {
+    background-image: none;
+    background-color: transparent;
+    color: @muted_fg;
+    border-radius: 4px;
+    border: none;
+    padding: 5px 7px;
+    margin: 0 1px;
+}
+
+window.thunar toolbar button:hover {
+    background-image: none;
+    background-color: @hover_bg;
+    color: @hover_fg;
+}
+
+/* Path Bar (Breadcrumb Buttons) */
+window.thunar path-bar,
+window.thunar .path-bar-box {
+    background: transparent;
+}
+
+window.thunar path-bar button,
+window.thunar .location-button {
+    background-image: none;
+    background-color: @button_bg;
+    border: 1px solid @border_color;
+    border-radius: 4px;
+    color: @text_fg;
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 3px 8px;
+    margin: 1px 2px;
+}
+
+window.thunar path-bar button:hover,
+window.thunar .location-button:hover {
+    background-image: none;
+    background-color: @hover_bg;
+    color: @hover_fg;
+}
+
+window.thunar path-bar button:checked,
+window.thunar .location-button:checked {
+    background-image: none;
+    background-color: @active_crumb_bg;
+    border-color: @active_crumb_border;
+    color: @active_crumb_fg;
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   Sidebar (Shortcuts Pane)
+   ========================================================================== */
+window.thunar .sidebar,
+window.thunar .shortcuts-pane,
+window.thunar scrolledwindow.shortcuts-pane,
+window.thunar .sidebar viewport,
+window.thunar .sidebar treeview,
+window.thunar .sidebar treeview.view,
+window.thunar .sidebar .view,
+window.thunar paned > scrolledwindow:first-child,
+window.thunar paned > scrolledwindow:first-child viewport,
+window.thunar paned > scrolledwindow:first-child treeview,
+window.thunar paned > scrolledwindow:first-child treeview.view {
+    background-image: none;
+    background-color: @frame_bg;
+    color: @muted_fg;
+    border-right: 1px solid @border_color;
+    -gtk-icon-style: symbolic;
+}
+
+/* Sidebar Section Headers ("Places", "Devices") */
+window.thunar .sidebar header button,
+window.thunar .sidebar treeview.view header button,
+window.thunar .shortcuts-pane header button {
+    background-image: none;
+    background-color: @frame_bg;
+    border: none;
+    color: @text_fg;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 10px 12px 4px 12px;
+}
+
+/* Sidebar Active Capsule Pill */
+window.thunar .sidebar treeview:selected,
+window.thunar .sidebar treeview.view:selected,
+window.thunar .sidebar treeview:selected:focus,
+window.thunar .sidebar treeview.view:selected:focus,
+window.thunar .sidebar treeview row:selected,
+window.thunar .sidebar treeview.view row:selected,
+window.thunar .shortcuts-pane treeview:selected,
+window.thunar .shortcuts-pane treeview.view:selected,
+window.thunar paned > scrolledwindow:first-child treeview:selected,
+window.thunar paned > scrolledwindow:first-child treeview.view:selected {
+    background-image: none;
+    background-color: @pill_bg;
+    color: @pill_fg;
+    font-weight: 700;
+    border-radius: 20px;
+    border: none;
+}
+
+/* ==========================================================================
+   Main File View Area (Details & Icon Views)
+   ========================================================================== */
+window.thunar .standard-view,
+window.thunar .standard-view viewport,
+window.thunar .standard-view treeview,
+window.thunar .standard-view treeview.view,
+window.thunar .standard-view .view,
+window.thunar .standard-view iconview,
+window.thunar paned > scrolledwindow:last-child,
+window.thunar paned > scrolledwindow:last-child viewport,
+window.thunar paned > scrolledwindow:last-child treeview,
+window.thunar paned > scrolledwindow:last-child treeview.view,
+window.thunar paned > box > scrolledwindow treeview,
+window.thunar paned > box > scrolledwindow treeview.view {
+    background-image: none;
+    background-color: @content_bg;
+    color: @text_fg;
+    -gtk-icon-style: regular;
+}
+
+/* Details View Column Headers */
+window.thunar .standard-view treeview header button,
+window.thunar .standard-view treeview.view header button,
+window.thunar .standard-view header button,
+window.thunar treeview.view header button {
+    background-image: none;
+    background-color: @content_bg;
+    border: none;
+    border-bottom: 1px solid @border_color;
+    color: @header_fg;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 12px;
+}
+
+window.thunar .standard-view treeview header button:hover,
+window.thunar .standard-view treeview.view header button:hover {
+    color: @hover_fg;
+}
+
+/* Details View Rows */
+window.thunar .standard-view treeview row,
+window.thunar .standard-view treeview.view row {
+    padding: 4px 0;
+    color: @text_fg;
+}
+
+window.thunar .standard-view treeview row:hover:not(:selected),
+window.thunar .standard-view treeview.view row:hover:not(:selected) {
+    background-color: @row_hover_bg;
+}
+
+/* Selected Row Highlight in File View */
+window.thunar .standard-view treeview:selected,
+window.thunar .standard-view treeview:selected:focus,
+window.thunar .standard-view treeview.view:selected,
+window.thunar .standard-view treeview.view:selected:focus,
+window.thunar .standard-view treeview row:selected,
+window.thunar .standard-view treeview.view row:selected,
+window.thunar paned > scrolledwindow:last-child treeview:selected,
+window.thunar paned > scrolledwindow:last-child treeview.view:selected {
+    background-image: none;
+    background-color: @row_selected_bg;
+    color: @row_selected_fg;
+}
+
+/* Icon View Cards */
+window.thunar .standard-view iconview:selected {
+    background-image: none;
+    background-color: @row_selected_bg;
+    color: @row_selected_fg;
+    border-radius: 8px;
+}
+
+/* Statusbar */
+window.thunar statusbar,
+window.thunar statusbar * {
+    background-image: none;
+    background-color: @content_bg;
+    border-top: 1px solid @border_color;
+    padding: 4px 12px;
+    color: @header_fg;
+    font-size: 11.5px;
+}
+
+/* Scrollbars */
+window.thunar scrollbar {
+    background: transparent;
+    border: none;
+}
+
+window.thunar scrollbar slider {
+    min-width: 5px;
+    min-height: 5px;
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.15);
+    border: none;
+    margin: 2px;
+}
