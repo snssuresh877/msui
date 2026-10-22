@@ -219,12 +219,23 @@ hl.window_rule({
 	rounding = 14,
 })
 
--- msUI Files (msui-fm) High-Performance Native File Manager
+-- Thunar File Manager
 hl.window_rule({
 	match = {
-		title = "^msUI Files.*$",
+		class = "^([Tt]hunar)$",
 	},
 
+	rounding = 14,
+})
+
+hl.window_rule({
+	match = {
+		class = "^([Tt]hunar)$",
+		title = "^(File Operation Progress|Confirm to replace files|Properties|Preferences)$",
+	},
+
+	float = true,
+	center = true,
 	rounding = 14,
 })
 

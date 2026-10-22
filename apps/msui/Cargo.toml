@@ -9,7 +9,6 @@ license.workspace = true
 msui-core.workspace = true
 msui-bar.workspace = true
 msui-launcher.workspace = true
-msui-fm.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

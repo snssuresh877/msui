@@ -180,9 +180,13 @@ fn main() -> anyhow::Result<()> {
         }
         "fm" | "files" | "filemanager" => {
             let target = args.get(2).map(std::path::PathBuf::from);
-            tracing::info!("Starting msUI File Manager (target: {:?})...", target);
-            if let Err(e) = msui_fm::run_fm(target) {
-                tracing::error!("msUI File Manager exited with error: {:?}", e);
+            tracing::info!("Starting GUI File Manager (Thunar) (target: {:?})...", target);
+            let mut cmd = std::process::Command::new("thunar");
+            if let Some(t) = target {
+                cmd.arg(t);
+            }
+            if let Err(e) = cmd.spawn() {
+                tracing::error!("Failed to launch Thunar: {:?}", e);
             }
         }
         "power" => {
