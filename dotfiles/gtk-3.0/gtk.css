@@ -1,0 +1,343 @@
+/* ==========================================================================
+   macOS Finder Modern Aesthetic for Thunar & GTK 3
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   macOS Dark Mode Color Palette
+   -------------------------------------------------------------------------- */
+@define-color mac_bg #1e1e24;
+@define-color mac_surface #212127;
+@define-color mac_sidebar #16161a;
+@define-color mac_accent #0a84ff;
+@define-color mac_accent_hover #0071e3;
+@define-color mac_accent_subtle rgba(10, 132, 255, 0.22);
+@define-color mac_fg #f5f5f7;
+@define-color mac_fg_muted #8e8e93;
+@define-color mac_border rgba(255, 255, 255, 0.08);
+@define-color mac_border_subtle rgba(255, 255, 255, 0.05);
+
+@define-color theme_fg_color @mac_fg;
+@define-color theme_text_color @mac_fg;
+@define-color theme_bg_color @mac_bg;
+@define-color theme_base_color @mac_bg;
+@define-color theme_selected_bg_color @mac_accent;
+@define-color theme_selected_fg_color #ffffff;
+@define-color borders @mac_border;
+@define-color unfocused_borders @mac_border_subtle;
+
+/* Global typography */
+* {
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+}
+
+/* --------------------------------------------------------------------------
+   Selection Box (Rubberband)
+   -------------------------------------------------------------------------- */
+rubberband,
+.rubberband,
+window.thunar rubberband,
+flowbox rubberband,
+treeview.view rubberband {
+    background-color: rgba(10, 132, 255, 0.18);
+    border: 1.5px solid @mac_accent;
+    border-radius: 6px;
+}
+
+/* --------------------------------------------------------------------------
+   Thunar Main Window & Surface
+   -------------------------------------------------------------------------- */
+window.thunar,
+.thunar {
+    background-color: @mac_bg;
+    color: @mac_fg;
+}
+
+/* --------------------------------------------------------------------------
+   Top Toolbar (macOS Finder Unified Header)
+   -------------------------------------------------------------------------- */
+window.thunar toolbar,
+.thunar toolbar {
+    background-color: @mac_surface;
+    border-bottom: 1px solid @mac_border;
+    padding: 6px 12px;
+}
+
+/* Navigation & Action Buttons (Back, Forward, Up, Home) */
+window.thunar toolbar button,
+.thunar toolbar button {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: @mac_fg_muted;
+    border-radius: 6px;
+    border: 1px solid @mac_border;
+    padding: 5px 9px;
+    margin: 0 2px;
+    font-size: 13px;
+    transition: all 120ms ease-in-out;
+}
+
+window.thunar toolbar button:hover,
+.thunar toolbar button:hover {
+    background-color: rgba(255, 255, 255, 0.11);
+    border-color: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+}
+
+window.thunar toolbar button:active,
+window.thunar toolbar button:checked,
+.thunar toolbar button:active {
+    background-color: @mac_accent_subtle;
+    border-color: @mac_accent;
+    color: @mac_accent;
+}
+
+/* --------------------------------------------------------------------------
+   Path Bar / Breadcrumbs (macOS Finder Pill Buttons)
+   -------------------------------------------------------------------------- */
+window.thunar path-bar,
+.thunar path-bar,
+.thunar .path-bar-box {
+    margin: 0 4px;
+}
+
+window.thunar path-bar button,
+.thunar path-bar button,
+.thunar .path-bar-box button {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid @mac_border;
+    border-radius: 6px;
+    color: #d1d1d6;
+    font-weight: 500;
+    font-size: 12.5px;
+    padding: 4px 10px;
+    margin: 1px 3px;
+    transition: all 120ms ease;
+}
+
+window.thunar path-bar button:hover,
+.thunar path-bar button:hover,
+.thunar .path-bar-box button:hover {
+    background-color: rgba(255, 255, 255, 0.10);
+    border-color: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+}
+
+/* Active / Current Folder in Breadcrumb */
+window.thunar path-bar button:checked,
+window.thunar path-bar button:active,
+.thunar path-bar button:checked {
+    background-color: @mac_accent;
+    border-color: @mac_accent;
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 1px 4px rgba(10, 132, 255, 0.35);
+}
+
+/* --------------------------------------------------------------------------
+   Sidebar (macOS Finder Shortcuts / Places Pane)
+   -------------------------------------------------------------------------- */
+window.thunar .sidebar,
+window.thunar .shortcuts-pane,
+window.thunar scrolledwindow.shortcuts-pane,
+.thunar .sidebar,
+.thunar .sidebar .view,
+.thunar .sidebar treeview.view,
+.thunar scrolledwindow.shortcuts-pane {
+    background-color: @mac_sidebar;
+    border-right: 1px solid @mac_border_subtle;
+    color: @mac_fg_muted;
+}
+
+/* Sidebar Section Headers (Favorites, Locations, Tags) */
+window.thunar .sidebar treeview.view header button,
+window.thunar scrolledwindow.shortcuts-pane treeview.view header button,
+.thunar .sidebar treeview.view header button {
+    background-color: @mac_sidebar;
+    border: none;
+    color: @mac_fg_muted;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 10px 10px 3px 10px;
+}
+
+/* Sidebar Rows (macOS Rounded Selection Pill) */
+window.thunar .sidebar treeview.view row,
+window.thunar scrolledwindow.shortcuts-pane treeview.view row,
+.thunar .sidebar treeview.view row {
+    padding: 5px 8px;
+    margin: 2px 6px;
+    border-radius: 6px;
+    border: none;
+    color: #c7c7cc;
+    transition: all 100ms ease;
+}
+
+window.thunar .sidebar treeview.view row:hover,
+window.thunar scrolledwindow.shortcuts-pane treeview.view row:hover,
+.thunar .sidebar treeview.view:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+}
+
+/* Selected Sidebar Row (Classic macOS Blue Pill) */
+window.thunar .sidebar treeview.view row:selected,
+window.thunar scrolledwindow.shortcuts-pane treeview.view row:selected,
+.thunar .sidebar treeview.view:selected,
+.thunar .sidebar .view:selected {
+    background-color: @mac_accent;
+    color: #ffffff;
+    font-weight: 600;
+    border: none;
+}
+
+/* --------------------------------------------------------------------------
+   Main File View Area
+   -------------------------------------------------------------------------- */
+window.thunar .standard-view,
+window.thunar .standard-view widget.view,
+window.thunar .standard-view iconview,
+window.thunar .standard-view treeview.view,
+.thunar .standard-view,
+.thunar .standard-view .view {
+    background-color: @mac_bg;
+    color: @mac_fg;
+}
+
+/* Icon Grid Cards - Hover Effect */
+window.thunar .standard-view iconview:hover:not(:selected),
+window.thunar .standard-view .view:hover:not(:selected),
+.thunar .standard-view iconview:hover:not(:selected) {
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid @mac_border;
+    border-radius: 8px;
+}
+
+/* Icon Grid Cards - macOS Selected State */
+window.thunar .standard-view iconview:selected,
+window.thunar .standard-view iconview:selected:focus,
+window.thunar .standard-view .view:selected,
+window.thunar .standard-view .view:selected:focus,
+window.thunar iconview:selected,
+window.thunar .view:selected,
+.thunar .standard-view iconview:selected {
+    background-color: rgba(10, 132, 255, 0.28);
+    border: 1.5px solid @mac_accent;
+    border-radius: 8px;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(10, 132, 255, 0.25);
+}
+
+/* --------------------------------------------------------------------------
+   Details / List View (macOS Table View)
+   -------------------------------------------------------------------------- */
+window.thunar treeview.view row,
+.thunar treeview.view row {
+    padding: 3px 0;
+    border-radius: 4px;
+}
+
+window.thunar treeview.view row:hover:not(:selected),
+.thunar treeview.view row:hover:not(:selected) {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+window.thunar treeview.view row:selected,
+window.thunar treeview.view row:selected:focus,
+.thunar treeview.view:selected {
+    background-color: @mac_accent;
+    color: #ffffff;
+    border-radius: 4px;
+}
+
+window.thunar treeview.view header button,
+.thunar treeview.view header button {
+    background-color: @mac_bg;
+    border: none;
+    border-bottom: 1px solid @mac_border;
+    border-right: 1px solid @mac_border_subtle;
+    color: @mac_fg_muted;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 6px 12px;
+}
+
+window.thunar treeview.view header button:hover,
+.thunar treeview.view header button:hover {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+/* --------------------------------------------------------------------------
+   Tabs / Notebook (Safari / macOS Finder Segmented Tabs)
+   -------------------------------------------------------------------------- */
+window.thunar notebook header,
+.thunar notebook header {
+    background-color: @mac_surface;
+    border-bottom: 1px solid @mac_border;
+    padding: 4px 6px 0 6px;
+}
+
+window.thunar notebook header tab,
+.thunar notebook header tab {
+    background-color: transparent;
+    color: @mac_fg_muted;
+    border: none;
+    border-radius: 6px 6px 0 0;
+    padding: 6px 16px;
+    margin: 0 2px;
+    font-size: 12px;
+    transition: all 120ms ease;
+}
+
+window.thunar notebook header tab:hover,
+.thunar notebook header tab:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+}
+
+window.thunar notebook header tab:checked,
+.thunar notebook header tab:checked {
+    background-color: @mac_bg;
+    color: #ffffff;
+    font-weight: 600;
+    border-top: 2px solid @mac_accent;
+}
+
+/* --------------------------------------------------------------------------
+   Minimalist macOS Scrollbars
+   -------------------------------------------------------------------------- */
+window.thunar scrollbar,
+.thunar scrollbar {
+    background-color: transparent;
+    border: none;
+}
+
+window.thunar scrollbar slider,
+.thunar scrollbar slider {
+    min-width: 5px;
+    min-height: 5px;
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.16);
+    border: none;
+    margin: 2px;
+}
+
+window.thunar scrollbar slider:hover,
+.thunar scrollbar slider:hover {
+    background-color: rgba(255, 255, 255, 0.32);
+    min-width: 7px;
+    min-height: 7px;
+}
+
+/* --------------------------------------------------------------------------
+   Statusbar (macOS Clean Compact Footer)
+   -------------------------------------------------------------------------- */
+window.thunar statusbar,
+.thunar statusbar {
+    background-color: @mac_sidebar;
+    border-top: 1px solid @mac_border_subtle;
+    padding: 4px 14px;
+    color: @mac_fg_muted;
+    font-size: 11px;
+}
