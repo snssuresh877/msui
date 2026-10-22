@@ -235,29 +235,42 @@ impl FileList {
             if let Some(entry) = all_entries.get(entry_idx) {
                 let is_selected = selected_idx == Some(filtered_idx);
                 let accent_color = entry.accent_color;
+                let display_name = format_grid_name(&entry.name, 16);
+
+                let icon_text = text(entry.icon_glyph)
+                    .size(32)
+                    .style(move |_theme: &Theme| text::Style {
+                        color: Some(accent_color),
+                    });
+
+                let name_label = container(
+                    text(display_name)
+                        .size(11)
+                        .align_x(Alignment::Center),
+                )
+                .width(Length::Fixed(116.0))
+                .center_x(Length::Fixed(116.0));
+
+                let size_label = text(&entry.human_size)
+                    .size(10)
+                    .style(|_theme: &Theme| text::Style {
+                        color: Some(Color::from_rgb8(147, 154, 183)),
+                    });
 
                 let card_content = column![
-                    text(entry.icon_glyph)
-                        .size(32)
-                        .style(move |_theme: &Theme| text::Style {
-                            color: Some(accent_color),
-                        }),
+                    icon_text,
                     space().height(Length::Fixed(4.0)),
-                    text(&entry.name)
-                        .size(12)
-                        .align_x(Alignment::Center),
-                    text(&entry.human_size)
-                        .size(10)
-                        .style(|_theme: &Theme| text::Style {
-                            color: Some(Color::from_rgb8(147, 154, 183)),
-                        }),
+                    name_label,
+                    space().height(Length::Fixed(2.0)),
+                    size_label,
                 ]
                 .spacing(2)
                 .align_x(Alignment::Center);
 
                 let card_btn = button(card_content)
-                    .width(Length::Fixed(110.0))
-                    .padding(10)
+                    .width(Length::Fixed(128.0))
+                    .height(Length::Fixed(112.0))
+                    .padding([8, 6])
                     .on_press(on_open(filtered_idx))
                     .style(move |theme: &Theme, status| {
                         grid_card_style(theme, status, is_selected)
@@ -267,14 +280,14 @@ impl FileList {
             }
         }
 
-        let grid_layout = row(cards).spacing(10).wrap();
+        let grid_layout = row(cards).spacing(12).wrap();
 
         container(
             scrollable(grid_layout)
                 .width(Length::Fill)
                 .height(Length::Fill),
         )
-        .padding(14)
+        .padding(16)
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
@@ -376,3 +389,54 @@ fn grid_card_style(_theme: &Theme, status: button::Status, is_selected: bool) ->
         }
     }
 }
+
+pub fn format_grid_name(name: &str, max_len: usize) -> String {
+    let count = name.chars().count();
+    if count <= max_len {
+        return name.to_string();
+    }
+
+    if let Some((stem, ext)) = name.rsplit_once('.') {
+        if !stem.is_empty() && ext.len() <= 5 && !stem.ends_with('.') {
+            if ext.len() + 3 < max_len {
+                let avail = max_len - ext.len() - 1;
+                let prefix: String = stem.chars().take(avail).collect();
+                return format!("{prefix}…{ext}");
+            }
+        }
+    }
+
+    let prefix: String = name.chars().take(max_len.saturating_sub(1)).collect();
+    format!("{prefix}…")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_grid_name_short() {
+        assert_eq!(format_grid_name("Android", 16), "Android");
+    }
+
+    #[test]
+    fn test_format_grid_name_long_with_extension() {
+        assert_eq!(
+            format_grid_name("system-backup-2026-06-18.tar.zst", 16),
+            "system-backu…zst"
+        );
+        assert_eq!(
+            format_grid_name("installed-packages.txt", 16),
+            "installed-pa…txt"
+        );
+    }
+
+    #[test]
+    fn test_format_grid_name_long_directory() {
+        assert_eq!(
+            format_grid_name("very_long_folder_name_here", 16),
+            "very_long_folde…"
+        );
+    }
+}
+
