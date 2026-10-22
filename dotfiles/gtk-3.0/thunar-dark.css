@@ -4,9 +4,9 @@
 
 @define-color frame_bg #222b30;
 @define-color content_bg #161e1f;
-@define-color pill_bg #bde6fc;
+@define-color pill_bg #d3ffff;
 @define-color pill_fg #161e1f;
-@define-color row_selected_bg #4a5b65;
+@define-color row_selected_bg #576c77;
 @define-color row_selected_fg #ffffff;
 @define-color text_fg #e2e8f0;
 @define-color muted_fg #94a3b8;
@@ -19,6 +19,9 @@
 @define-color active_crumb_border #4a5b65;
 @define-color active_crumb_fg #ffffff;
 @define-color row_hover_bg rgba(255, 255, 255, 0.04);
+
+@define-color theme_selected_bg_color @row_selected_bg;
+@define-color theme_selected_fg_color @row_selected_fg;
 
 * {
     font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -36,7 +39,7 @@ window.thunar > box.vertical {
 window.thunar rubberband,
 window.thunar .rubberband,
 window.thunar treeview.view rubberband {
-    background-color: rgba(189, 230, 252, 0.2);
+    background-color: rgba(211, 255, 255, 0.2);
     border: 1.5px solid @pill_bg;
     border-radius: 4px;
 }
@@ -141,6 +144,10 @@ window.thunar paned > scrolledwindow:first-child treeview.view {
     -gtk-icon-style: symbolic;
 }
 
+window.thunar .sidebar treeview {
+    padding: 4px 8px;
+}
+
 /* Sidebar Section Headers ("Places", "Devices") */
 window.thunar .sidebar header button,
 window.thunar .sidebar treeview.view header button,
@@ -152,25 +159,6 @@ window.thunar .shortcuts-pane header button {
     font-size: 12px;
     font-weight: 700;
     padding: 10px 12px 4px 12px;
-}
-
-/* Sidebar Active Capsule Pill */
-window.thunar .sidebar treeview:selected,
-window.thunar .sidebar treeview.view:selected,
-window.thunar .sidebar treeview:selected:focus,
-window.thunar .sidebar treeview.view:selected:focus,
-window.thunar .sidebar treeview row:selected,
-window.thunar .sidebar treeview.view row:selected,
-window.thunar .shortcuts-pane treeview:selected,
-window.thunar .shortcuts-pane treeview.view:selected,
-window.thunar paned > scrolledwindow:first-child treeview:selected,
-window.thunar paned > scrolledwindow:first-child treeview.view:selected {
-    background-image: none;
-    background-color: @pill_bg;
-    color: @pill_fg;
-    font-weight: 700;
-    border-radius: 20px;
-    border: none;
 }
 
 /* ==========================================================================
@@ -192,6 +180,14 @@ window.thunar paned > box > scrolledwindow treeview.view {
     background-color: @content_bg;
     color: @text_fg;
     -gtk-icon-style: regular;
+}
+
+/* Treeview Row Spacing (Exact Vertical Spacing) */
+window.thunar treeview,
+window.thunar treeview.view,
+window.thunar .standard-view treeview {
+    -GtkTreeView-vertical-separator: 6;
+    -GtkTreeView-horizontal-separator: 8;
 }
 
 /* Details View Column Headers */
@@ -217,7 +213,7 @@ window.thunar .standard-view treeview.view header button:hover {
 /* Details View Rows */
 window.thunar .standard-view treeview row,
 window.thunar .standard-view treeview.view row {
-    padding: 4px 0;
+    padding: 5px 0;
     color: @text_fg;
 }
 
@@ -226,18 +222,57 @@ window.thunar .standard-view treeview.view row:hover:not(:selected) {
     background-color: @row_hover_bg;
 }
 
-/* Selected Row Highlight in File View */
+/* Selected Row Highlight in File View (Muted Slate Teal #576c77) */
 window.thunar .standard-view treeview:selected,
 window.thunar .standard-view treeview:selected:focus,
+window.thunar .standard-view treeview:selected:backdrop,
 window.thunar .standard-view treeview.view:selected,
 window.thunar .standard-view treeview.view:selected:focus,
+window.thunar .standard-view treeview.view:selected:backdrop,
 window.thunar .standard-view treeview row:selected,
 window.thunar .standard-view treeview.view row:selected,
+window.thunar .standard-view .view:selected,
+window.thunar .standard-view .view:selected:focus,
+window.thunar .standard-view .view:selected:backdrop,
+window.thunar treeview.view:selected,
+window.thunar treeview.view:selected:focus,
+window.thunar treeview.view:selected:backdrop,
+window.thunar .view:selected,
+window.thunar .view:selected:focus,
+window.thunar .view:selected:backdrop,
 window.thunar paned > scrolledwindow:last-child treeview:selected,
 window.thunar paned > scrolledwindow:last-child treeview.view:selected {
     background-image: none;
     background-color: @row_selected_bg;
     color: @row_selected_fg;
+}
+
+/* Sidebar Active Capsule Pill (Must override general selection above) */
+window.thunar .sidebar treeview:selected,
+window.thunar .sidebar treeview:selected:focus,
+window.thunar .sidebar treeview:selected:backdrop,
+window.thunar .sidebar treeview.view:selected,
+window.thunar .sidebar treeview.view:selected:focus,
+window.thunar .sidebar treeview.view:selected:backdrop,
+window.thunar .sidebar .view:selected,
+window.thunar .sidebar .view:selected:focus,
+window.thunar .sidebar .view:selected:backdrop,
+window.thunar .sidebar treeview row:selected,
+window.thunar .sidebar treeview.view row:selected,
+window.thunar .shortcuts-pane treeview:selected,
+window.thunar .shortcuts-pane treeview:selected:focus,
+window.thunar .shortcuts-pane treeview:selected:backdrop,
+window.thunar .shortcuts-pane treeview.view:selected,
+window.thunar .shortcuts-pane treeview.view:selected:focus,
+window.thunar .shortcuts-pane treeview.view:selected:backdrop,
+window.thunar paned > scrolledwindow:first-child treeview:selected,
+window.thunar paned > scrolledwindow:first-child treeview.view:selected {
+    background-image: none;
+    background-color: @pill_bg;
+    color: @pill_fg;
+    font-weight: 700;
+    border-radius: 20px;
+    border: none;
 }
 
 /* Icon View Cards */
