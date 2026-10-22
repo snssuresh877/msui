@@ -178,6 +178,13 @@ fn main() -> anyhow::Result<()> {
                 tracing::error!("msUI Launcher exited with error: {:?}", e);
             }
         }
+        "fm" | "files" | "filemanager" => {
+            let target = args.get(2).map(std::path::PathBuf::from);
+            tracing::info!("Starting msUI File Manager (target: {:?})...", target);
+            if let Err(e) = msui_fm::run_fm(target) {
+                tracing::error!("msUI File Manager exited with error: {:?}", e);
+            }
+        }
         "power" => {
             if try_ipc_toggle("power") {
                 return Ok(());

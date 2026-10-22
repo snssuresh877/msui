@@ -32,7 +32,7 @@ Apps = {
 
 	browser = "firefox",
 
-	fileManager = "thunar",
+	fileManager = "msui-fm",
 
 	codeEditor = "foot -e nvim",
 

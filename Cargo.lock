@@ -2482,6 +2482,7 @@ dependencies = [
  "anyhow",
  "msui-bar",
  "msui-core",
+ "msui-fm",
  "msui-launcher",
  "tokio",
  "tracing",
@@ -2518,6 +2519,21 @@ dependencies = [
  "tracing",
  "xdg",
  "zbus",
+]
+
+[[package]]
+name = "msui-fm"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "fuzzy-matcher",
+ "iced",
+ "iced_runtime",
+ "msui-core",
+ "tokio",
+ "tracing",
+ "walkdir",
 ]
 
 [[package]]

@@ -4,6 +4,7 @@ members = [
     "crates/msui-core",
     "crates/msui-bar",
     "crates/msui-launcher",
+    "crates/msui-fm",
     "apps/msui",
 ]
 
@@ -32,9 +33,11 @@ thiserror = "2.0"
 chrono = "0.4"
 freedesktop-desktop-entry = "0.8"
 fuzzy-matcher = "0.3"
+walkdir = "2.5"
 xdg = "3.0"
 zbus = "5.19"
 
 msui-core = { path = "crates/msui-core" }
 msui-bar = { path = "crates/msui-bar" }
 msui-launcher = { path = "crates/msui-launcher" }
+msui-fm = { path = "crates/msui-fm" }

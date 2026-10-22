@@ -219,6 +219,15 @@ hl.window_rule({
 	rounding = 14,
 })
 
+-- msUI Files (msui-fm) High-Performance Native File Manager
+hl.window_rule({
+	match = {
+		title = "^msUI Files.*$",
+	},
+
+	rounding = 14,
+})
+
 -- Flux-FM File Manager Windows & Dialogs
 hl.window_rule({
 	match = {
