@@ -1,24 +1,24 @@
 /* ==========================================================================
-   Thunar - Custom Dark Mode (Matching User Image 2)
+   Thunar - Pitch Black OLED Dark Mode (Ultra Clean & Battery Efficient)
    ========================================================================== */
 
-@define-color frame_bg #222b30;
-@define-color content_bg #161e1f;
-@define-color pill_bg #d3ffff;
-@define-color pill_fg #161e1f;
-@define-color row_selected_bg #576c77;
+@define-color frame_bg #0a0b0e;
+@define-color content_bg #000000;
+@define-color pill_bg #bde6fc;
+@define-color pill_fg #000000;
+@define-color row_selected_bg #1a222d;
 @define-color row_selected_fg #ffffff;
-@define-color text_fg #e2e8f0;
+@define-color text_fg #f1f5f9;
 @define-color muted_fg #94a3b8;
-@define-color header_fg #78909c;
+@define-color header_fg #64748b;
 @define-color border_color rgba(255, 255, 255, 0.07);
-@define-color hover_bg rgba(255, 255, 255, 0.08);
+@define-color hover_bg rgba(255, 255, 255, 0.07);
 @define-color hover_fg #ffffff;
-@define-color button_bg rgba(255, 255, 255, 0.06);
-@define-color active_crumb_bg #313d44;
-@define-color active_crumb_border #4a5b65;
+@define-color button_bg rgba(255, 255, 255, 0.04);
+@define-color active_crumb_bg #182028;
+@define-color active_crumb_border rgba(255, 255, 255, 0.12);
 @define-color active_crumb_fg #ffffff;
-@define-color row_hover_bg rgba(255, 255, 255, 0.04);
+@define-color row_hover_bg rgba(255, 255, 255, 0.03);
 
 @define-color theme_selected_bg_color @row_selected_bg;
 @define-color theme_selected_fg_color @row_selected_fg;
@@ -39,7 +39,7 @@ window.thunar > box.vertical {
 window.thunar rubberband,
 window.thunar .rubberband,
 window.thunar treeview.view rubberband {
-    background-color: rgba(211, 255, 255, 0.2);
+    background-color: rgba(189, 230, 252, 0.2);
     border: 1.5px solid @pill_bg;
     border-radius: 4px;
 }
@@ -162,7 +162,7 @@ window.thunar .shortcuts-pane header button {
 }
 
 /* ==========================================================================
-   Main File View Area (Details & Icon Views)
+   Main File View Area (Details & Icon Views - OLED Pitch Black)
    ========================================================================== */
 window.thunar .standard-view,
 window.thunar .standard-view viewport,
@@ -222,7 +222,7 @@ window.thunar .standard-view treeview.view row:hover:not(:selected) {
     background-color: @row_hover_bg;
 }
 
-/* Selected Row Highlight in File View (Muted Slate Teal #576c77) */
+/* Selected Row Highlight in File View (Deep Charcoal #1a222d) */
 window.thunar .standard-view treeview:selected,
 window.thunar .standard-view treeview:selected:focus,
 window.thunar .standard-view treeview:selected:backdrop,
@@ -247,7 +247,7 @@ window.thunar paned > scrolledwindow:last-child treeview.view:selected {
     color: @row_selected_fg;
 }
 
-/* Sidebar Active Capsule Pill (Must override general selection above) */
+/* Sidebar Active Capsule Pill (Ice-Blue Pill with High Contrast Dark Text) */
 window.thunar .sidebar treeview:selected,
 window.thunar .sidebar treeview:selected:focus,
 window.thunar .sidebar treeview:selected:backdrop,
