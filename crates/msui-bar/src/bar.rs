@@ -147,6 +147,135 @@ pub enum Message {
     Ignored,
 }
 
+fn bar_btn_transparent(theme: &Theme, status: button::Status) -> button::Style {
+    let p = theme.palette();
+    let bg = match status {
+        button::Status::Hovered => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.09).into()),
+        button::Status::Pressed => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.16).into()),
+        _ => None,
+    };
+    let text_color = match status {
+        button::Status::Hovered => iced::Color::WHITE,
+        _ => p.text,
+    };
+    button::Style {
+        background: bg,
+        text_color,
+        border: iced::border::rounded(6),
+        ..Default::default()
+    }
+}
+
+fn bar_btn_stepper(theme: &Theme, status: button::Status) -> button::Style {
+    let p = theme.palette();
+    let bg = match status {
+        button::Status::Hovered => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.12).into()),
+        button::Status::Pressed => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.20).into()),
+        _ => None,
+    };
+    let text_color = match status {
+        button::Status::Hovered => iced::Color::WHITE,
+        _ => p.text,
+    };
+    button::Style {
+        background: bg,
+        text_color,
+        border: iced::border::rounded(4),
+        ..Default::default()
+    }
+}
+
+fn bar_btn_brand(theme: &Theme, status: button::Status) -> button::Style {
+    let p = theme.palette();
+    let bg = match status {
+        button::Status::Hovered => Some(iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.24).into()),
+        button::Status::Pressed => Some(iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.32).into()),
+        _ => Some(iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.12).into()),
+    };
+    let mut border = iced::border::rounded(6);
+    border.width = 1.0;
+    border.color = iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.35);
+    button::Style {
+        background: bg,
+        text_color: p.primary,
+        border,
+        ..Default::default()
+    }
+}
+
+fn bar_btn_active(theme: &Theme, status: button::Status) -> button::Style {
+    let p = theme.palette();
+    let bg = match status {
+        button::Status::Hovered => iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.28),
+        button::Status::Pressed => iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.38),
+        _ => iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.16),
+    };
+    let mut border = iced::border::rounded(6);
+    border.width = 1.0;
+    border.color = iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.45);
+    button::Style {
+        background: Some(bg.into()),
+        text_color: p.primary,
+        border,
+        ..Default::default()
+    }
+}
+
+fn bar_btn_inactive_ws(theme: &Theme, status: button::Status) -> button::Style {
+    let p = theme.palette();
+    let bg = match status {
+        button::Status::Hovered => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()),
+        button::Status::Pressed => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.14).into()),
+        _ => None,
+    };
+    let text_color = match status {
+        button::Status::Hovered => iced::Color::WHITE,
+        _ => iced::Color::from_rgba(p.text.r, p.text.g, p.text.b, 0.55),
+    };
+    button::Style {
+        background: bg,
+        text_color,
+        border: iced::border::rounded(6),
+        ..Default::default()
+    }
+}
+
+fn bar_btn_danger(theme: &Theme, status: button::Status) -> button::Style {
+    let p = theme.palette();
+    let bg = match status {
+        button::Status::Hovered => Some(iced::Color::from_rgba(p.danger.r, p.danger.g, p.danger.b, 0.28).into()),
+        button::Status::Pressed => Some(iced::Color::from_rgba(p.danger.r, p.danger.g, p.danger.b, 0.38).into()),
+        _ => Some(iced::Color::from_rgba(p.danger.r, p.danger.g, p.danger.b, 0.16).into()),
+    };
+    let mut border = iced::border::rounded(6);
+    border.width = 1.0;
+    border.color = iced::Color::from_rgba(p.danger.r, p.danger.g, p.danger.b, 0.45);
+    button::Style {
+        background: bg,
+        text_color: p.danger,
+        border,
+        ..Default::default()
+    }
+}
+
+fn bar_btn_power(theme: &Theme, status: button::Status) -> button::Style {
+    let p = theme.palette();
+    let bg = match status {
+        button::Status::Hovered => Some(iced::Color::from_rgba(p.danger.r, p.danger.g, p.danger.b, 0.22).into()),
+        button::Status::Pressed => Some(iced::Color::from_rgba(p.danger.r, p.danger.g, p.danger.b, 0.34).into()),
+        _ => None,
+    };
+    let text_color = match status {
+        button::Status::Hovered => iced::Color::WHITE,
+        _ => p.danger,
+    };
+    button::Style {
+        background: bg,
+        text_color,
+        border: iced::border::rounded(6),
+        ..Default::default()
+    }
+}
 
 impl Bar {
     pub fn new(config: MsuiConfig, shell_events: ShellReceiver) -> Self {
@@ -426,7 +555,7 @@ impl Bar {
 
         if self.config.bar.show_brand {
             let brand_btn = button(text(" 󰣇 msUI ").size(14))
-                .style(button::primary)
+                .style(bar_btn_brand)
                 .padding([4, 10])
                 .on_press(Message::OpenDrawer);
             left_row = left_row.push(brand_btn);
@@ -444,9 +573,9 @@ impl Bar {
                 };
 
                 let btn_style = if is_active {
-                    button::primary
+                    bar_btn_active
                 } else {
-                    button::secondary
+                    bar_btn_inactive_ws
                 };
 
                 ws_row = ws_row.push(
@@ -474,7 +603,7 @@ impl Bar {
                     display_title.to_string()
                 };
                 let win_btn = button(text(format!(" {icon}  {truncated} ")).size(13))
-                    .style(button::secondary)
+                    .style(bar_btn_transparent)
                     .padding([3, 8])
                     .on_press(Message::OpenDrawer);
                 left_row = left_row.push(win_btn);
@@ -491,11 +620,11 @@ impl Bar {
                     media.title.clone()
                 };
                 let track_btn = button(text(format!(" 󰝚 {short_title} ")).size(13))
-                    .style(button::secondary)
+                    .style(bar_btn_transparent)
                     .padding([2, 6])
                     .on_press(Message::OpenMedia);
                 let play_btn = button(text(symbol).size(12))
-                    .style(button::primary)
+                    .style(bar_btn_active)
                     .padding([2, 6])
                     .on_press(Message::MediaPlayPause);
                 let media_group = row![track_btn, play_btn].spacing(2).align_y(Alignment::Center);
@@ -508,7 +637,7 @@ impl Bar {
 
         if self.config.bar.show_clock {
             let clock_widget = button(text(format!("󰃭 {}", &self.current_time)).size(14))
-                .style(button::text)
+                .style(bar_btn_transparent)
                 .padding([2, 6])
                 .on_press(Message::OpenControlCenter);
             center_row = center_row.push(clock_widget);
@@ -524,7 +653,7 @@ impl Bar {
                     format!(" 󰥔 {} ({}) ", rem_str, reminder.title)
                 };
                 let timer_pill = button(text(label).size(12))
-                    .style(if is_expired { button::danger } else { button::primary })
+                    .style(if is_expired { bar_btn_danger } else { bar_btn_active })
                     .padding([2, 8])
                     .on_press(Message::OpenReminders);
                 center_row = center_row.push(timer_pill);
@@ -558,9 +687,9 @@ impl Bar {
             };
             let net_btn = button(text(net_text).size(13))
                 .style(if self.network_info.is_connected {
-                    button::secondary
+                    bar_btn_transparent
                 } else {
-                    button::danger
+                    bar_btn_danger
                 })
                 .padding([2, 6])
                 .on_press(Message::OpenWifi);
@@ -581,9 +710,9 @@ impl Bar {
 
             let mute_btn = button(text(vol_icon).size(13))
                 .style(if self.audio_info.is_muted {
-                    button::danger
+                    bar_btn_danger
                 } else {
-                    button::text
+                    bar_btn_transparent
                 })
                 .padding([2, 5])
                 .on_press(Message::ToggleMute);
@@ -595,16 +724,16 @@ impl Bar {
             };
 
             let vol_btn = button(text(vol_text).size(13))
-                .style(button::text)
+                .style(bar_btn_transparent)
                 .padding([2, 4])
                 .on_press(Message::OpenAudio);
 
             let vol_down = button(text("-").size(12))
-                .style(button::secondary)
+                .style(bar_btn_stepper)
                 .padding([2, 6])
                 .on_press(Message::VolumeDown);
             let vol_up = button(text("+").size(12))
-                .style(button::secondary)
+                .style(bar_btn_stepper)
                 .padding([2, 6])
                 .on_press(Message::VolumeUp);
 
@@ -624,15 +753,15 @@ impl Bar {
                 };
                 let bright_str = format!("{bright_icon} {}%", b.percent);
                 let bright_btn = button(text(bright_str).size(13))
-                    .style(button::text)
+                    .style(bar_btn_transparent)
                     .padding([2, 4])
                     .on_press(Message::OpenDisplay);
                 let bright_down = button(text("-").size(12))
-                    .style(button::secondary)
+                    .style(bar_btn_stepper)
                     .padding([2, 6])
                     .on_press(Message::BrightnessDown);
                 let bright_up = button(text("+").size(12))
-                    .style(button::secondary)
+                    .style(bar_btn_stepper)
                     .padding([2, 6])
                     .on_press(Message::BrightnessUp);
 
@@ -656,7 +785,7 @@ impl Bar {
                 self.system_metrics.ram_total_mb as f32 / 1024.0
             );
             let ram_btn = button(text(ram_str).size(13))
-                .style(button::text)
+                .style(bar_btn_transparent)
                 .padding([2, 4])
                 .on_press(Message::OpenStorage);
             right_row = right_row.push(ram_btn);
@@ -665,7 +794,7 @@ impl Bar {
         // Removable USB Storage indicator
         if self.config.bar.show_storage && self.has_removable_drive {
             let usb_btn = button(text(" 󱊞 USB ").size(12))
-                .style(button::primary)
+                .style(bar_btn_active)
                 .padding([2, 6])
                 .on_press(Message::OpenStorage);
             right_row = right_row.push(usb_btn);
@@ -690,9 +819,9 @@ impl Bar {
                 let bat_str = format!("{bat_icon} {}%", bat.percentage);
                 let bat_btn = button(text(bat_str).size(13))
                     .style(if bat.percentage <= 20 && !bat.is_charging {
-                        button::danger
+                        bar_btn_danger
                     } else {
-                        button::text
+                        bar_btn_transparent
                     })
                     .padding([2, 5])
                     .on_press(Message::OpenBattery);
@@ -716,7 +845,7 @@ impl Bar {
                 ("󰂯", "".to_string())
             };
             let bt_btn = button(text(format!(" {}{} ", bt_icon, bt_label)).size(12))
-                .style(if is_connected { button::primary } else { button::secondary })
+                .style(if is_connected { bar_btn_active } else { bar_btn_transparent })
                 .padding([2, 6])
                 .on_press(Message::OpenBluetooth);
             right_row = right_row.push(bt_btn);
@@ -725,7 +854,7 @@ impl Bar {
         // Wallpaper Picker Shortcut
         if self.config.bar.show_wallpaper {
             let wall_btn = button(text(" 󰸉 ").size(13))
-                .style(button::secondary)
+                .style(bar_btn_transparent)
                 .padding([2, 6])
                 .on_press(Message::OpenWallpaper);
             right_row = right_row.push(wall_btn);
@@ -734,7 +863,7 @@ impl Bar {
         // Theme Selector Shortcut
         if self.config.bar.show_theme {
             let theme_btn = button(text(" 󰔎 ").size(13))
-                .style(button::secondary)
+                .style(bar_btn_transparent)
                 .padding([2, 6])
                 .on_press(Message::OpenTheme);
             right_row = right_row.push(theme_btn);
@@ -743,7 +872,7 @@ impl Bar {
         // Reminders & Timers Shortcut
         if self.config.bar.show_reminders_btn {
             let rem_btn = button(text(" 󰥔 ").size(13))
-                .style(button::secondary)
+                .style(bar_btn_transparent)
                 .padding([2, 6])
                 .on_press(Message::OpenReminders);
             right_row = right_row.push(rem_btn);
@@ -752,7 +881,7 @@ impl Bar {
         // Quick Screenshot Shortcut
         if self.config.bar.show_screenshot {
             let shot_btn = button(text(" 󰄀 ").size(13))
-                .style(button::secondary)
+                .style(bar_btn_transparent)
                 .padding([2, 6])
                 .on_press(Message::TakeScreenshot);
             right_row = right_row.push(shot_btn);
@@ -761,7 +890,7 @@ impl Bar {
         // Clipboard History Shortcut
         if self.config.bar.show_clipboard {
             let clip_btn = button(text(" 󰅍 Clip ").size(12))
-                .style(button::secondary)
+                .style(bar_btn_transparent)
                 .padding([2, 6])
                 .on_press(Message::OpenClipboard);
             right_row = right_row.push(clip_btn);
@@ -791,7 +920,7 @@ impl Bar {
                 };
 
                 let tray_btn = button(text(format!(" {glyph} ")).size(13))
-                    .style(button::primary)
+                    .style(bar_btn_transparent)
                     .padding([2, 5])
                     .on_press(Message::ActivateTray(item.service.clone(), item.path.clone()));
 
@@ -812,11 +941,11 @@ impl Bar {
             };
             let notif_btn = button(text(notif_label).size(12))
                 .style(if is_dnd {
-                    button::danger
+                    bar_btn_danger
                 } else if self.notification_count > 0 {
-                    button::primary
+                    bar_btn_active
                 } else {
-                    button::secondary
+                    bar_btn_transparent
                 })
                 .padding([2, 6])
                 .on_press(Message::OpenNotifications);
@@ -826,7 +955,7 @@ impl Bar {
         // Quick Settings Control Center Shortcut
         if self.config.bar.show_control_center {
             let control_btn = button(text(" 󰒓 ").size(12))
-                .style(button::secondary)
+                .style(bar_btn_transparent)
                 .padding([2, 6])
                 .on_press(Message::OpenControlCenter);
             right_row = right_row.push(control_btn);
@@ -835,7 +964,7 @@ impl Bar {
         // Terminal Shortcut
         if self.config.bar.show_terminal {
             let term_btn = button(text(" 󰞷 Term ").size(12))
-                .style(button::secondary)
+                .style(bar_btn_transparent)
                 .padding([2, 6])
                 .on_press(Message::OpenTerminal);
             right_row = right_row.push(term_btn);
@@ -844,7 +973,7 @@ impl Bar {
         // Power Menu Trigger Button
         if self.config.bar.show_power {
             let power_btn = button(text(" 󰐥 ").size(13))
-                .style(button::danger)
+                .style(bar_btn_power)
                 .padding([2, 8])
                 .on_press(Message::OpenPowerMenu);
             right_row = right_row.push(power_btn);
@@ -873,9 +1002,9 @@ impl Bar {
                     let p = theme.palette();
                     let mut border = iced::border::rounded(radius);
                     border.width = b_width;
-                    border.color = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.15);
+                    border.color = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.12);
                     container::Style {
-                        background: Some(iced::Color::from_rgba(p.background.r, p.background.g, p.background.b, 0.82).into()),
+                        background: Some(iced::Color::from_rgba(p.background.r, p.background.g, p.background.b, 0.45).into()),
                         border,
                         ..Default::default()
                     }
