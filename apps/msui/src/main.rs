@@ -19,7 +19,7 @@ impl ModalManager {
             matches!(
                 target,
                 "bar" | "wallpaper" | "wall" | "dnd" | "launcher" | "power"
-                    | "control" | "quicksettings" | "cc"
+                    | "control" | "quicksettings" | "cc" | "topbar" | "bar-settings"
                     | "clipboard" | "clip"
                     | "notifications" | "notifs"
                     | "drawer" | "tasks" | "apps" | "appdrawer"
@@ -722,6 +722,9 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 Some("topbar" | "bar" | "settings") => {
+                    if try_ipc_toggle("topbar") {
+                        return Ok(());
+                    }
                     tracing::info!("Starting msUI Control Center (Top Bar Settings)...");
                     let config = MsuiConfig::load_or_default();
                     if let Err(e) = msui_launcher::run_control_center_topbar(config) {
@@ -738,6 +741,16 @@ fn main() -> anyhow::Result<()> {
                         tracing::error!("msUI Control Center exited with error: {:?}", e);
                     }
                 }
+            }
+        }
+        "topbar" => {
+            if try_ipc_toggle("topbar") {
+                return Ok(());
+            }
+            tracing::info!("Starting msUI Control Center (Top Bar Settings)...");
+            let config = MsuiConfig::load_or_default();
+            if let Err(e) = msui_launcher::run_control_center_topbar(config) {
+                tracing::error!("msUI Control Center exited with error: {:?}", e);
             }
         }
         "media" | "mpris" | "player" => {

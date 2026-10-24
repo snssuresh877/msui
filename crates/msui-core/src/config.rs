@@ -18,6 +18,16 @@ pub struct BarConfig {
     pub layer: String,
     #[serde(default = "default_bar_anchor")]
     pub anchor: String,
+    #[serde(default = "default_bar_style")]
+    pub style: String,
+    #[serde(default = "default_margin_top")]
+    pub margin_top: u32,
+    #[serde(default = "default_margin_horizontal")]
+    pub margin_horizontal: u32,
+    #[serde(default = "default_corner_radius")]
+    pub corner_radius: f32,
+    #[serde(default = "default_border_width")]
+    pub border_width: f32,
     #[serde(default = "default_time_format")]
     pub time_format: String,
     #[serde(default = "default_battery_refresh")]
@@ -88,9 +98,21 @@ pub struct LauncherConfig {
     pub terminal: String,
 }
 
+impl BarConfig {
+    pub fn is_modern(&self) -> bool {
+        let s = self.style.to_lowercase();
+        s == "modern" || s == "floating" || s == "island"
+    }
+}
+
 fn default_bar_height() -> u32 { 32 }
 fn default_bar_layer() -> String { "top".into() }
 fn default_bar_anchor() -> String { "top".into() }
+fn default_bar_style() -> String { "modern".into() }
+fn default_margin_top() -> u32 { 6 }
+fn default_margin_horizontal() -> u32 { 12 }
+fn default_corner_radius() -> f32 { 14.0 }
+fn default_border_width() -> f32 { 1.0 }
 fn default_time_format() -> String { "%a %b %d  %I:%M %p".into() }
 fn default_battery_refresh() -> u64 { 5 }
 fn default_sysinfo_refresh() -> u64 { 2 }
@@ -118,6 +140,11 @@ impl Default for BarConfig {
             height: default_bar_height(),
             layer: default_bar_layer(),
             anchor: default_bar_anchor(),
+            style: default_bar_style(),
+            margin_top: default_margin_top(),
+            margin_horizontal: default_margin_horizontal(),
+            corner_radius: default_corner_radius(),
+            border_width: default_border_width(),
             time_format: default_time_format(),
             battery_refresh_seconds: default_battery_refresh(),
             sysinfo_refresh_seconds: default_sysinfo_refresh(),
@@ -206,5 +233,50 @@ impl MsuiConfig {
         let path = Self::default_config_path()
             .ok_or_else(|| anyhow::anyhow!("Could not determine default config path"))?;
         self.save_to_path(path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bar_config_defaults() {
+        let bar = BarConfig::default();
+        assert_eq!(bar.style, "modern");
+        assert!(bar.is_modern());
+        assert_eq!(bar.margin_top, 6);
+        assert_eq!(bar.margin_horizontal, 12);
+        assert_eq!(bar.corner_radius, 14.0);
+        assert_eq!(bar.border_width, 1.0);
+    }
+
+    #[test]
+    fn test_bar_config_is_modern() {
+        let mut bar = BarConfig::default();
+        bar.style = "classic".into();
+        assert!(!bar.is_modern());
+        bar.style = "docked".into();
+        assert!(!bar.is_modern());
+        bar.style = "floating".into();
+        assert!(bar.is_modern());
+        bar.style = "island".into();
+        assert!(bar.is_modern());
+        bar.style = "modern".into();
+        assert!(bar.is_modern());
+    }
+
+    #[test]
+    fn test_config_deserialize_toml() {
+        let toml_str = r#"
+        [bar]
+        style = "classic"
+        margin_top = 0
+        "#;
+        let cfg: MsuiConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(cfg.bar.style, "classic");
+        assert!(!cfg.bar.is_modern());
+        assert_eq!(cfg.bar.margin_top, 0);
+        assert_eq!(cfg.bar.margin_horizontal, 12);
     }
 }

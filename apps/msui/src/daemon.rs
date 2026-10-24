@@ -18,7 +18,7 @@ use msui_core::{
 use msui_launcher::{
     AppDrawer, AppDrawerMessage, AudioMenu, AudioMessage, BatteryMenu, BatteryMessage,
     BluetoothMenu, BluetoothMessage, ClipboardMenu, ClipboardMessage, ControlCenter,
-    ControlCenterMessage, DisplayMenu, DisplayMessage, FShareMessage, FShareModal, Launcher,
+    ControlCenterMessage, ControlCenterTab, DisplayMenu, DisplayMessage, FShareMessage, FShareModal, Launcher,
     LauncherMessage, MediaMenu, MediaMessage, NotificationCenter, NotificationCenterMessage,
     OsdMessage, OsdWindow, PolkitDialog, PolkitDialogArgs, PolkitMessage, PowerMenu, PowerMessage,
     ReminderMenu, ReminderMessage, StorageMenu, StorageMessage, ThemeMenu, ThemeMessage, ToastApp,
@@ -246,11 +246,27 @@ impl UnifiedShell {
             _ => Anchor::Top | Anchor::Left | Anchor::Right,
         };
 
+        let is_modern = config.bar.is_modern();
+        let (bar_margin, exclusive_zone) = if is_modern {
+            (
+                Some(Margin {
+                    top: config.bar.margin_top as i32,
+                    right: config.bar.margin_horizontal as i32,
+                    bottom: 0,
+                    left: config.bar.margin_horizontal as i32,
+                }),
+                Some((height + config.bar.margin_top + 4) as i32),
+            )
+        } else {
+            (None, Some(height as i32))
+        };
+
         let (bar_id, bar_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
             size: LayerSize::fill_width(height),
             layer: bar_layer,
             anchor: bar_anchor,
-            exclusive_zone: Some(height as i32),
+            margin: bar_margin,
+            exclusive_zone,
             keyboard_interactivity: KeyboardInteractivity::None,
             output_option,
             ..Default::default()
@@ -306,11 +322,27 @@ impl UnifiedShell {
             OutputOption::Active
         };
 
+        let is_modern = self.config.bar.is_modern();
+        let (bar_margin, exclusive_zone) = if is_modern {
+            (
+                Some(Margin {
+                    top: self.config.bar.margin_top as i32,
+                    right: self.config.bar.margin_horizontal as i32,
+                    bottom: 0,
+                    left: self.config.bar.margin_horizontal as i32,
+                }),
+                Some((height + self.config.bar.margin_top + 4) as i32),
+            )
+        } else {
+            (None, Some(height as i32))
+        };
+
         let (bid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
             size: LayerSize::fill_width(height),
             layer: bar_layer,
             anchor: bar_anchor,
-            exclusive_zone: Some(height as i32),
+            margin: bar_margin,
+            exclusive_zone,
             keyboard_interactivity: KeyboardInteractivity::None,
             output_option,
             ..Default::default()
@@ -344,7 +376,7 @@ impl UnifiedShell {
         let target_norm = match target {
             "launcher" => "launcher",
             "power" => "power",
-            "control" | "quicksettings" | "cc" => "control",
+            "control" | "quicksettings" | "cc" | "topbar" | "bar-settings" => "control",
             "clipboard" | "clip" => "clipboard",
             "notifications" | "notifs" => "notifications",
             "drawer" | "tasks" | "apps" | "appdrawer" => "drawer",
@@ -356,6 +388,14 @@ impl UnifiedShell {
             "fshare" | "share" | "fileshare" => "fshare",
             _ => return Task::none(),
         };
+
+        // If Control Center is already open and user requested topbar settings, switch tab directly
+        if let Some(ActiveModal::ControlCenter(cc)) = &mut self.active_modal {
+            if target == "topbar" || target == "bar-settings" {
+                cc.set_tab(ControlCenterTab::TopBarSettings);
+                return Task::none();
+            }
+        }
 
         // If currently open modal is the same target, toggle it off!
         if self.active_modal.as_ref().map(|m| m.kind()) == Some(target_norm) {
@@ -410,12 +450,17 @@ impl UnifiedShell {
                 tasks.push(init_cmd.map(|m| DaemonMessage::Modal(ModalMessage::Power(m))));
             }
             "control" => {
+                let top_margin = if self.config.bar.is_modern() {
+                    (self.config.bar.height + self.config.bar.margin_top + 8) as i32
+                } else {
+                    self.config.bar.height as i32 + 8
+                };
                 let (mid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
                     size: LayerSize::px(400, 765),
                     layer: Layer::Overlay,
                     anchor: Anchor::Top | Anchor::Right,
                     margin: Some(Margin {
-                        top: self.config.bar.height as i32 + 8,
+                        top: top_margin,
                         right: 12,
                         bottom: 0,
                         left: 0,
@@ -425,6 +470,9 @@ impl UnifiedShell {
                     ..Default::default()
                 });
                 let (mut cc, init_cmd) = ControlCenter::new_embedded(self.config.clone());
+                if target == "topbar" || target == "bar-settings" {
+                    cc.set_tab(ControlCenterTab::TopBarSettings);
+                }
                 let reset_cmd = cc.reset().map(|m| DaemonMessage::Modal(ModalMessage::ControlCenter(m)));
                 self.modal_id = Some(mid);
                 self.active_modal = Some(ActiveModal::ControlCenter(cc));
@@ -909,7 +957,20 @@ impl UnifiedShell {
                         }
                     }
                     IpcCommand::Open(target) => {
-                        if self.active_modal.as_ref().map(|m| m.kind()) != Some(&target) {
+                        let target_norm = match target.as_str() {
+                            "control" | "quicksettings" | "cc" | "topbar" | "bar-settings" => "control",
+                            other => other,
+                        };
+                        if let Some(ActiveModal::ControlCenter(cc)) = &mut self.active_modal {
+                            if target == "topbar" || target == "bar-settings" {
+                                cc.set_tab(ControlCenterTab::TopBarSettings);
+                                return Task::none();
+                            } else if target == "control" || target == "quicksettings" || target == "cc" {
+                                cc.set_tab(ControlCenterTab::QuickSettings);
+                                return Task::none();
+                            }
+                        }
+                        if self.active_modal.as_ref().map(|m| m.kind()) != Some(target_norm) {
                             self.toggle_modal(&target)
                         } else {
                             Task::none()
@@ -927,9 +988,24 @@ impl UnifiedShell {
                     }
                     IpcCommand::ReloadConfig => {
                         tracing::info!("ReloadConfig: Reloading configuration from disk...");
+                        let old_style = self.config.bar.style.clone();
+                        let old_height = self.config.bar.height;
+                        let old_margin_top = self.config.bar.margin_top;
+                        let old_margin_h = self.config.bar.margin_horizontal;
                         self.config = MsuiConfig::load_or_default();
                         self.bar.reload_config(self.config.clone());
-                        Task::none()
+                        let geometry_changed = old_style != self.config.bar.style
+                            || old_height != self.config.bar.height
+                            || old_margin_top != self.config.bar.margin_top
+                            || old_margin_h != self.config.bar.margin_horizontal;
+                        if geometry_changed && self.bar_id.is_some() {
+                            tracing::info!("ReloadConfig: Bar geometry/style changed, recreating layer surface");
+                            let close_task = iced::window::close(self.bar_id.take().unwrap());
+                            let open_task = self.open_bar();
+                            Task::batch([close_task, open_task])
+                        } else {
+                            Task::none()
+                        }
                     }
                     IpcCommand::WallpaperCycle => {
                         WallpaperManager::cycle();

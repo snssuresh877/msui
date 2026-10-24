@@ -25,7 +25,7 @@ pub use audio_menu::{run_audio_menu, AudioMenu, Message as AudioMessage};
 pub use battery_menu::{run_battery_menu, BatteryMenu, Message as BatteryMessage};
 pub use bluetooth_menu::{run_bluetooth_menu, BluetoothMenu, Message as BluetoothMessage};
 pub use clipboard_menu::{run_clipboard_menu, ClipboardMenu, Message as ClipboardMessage};
-pub use control_center::{run_control_center, run_control_center_topbar, ControlCenter, Message as ControlCenterMessage};
+pub use control_center::{run_control_center, run_control_center_topbar, ControlCenter, ControlCenterTab, Message as ControlCenterMessage};
 pub use display_menu::{run_display_menu, DisplayMenu, Message as DisplayMessage};
 pub use fshare_modal::{run_fshare_modal, FShareModal, Message as FShareMessage};
 pub use launcher::{run_launcher, Launcher, Message as LauncherMessage};

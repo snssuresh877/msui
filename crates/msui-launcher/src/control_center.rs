@@ -193,6 +193,7 @@ pub struct ControlCenter {
 #[derive(Debug, Clone)]
 pub enum Message {
     SwitchTab(ControlCenterTab),
+    SetBarStyle(String),
     ToggleBarModule(BarModule),
     EnableAllBarModules,
     MinimalBarPreset,
@@ -295,6 +296,10 @@ impl ControlCenter {
         Command::done(Message::Refresh)
     }
 
+    pub fn set_tab(&mut self, tab: ControlCenterTab) {
+        self.active_tab = tab;
+    }
+
     pub fn namespace() -> String {
         "msui-control-center".to_string()
     }
@@ -307,6 +312,10 @@ impl ControlCenter {
         match message {
             Message::SwitchTab(tab) => {
                 self.active_tab = tab;
+            }
+            Message::SetBarStyle(style) => {
+                self.config.bar.style = style;
+                let _ = self.config.save_to_default_path();
             }
             Message::ToggleBarModule(module) => {
                 module.toggle(&mut self.config.bar);
@@ -591,6 +600,43 @@ impl ControlCenter {
 
         // --- Top Bar Settings View ---
         if self.active_tab == ControlCenterTab::TopBarSettings {
+            let is_modern = self.config.bar.is_modern();
+            let modern_btn = button(
+                row![text("󰍹").size(14), text("Modern Floating").size(11)]
+                    .spacing(6)
+                    .align_y(Alignment::Center),
+            )
+            .width(Length::FillPortion(1))
+            .style(if is_modern { button::primary } else { button::secondary })
+            .padding([7, 10])
+            .on_press(Message::SetBarStyle("modern".to_string()));
+
+            let classic_btn = button(
+                row![text("󰍺").size(14), text("Classic Docked").size(11)]
+                    .spacing(6)
+                    .align_y(Alignment::Center),
+            )
+            .width(Length::FillPortion(1))
+            .style(if !is_modern { button::primary } else { button::secondary })
+            .padding([7, 10])
+            .on_press(Message::SetBarStyle("classic".to_string()));
+
+            let style_card = container(
+                column![
+                    row![
+                        text("Bar Appearance Style").size(12),
+                        space().width(Length::Fill),
+                        text(if is_modern { "Floating Acrylic Island" } else { "Full-Width Docked" }).size(10).style(text::secondary),
+                    ]
+                    .align_y(Alignment::Center),
+                    row![modern_btn, classic_btn].spacing(8),
+                ]
+                .spacing(8),
+            )
+            .style(container::bordered_box)
+            .padding([10, 12])
+            .width(Length::Fill);
+
             let btn_enable_all = button(
                 row![text("󰐥").size(12), text("Enable All").size(11)]
                     .spacing(4)
@@ -675,6 +721,7 @@ impl ControlCenter {
             let content = column![
                 header,
                 tab_row,
+                style_card,
                 presets_row,
                 scrollable_content,
             ]

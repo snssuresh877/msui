@@ -2,9 +2,9 @@ use chrono::Local;
 use futures::channel::mpsc::Sender;
 use futures::SinkExt;
 use iced::widget::{button, container, row, space, text};
-use iced::{Alignment, Element, Font, Length, Task as Command};
+use iced::{Alignment, Element, Font, Length, Task as Command, Theme};
 use iced_exwlshell::layershell::application;
-use iced_exwlshell::reexport::{Anchor, Layer, LayerSize};
+use iced_exwlshell::reexport::{Anchor, Layer, LayerSize, Margin};
 use iced_exwlshell::settings::{ExWlSettings, LayerShellSettings, StartMode};
 use iced_exwlshell::to_layer_message;
 use iced_wayland_subscriber::OutputId;
@@ -43,6 +43,21 @@ pub fn run_bar(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
         StartMode::Active
     };
 
+    let is_modern = config.bar.is_modern();
+    let (margin, exclusive_zone) = if is_modern {
+        (
+            Margin {
+                top: config.bar.margin_top as i32,
+                right: config.bar.margin_horizontal as i32,
+                bottom: 0,
+                left: config.bar.margin_horizontal as i32,
+            },
+            (height + config.bar.margin_top + 4) as i32,
+        )
+    } else {
+        (Margin::default(), height as i32)
+    };
+
     application(
         move || Bar::new(cfg_clone.clone(), shell_events.clone()),
         Bar::namespace,
@@ -58,9 +73,10 @@ pub fn run_bar(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
     .wl_settings(ExWlSettings {
         layer_settings: LayerShellSettings {
             size: LayerSize::fill_width(height),
-            exclusive_zone: height as i32,
+            exclusive_zone,
             anchor,
             layer,
+            margin,
             start_mode,
             ..Default::default()
         },
@@ -846,10 +862,38 @@ impl Bar {
         .align_y(Alignment::Center)
         .padding([2, 10]);
 
-        container(bar_content)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+        let is_modern = self.config.bar.is_modern();
+        let bar_container = if is_modern {
+            let radius = self.config.bar.corner_radius;
+            let b_width = self.config.bar.border_width;
+            container(bar_content)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(move |theme: &Theme| {
+                    let p = theme.palette();
+                    let mut border = iced::border::rounded(radius);
+                    border.width = b_width;
+                    border.color = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.15);
+                    container::Style {
+                        background: Some(iced::Color::from_rgba(p.background.r, p.background.g, p.background.b, 0.82).into()),
+                        border,
+                        ..Default::default()
+                    }
+                })
+        } else {
+            container(bar_content)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .style(|theme: &Theme| {
+                    let p = theme.palette();
+                    container::Style {
+                        background: Some(p.background.into()),
+                        ..Default::default()
+                    }
+                })
+        };
+
+        bar_container.into()
     }
 }
 
