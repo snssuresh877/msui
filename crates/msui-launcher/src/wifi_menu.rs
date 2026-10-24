@@ -43,6 +43,8 @@ pub struct WifiMenu {
     password_prompt_ssid: Option<String>,
     password_input: String,
     status_msg: Option<(String, bool)>, // (message, is_error)
+    is_standalone: bool,
+    should_close: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -71,7 +73,15 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 }
 
 impl WifiMenu {
-    fn new() -> (Self, Command<Message>) {
+    pub fn new() -> (Self, Command<Message>) {
+        Self::new_internal(true)
+    }
+
+    pub fn new_embedded() -> (Self, Command<Message>) {
+        Self::new_internal(false)
+    }
+
+    fn new_internal(is_standalone: bool) -> (Self, Command<Message>) {
         let is_enabled = NetworkMonitor::is_wifi_enabled();
         let networks = if is_enabled {
             NetworkMonitor::scan_wifi()
@@ -87,22 +97,46 @@ impl WifiMenu {
                 password_prompt_ssid: None,
                 password_input: String::new(),
                 status_msg: None,
+                is_standalone,
+                should_close: false,
             },
             Command::none(),
         )
     }
 
-    fn namespace() -> String {
+    pub fn should_close(&self) -> bool {
+        self.should_close
+    }
+
+    pub fn reset_should_close(&mut self) {
+        self.should_close = false;
+    }
+
+    pub fn reset(&mut self) -> Command<Message> {
+        self.is_enabled = NetworkMonitor::is_wifi_enabled();
+        self.networks = if self.is_enabled {
+            NetworkMonitor::scan_wifi()
+        } else {
+            Vec::new()
+        };
+        self.password_prompt_ssid = None;
+        self.password_input.clear();
+        self.status_msg = None;
+        self.should_close = false;
+        Command::none()
+    }
+
+    pub fn namespace() -> String {
         String::from("msui-wifi-menu")
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
+    pub fn subscription(&self) -> iced::Subscription<Message> {
         let events = event::listen().map(Message::IcedEvent);
         let tick = iced::time::every(Duration::from_secs(6)).map(|_| Message::Rescan);
         iced::Subscription::batch([events, tick])
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::ToggleRadio => {
                 NetworkMonitor::toggle_wifi_radio();
@@ -213,7 +247,11 @@ impl WifiMenu {
                 }
             }
             Message::Close => {
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::IcedEvent(Event::Keyboard(KeyboardEvent::KeyPressed { key, .. })) => {
                 match key {
@@ -249,7 +287,7 @@ impl WifiMenu {
         Command::none()
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         let title = text("󰤨 Wi-Fi Network Manager").size(18);
 
         let rescan_btn = button(text("󰑐 Rescan").size(12))

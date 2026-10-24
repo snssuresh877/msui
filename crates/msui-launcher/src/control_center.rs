@@ -186,6 +186,8 @@ pub struct ControlCenter {
     is_night_light: bool,
     night_light_temp: u32,
     active_profile: PowerProfile,
+    is_standalone: bool,
+    should_close: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -204,6 +206,8 @@ pub enum Message {
     OpenMediaManager,
     OpenReminderManager,
     OpenAppDrawer,
+    OpenClipboardManager,
+    OpenFShare,
     ToggleDnd,
     ToggleMute,
     VolumeChanged(u8),
@@ -229,6 +233,14 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 
 impl ControlCenter {
     pub fn new() -> (Self, Command<Message>) {
+        Self::new_internal(true)
+    }
+
+    pub fn new_embedded(_config: MsuiConfig) -> (Self, Command<Message>) {
+        Self::new_internal(false)
+    }
+
+    fn new_internal(is_standalone: bool) -> (Self, Command<Message>) {
         let config = MsuiConfig::load_or_default();
         let battery_info = BatteryMonitor::new().read();
         let mut sys_mon = SystemMonitor::new();
@@ -263,9 +275,24 @@ impl ControlCenter {
             is_night_light,
             night_light_temp,
             active_profile,
+            is_standalone,
+            should_close: false,
         };
 
         (state, Command::none())
+    }
+
+    pub fn should_close(&self) -> bool {
+        self.should_close
+    }
+
+    pub fn reset_should_close(&mut self) {
+        self.should_close = false;
+    }
+
+    pub fn reset(&mut self) -> Command<Message> {
+        self.should_close = false;
+        Command::done(Message::Refresh)
     }
 
     pub fn namespace() -> String {
@@ -347,7 +374,11 @@ impl ControlCenter {
             }
             Message::OpenWifiManager => {
                 spawn_detached("wifi");
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::ToggleBluetooth => {
                 BluetoothManager::toggle_power();
@@ -356,7 +387,11 @@ impl ControlCenter {
             }
             Message::OpenBluetoothManager => {
                 spawn_detached("bluetooth");
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::ToggleNightLight => {
                 let new_state = NightLightManager::toggle();
@@ -364,23 +399,59 @@ impl ControlCenter {
             }
             Message::OpenDisplayManager => {
                 spawn_detached("display");
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::OpenStorageManager => {
                 spawn_detached("storage");
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::OpenMediaManager => {
                 spawn_detached("media");
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::OpenReminderManager => {
                 spawn_detached("reminder");
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::OpenAppDrawer => {
                 spawn_detached("drawer");
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
+            }
+            Message::OpenClipboardManager => {
+                spawn_detached("clipboard");
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
+            }
+            Message::OpenFShare => {
+                spawn_detached("fshare");
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::ToggleDnd => {
                 self.is_dnd = DndManager::toggle_dnd();
@@ -420,19 +491,35 @@ impl ControlCenter {
             }
             Message::LockScreen => {
                 SystemControl::lock();
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::SuspendSystem => {
                 SystemControl::suspend();
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::RebootSystem => {
                 SystemControl::reboot();
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::PowerOffSystem => {
                 SystemControl::poweroff();
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::Refresh => {
                 self.battery_info = BatteryMonitor::new().read();
@@ -448,7 +535,11 @@ impl ControlCenter {
                 self.active_profile = PowerProfileManager::get_profile();
             }
             Message::Close => {
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::IcedEvent(Event::Keyboard(KeyboardEvent::KeyPressed { key, .. })) => {
                 if let Key::Named(Named::Escape) = key {
@@ -807,7 +898,43 @@ impl ControlCenter {
 
         let row_toggles_5 = row![reminder_btn, apps_btn].spacing(8);
 
-        let toggles_box = column![row_toggles_1, row_toggles_2, row_toggles_3, row_toggles_4, row_toggles_5].spacing(8);
+        // Pill 11: Clipboard History Shortcut
+        let clip_btn = button(
+            row![
+                text("󰅌").size(16),
+                column![
+                    text("Clipboard").size(12),
+                    text("History & Pins").size(10),
+                ].spacing(1),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center)
+        )
+        .width(Length::FillPortion(1))
+        .style(button::secondary)
+        .padding([8, 10])
+        .on_press(Message::OpenClipboardManager);
+
+        // Pill 12: FShare Direct Wi-Fi File Hub Shortcut
+        let fshare_btn = button(
+            row![
+                text("󰅟").size(16),
+                column![
+                    text("FShare Hub").size(12),
+                    text("Wi-Fi Transfer").size(10),
+                ].spacing(1),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center)
+        )
+        .width(Length::FillPortion(1))
+        .style(button::secondary)
+        .padding([8, 10])
+        .on_press(Message::OpenFShare);
+
+        let row_toggles_6 = row![clip_btn, fshare_btn].spacing(8);
+
+        let toggles_box = column![row_toggles_1, row_toggles_2, row_toggles_3, row_toggles_4, row_toggles_5, row_toggles_6].spacing(8);
 
         // --- 3. Sliders Section: Volume & Brightness ---
         let vol_val = self.audio_info.volume_percent.min(100);

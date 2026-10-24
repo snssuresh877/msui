@@ -5,6 +5,8 @@ use zbus::object_server::SignalEmitter;
 use zbus::zvariant::OwnedValue;
 use zbus::{interface, Connection};
 
+pub static IS_UNIFIED_DAEMON: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 pub static NOTIFICATION_BUS_CONN: LazyLock<RwLock<Option<Connection>>> =
     LazyLock::new(|| RwLock::new(None));
 
@@ -63,8 +65,11 @@ impl NotificationServer {
             notif.id
         };
 
-        // Spawn msui toast popup window if not currently running and DND is OFF
-        if !crate::notification::DndManager::is_dnd_enabled() && !is_toast_running() {
+        // Spawn msui toast popup window only if not running in unified daemon mode and DND is OFF
+        if !IS_UNIFIED_DAEMON.load(std::sync::atomic::Ordering::Relaxed)
+            && !crate::notification::DndManager::is_dnd_enabled()
+            && !is_toast_running()
+        {
             if let Ok(exe) = std::env::current_exe() {
                 if let Ok(mut child) = std::process::Command::new(exe).arg("toast").spawn() {
                     std::thread::spawn(move || {

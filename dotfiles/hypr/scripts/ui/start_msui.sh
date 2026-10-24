@@ -17,18 +17,13 @@ fi
 pkill -x msui 2>/dev/null || true
 sleep 0.2
 
-# 1. Start PolicyKit Authentication Agent
-setsid "$MSUI_BIN" polkit >/tmp/msui-polkit.log 2>&1 &
+# Optimize glibc memory arenas to prevent heap fragmentation in multi-threaded runtime
+export MALLOC_ARENA_MAX=2
 
-# 2. Start Wayland Wallpaper Daemon
-sleep 0.2
-setsid "$MSUI_BIN" bg >/tmp/msui-bg.log 2>&1 &
+# Start unified msUI desktop daemon (Bar + Wallpaper + Toasts + Polkit + Clipboard + Tray + IPC)
+setsid "$MSUI_BIN" daemon >/tmp/msui.log 2>&1 &
 
-# 3. Start Wayland Layer Shell Status Bar
-sleep 0.3
-setsid "$MSUI_BIN" bar >/tmp/msui-bar.log 2>&1 &
-
-# 4. Record boot verification log
+# Record boot verification log
 sleep 1.5
 {
   date '+%Y-%m-%d %H:%M:%S msUI Desktop Shell Started'

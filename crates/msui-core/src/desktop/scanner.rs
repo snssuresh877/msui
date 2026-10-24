@@ -313,6 +313,11 @@ mod tests {
 
     #[test]
     fn test_scan_flux() {
+        let has_flux = std::path::Path::new("/usr/share/applications/flux.desktop").exists()
+            || std::path::Path::new("/home/m/.local/share/applications/flux.desktop").exists();
+        if !has_flux {
+            return;
+        }
         let apps = scan_desktop_apps();
         let flux = apps.iter().find(|a| a.name.to_lowercase() == "flux" || a.id.to_lowercase().contains("flux"));
         println!("Flux found in scan_desktop_apps: {:?}", flux);

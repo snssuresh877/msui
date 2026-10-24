@@ -40,6 +40,8 @@ pub struct NotificationCenter {
     all_notifications: Vec<Notification>,
     filtered: Vec<Notification>,
     selected_idx: usize,
+    is_standalone: bool,
+    should_close: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -62,7 +64,15 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 }
 
 impl NotificationCenter {
-    fn new() -> (Self, Command<Message>) {
+    pub fn new() -> (Self, Command<Message>) {
+        Self::new_internal(true)
+    }
+
+    pub fn new_embedded() -> (Self, Command<Message>) {
+        Self::new_internal(false)
+    }
+
+    fn new_internal(is_standalone: bool) -> (Self, Command<Message>) {
         let all_notifications = {
             let mut store = GLOBAL_NOTIFICATIONS.lock().unwrap();
             store.load();
@@ -77,16 +87,39 @@ impl NotificationCenter {
                 all_notifications,
                 filtered,
                 selected_idx: 0,
+                is_standalone,
+                should_close: false,
             },
             focus(INPUT_ID.clone()),
         )
     }
 
-    fn namespace() -> String {
+    pub fn should_close(&self) -> bool {
+        self.should_close
+    }
+
+    pub fn reset_should_close(&mut self) {
+        self.should_close = false;
+    }
+
+    pub fn reset(&mut self) -> Command<Message> {
+        self.query.clear();
+        self.all_notifications = {
+            let mut store = GLOBAL_NOTIFICATIONS.lock().unwrap();
+            store.load();
+            store.mark_all_read();
+            store.history()
+        };
+        self.update_filtered();
+        self.should_close = false;
+        focus(INPUT_ID.clone())
+    }
+
+    pub fn namespace() -> String {
         String::from("msui-notification-center")
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
+    pub fn subscription(&self) -> iced::Subscription<Message> {
         event::listen().map(Message::IcedEvent)
     }
 
@@ -111,7 +144,7 @@ impl NotificationCenter {
         self.selected_idx = 0;
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::QueryChanged(new_query) => {
                 self.query = new_query;
@@ -143,7 +176,11 @@ impl NotificationCenter {
                         action: action_key,
                     });
                 }
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::DeleteNotification(id) => {
                 {
@@ -162,7 +199,11 @@ impl NotificationCenter {
                 self.update_filtered();
             }
             Message::Close => {
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::IcedEvent(Event::Keyboard(KeyboardEvent::KeyPressed { key, .. })) => {
                 match key {
@@ -193,7 +234,7 @@ impl NotificationCenter {
         Command::none()
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         let input = text_input("󰍉 Search notification history...", &self.query)
             .id(INPUT_ID.clone())
             .on_input(Message::QueryChanged)

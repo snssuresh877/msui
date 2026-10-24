@@ -43,6 +43,8 @@ pub struct DisplayMenu {
     night_light_active: bool,
     night_light_temp: u32,
     status_msg: Option<String>,
+    is_standalone: bool,
+    should_close: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -68,7 +70,15 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 }
 
 impl DisplayMenu {
-    fn new() -> (Self, Command<Message>) {
+    pub fn new() -> (Self, Command<Message>) {
+        Self::new_internal(true)
+    }
+
+    pub fn new_embedded() -> (Self, Command<Message>) {
+        Self::new_internal(false)
+    }
+
+    fn new_internal(is_standalone: bool) -> (Self, Command<Message>) {
         let monitors = DisplayManager::list_monitors();
         let brightness_monitor = BrightnessMonitor::new();
         let brightness_info = brightness_monitor.read();
@@ -84,22 +94,42 @@ impl DisplayMenu {
                 night_light_active,
                 night_light_temp,
                 status_msg: None,
+                is_standalone,
+                should_close: false,
             },
             Command::none(),
         )
     }
 
-    fn namespace() -> String {
+    pub fn should_close(&self) -> bool {
+        self.should_close
+    }
+
+    pub fn reset_should_close(&mut self) {
+        self.should_close = false;
+    }
+
+    pub fn reset(&mut self) -> Command<Message> {
+        self.monitors = DisplayManager::list_monitors();
+        self.brightness_info = self.brightness_monitor.read();
+        self.night_light_active = NightLightManager::is_active();
+        self.night_light_temp = NightLightManager::get_temperature();
+        self.status_msg = None;
+        self.should_close = false;
+        Command::none()
+    }
+
+    pub fn namespace() -> String {
         String::from("msui-display-menu")
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
+    pub fn subscription(&self) -> iced::Subscription<Message> {
         let tick = iced::time::every(Duration::from_millis(3000)).map(|_| Message::Refresh);
         let events = event::listen().map(Message::IcedEvent);
         iced::Subscription::batch([tick, events])
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::SelectMonitor(idx) => {
                 if idx < self.monitors.len() {
@@ -174,11 +204,15 @@ impl DisplayMenu {
                 self.night_light_active = NightLightManager::is_active();
             }
             Message::Close => {
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::IcedEvent(Event::Keyboard(KeyboardEvent::KeyPressed { key, .. })) => {
                 if let Key::Named(Named::Escape) = key {
-                    std::process::exit(0);
+                    return self.update(Message::Close);
                 }
             }
             Message::IcedEvent(_) => {}
@@ -186,7 +220,7 @@ impl DisplayMenu {
         Command::none()
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         // Header
         let header_title = text("󰍹  Display & Monitor Manager").size(18);
 

@@ -35,6 +35,8 @@ fuzzy-matcher = "0.3"
 walkdir = "2.5"
 xdg = "3.0"
 zbus = "5.19"
+libc = "0.2"
+qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
 
 msui-core = { path = "crates/msui-core" }
 msui-bar = { path = "crates/msui-bar" }

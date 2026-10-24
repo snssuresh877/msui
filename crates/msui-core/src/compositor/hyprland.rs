@@ -326,6 +326,19 @@ impl HyprlandIpc {
                             class: class.to_string(),
                             title: title.to_string(),
                         };
+                    } else if payload.is_empty() || payload == "," {
+                        return HyprlandEvent::FocusedWindow {
+                            class: String::new(),
+                            title: String::new(),
+                        };
+                    }
+                }
+                "activewindowv2" => {
+                    if payload.is_empty() {
+                        return HyprlandEvent::FocusedWindow {
+                            class: String::new(),
+                            title: String::new(),
+                        };
                     }
                 }
                 _ => {}

@@ -58,6 +58,7 @@ pub struct ToastApp {
     seen_ids: HashSet<u32>,
     dismissed_ids: HashSet<u32>,
     active_notifications: Vec<(Notification, u32)>, // (Notification, ticks_remaining)
+    pub is_standalone: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -75,9 +76,17 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 }
 
 impl ToastApp {
-    fn new() -> (Self, Command<Message>) {
+    pub fn new() -> (Self, Command<Message>) {
+        Self::new_with_mode(true)
+    }
+
+    pub fn new_embedded() -> (Self, Command<Message>) {
+        Self::new_with_mode(false)
+    }
+
+    pub fn new_with_mode(is_standalone: bool) -> (Self, Command<Message>) {
         let loaded = load_active_toasts();
-        if loaded.is_empty() {
+        if loaded.is_empty() && is_standalone {
             remove_toast_pid();
             std::process::exit(0);
         }
@@ -96,20 +105,25 @@ impl ToastApp {
                 seen_ids: seen,
                 dismissed_ids: HashSet::new(),
                 active_notifications: active,
+                is_standalone,
             },
             Command::none(),
         )
     }
 
-    fn namespace() -> String {
+    pub fn is_empty(&self) -> bool {
+        self.active_notifications.is_empty()
+    }
+
+    pub fn namespace() -> String {
         String::from("msui-toast")
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
+    pub fn subscription(&self) -> iced::Subscription<Message> {
         iced::time::every(Duration::from_millis(400)).map(|_| Message::Tick)
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::Action(id, key) => {
                 self.dismissed_ids.insert(id);
@@ -122,7 +136,9 @@ impl ToastApp {
                 if self.active_notifications.is_empty() {
                     remove_toast_pid();
                     clear_active_toasts();
-                    std::process::exit(0);
+                    if self.is_standalone {
+                        std::process::exit(0);
+                    }
                 }
             }
             Message::Dismiss(id) => {
@@ -136,7 +152,9 @@ impl ToastApp {
                 if self.active_notifications.is_empty() {
                     remove_toast_pid();
                     clear_active_toasts();
-                    std::process::exit(0);
+                    if self.is_standalone {
+                        std::process::exit(0);
+                    }
                 }
             }
             Message::Tick => {
@@ -184,14 +202,16 @@ impl ToastApp {
                 if self.active_notifications.is_empty() {
                     remove_toast_pid();
                     clear_active_toasts();
-                    std::process::exit(0);
+                    if self.is_standalone {
+                        std::process::exit(0);
+                    }
                 }
             }
         }
         Command::none()
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         if self.active_notifications.is_empty() {
             return space().width(Length::Shrink).height(Length::Shrink).into();
         }

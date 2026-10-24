@@ -41,6 +41,8 @@ pub fn run_osd_window() -> Result<(), iced_exwlshell::Error> {
 
 pub struct OsdWindow {
     state: Option<OsdState>,
+    is_standalone: bool,
+    last_update: Option<std::time::Instant>,
 }
 
 #[derive(Debug, Clone)]
@@ -61,7 +63,43 @@ impl OsdWindow {
         OsdManager::record_osd_pid(std::process::id());
         let state = OsdManager::read_state();
 
-        (Self { state }, Command::none())
+        (
+            Self {
+                state,
+                is_standalone: true,
+                last_update: Some(std::time::Instant::now()),
+            },
+            Command::none(),
+        )
+    }
+
+    pub fn new_embedded() -> (Self, Command<Message>) {
+        (
+            Self {
+                state: None,
+                is_standalone: false,
+                last_update: None,
+            },
+            Command::none(),
+        )
+    }
+
+    pub fn show(&mut self, kind: OsdKind, percent: u8, is_muted: bool) {
+        self.state = Some(OsdState {
+            kind,
+            percent,
+            is_muted,
+            timestamp_ms: OsdManager::current_time_ms(),
+        });
+        self.last_update = Some(std::time::Instant::now());
+    }
+
+    pub fn is_active(&self) -> bool {
+        if let Some(last) = self.last_update {
+            last.elapsed() < Duration::from_millis(1500)
+        } else {
+            false
+        }
     }
 
     pub fn namespace() -> String {
@@ -69,24 +107,35 @@ impl OsdWindow {
     }
 
     pub fn subscription(&self) -> iced::Subscription<Message> {
-        iced::time::every(Duration::from_millis(50)).map(|_| Message::Tick)
+        if self.is_standalone || self.is_active() {
+            iced::time::every(Duration::from_millis(50)).map(|_| Message::Tick)
+        } else {
+            iced::Subscription::none()
+        }
     }
 
     pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::Tick => {
-                if let Some(state) = OsdManager::read_state() {
-                    let now = OsdManager::current_time_ms();
-                    let elapsed = now.saturating_sub(state.timestamp_ms);
-                    if elapsed > 1500 {
-                        // 1.5 seconds without update: dismiss
+                if self.is_standalone {
+                    if let Some(state) = OsdManager::read_state() {
+                        let now = OsdManager::current_time_ms();
+                        let elapsed = now.saturating_sub(state.timestamp_ms);
+                        if elapsed > 1500 {
+                            // 1.5 seconds without update: dismiss
+                            OsdManager::remove_osd_pid();
+                            std::process::exit(0);
+                        }
+                        self.state = Some(state);
+                    } else {
                         OsdManager::remove_osd_pid();
                         std::process::exit(0);
                     }
-                    self.state = Some(state);
                 } else {
-                    OsdManager::remove_osd_pid();
-                    std::process::exit(0);
+                    if !self.is_active() {
+                        self.state = None;
+                        self.last_update = None;
+                    }
                 }
             }
             Message::Ignored => {}

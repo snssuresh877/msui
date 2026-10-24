@@ -1,4 +1,6 @@
 use chrono::Local;
+use futures::channel::mpsc::Sender;
+use futures::SinkExt;
 use iced::widget::{button, container, row, space, text};
 use iced::{Alignment, Element, Font, Length, Task as Command};
 use iced_exwlshell::layershell::application;
@@ -83,6 +85,7 @@ pub struct Bar {
     brightness_info: Option<BrightnessInfo>,
     media_info: Option<MediaInfo>,
     hyprland_workspace: i32,
+    active_window: Option<(String, String)>,
     notification_count: usize,
     bluetooth_info: BluetoothInfo,
     has_removable_drive: bool,
@@ -98,6 +101,8 @@ pub enum Message {
     MetricsTick,
     SwitchWorkspace(i32),
     OutputChanged(Option<OutputId>),
+    HyprlandFocusedWindow { class: String, title: String },
+    HyprlandWorkspaceChanged(i32),
     OpenLauncher,
     OpenDrawer,
     OpenControlCenter,
@@ -128,7 +133,7 @@ pub enum Message {
 
 
 impl Bar {
-    fn new(config: MsuiConfig, shell_events: ShellReceiver) -> Self {
+    pub fn new(config: MsuiConfig, shell_events: ShellReceiver) -> Self {
         let battery_monitor = BatteryMonitor::new();
         let mut system_monitor = SystemMonitor::new();
         let brightness_monitor = BrightnessMonitor::new();
@@ -142,6 +147,10 @@ impl Bar {
         let brightness_info = brightness_monitor.read();
         let media_info = MediaMonitor::read();
         let bluetooth_info = BluetoothManager::read();
+
+        let active_window = msui_core::HyprlandIpc::get_active_client()
+            .map(|c| (c.class, c.title))
+            .filter(|(c, t)| !c.is_empty() || !t.is_empty());
 
         Self {
             config,
@@ -158,6 +167,7 @@ impl Bar {
             brightness_info,
             media_info,
             hyprland_workspace: msui_core::HyprlandIpc::get_active_workspace_id(),
+            active_window,
             notification_count: 0,
             bluetooth_info,
             has_removable_drive: StorageManager::has_removable_devices(),
@@ -169,11 +179,15 @@ impl Bar {
         }
     }
 
-    fn namespace() -> String {
+    pub fn reload_config(&mut self, config: MsuiConfig) {
+        self.config = config;
+    }
+
+    pub fn namespace() -> String {
         String::from("msui-bar")
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
+    pub fn subscription(&self) -> iced::Subscription<Message> {
         let clock = iced::time::every(Duration::from_secs(1)).map(|_| Message::ClockTick);
         let metrics = iced::time::every(Duration::from_secs(self.config.bar.sysinfo_refresh_seconds))
             .map(|_| Message::MetricsTick);
@@ -185,10 +199,12 @@ impl Bar {
             _ => None,
         });
 
-        iced::Subscription::batch([clock, metrics, shell_listener])
+        let hypr_sub = iced::Subscription::run(hyprland_stream);
+
+        iced::Subscription::batch([clock, metrics, shell_listener, hypr_sub])
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::ClockTick => {
                 self.current_time = Local::now().format(&self.config.bar.time_format).to_string();
@@ -242,6 +258,16 @@ impl Bar {
             Message::SwitchWorkspace(id) => {
                 self.hyprland_workspace = id;
                 msui_core::HyprlandIpc::switch_workspace_sync(id);
+            }
+            Message::HyprlandFocusedWindow { class, title } => {
+                if class.is_empty() && title.is_empty() {
+                    self.active_window = None;
+                } else {
+                    self.active_window = Some((class, title));
+                }
+            }
+            Message::HyprlandWorkspaceChanged(id) => {
+                self.hyprland_workspace = id;
             }
 
             Message::OutputChanged(output) => {
@@ -378,7 +404,7 @@ impl Bar {
         Command::none()
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         // --- Left Section: Launcher Button + Workspaces + Media ---
         let mut left_row = row![].spacing(8).align_y(Alignment::Center);
 
@@ -415,6 +441,28 @@ impl Bar {
                 );
             }
             left_row = left_row.push(ws_row);
+        }
+
+        if self.config.bar.show_active_window {
+            if let Some((class, title)) = &self.active_window {
+                let icon = app_icon_for_class(class);
+                let display_title = if title.trim().is_empty() {
+                    class.as_str()
+                } else {
+                    title.as_str()
+                };
+                let truncated = if display_title.chars().count() > 38 {
+                    let s: String = display_title.chars().take(37).collect();
+                    format!("{s}…")
+                } else {
+                    display_title.to_string()
+                };
+                let win_btn = button(text(format!(" {icon}  {truncated} ")).size(13))
+                    .style(button::secondary)
+                    .padding([3, 8])
+                    .on_press(Message::OpenDrawer);
+                left_row = left_row.push(win_btn);
+            }
         }
 
         // Media Widget (when playing or paused music exists)
@@ -810,5 +858,68 @@ fn spawn_detached(cmd: &mut std::process::Command) {
         std::thread::spawn(move || {
             let _ = child.wait();
         });
+    }
+}
+
+fn hyprland_stream() -> impl iced::futures::Stream<Item = Message> {
+    iced::stream::channel(100, |mut output: Sender<Message>| async move {
+        loop {
+            if let Some(sock_path) = msui_core::HyprlandIpc::socket2_path() {
+                if let Ok(stream) = tokio::net::UnixStream::connect(sock_path).await {
+                    let reader = tokio::io::BufReader::new(stream);
+                    let mut lines = tokio::io::AsyncBufReadExt::lines(reader);
+                    while let Ok(Some(line)) = lines.next_line().await {
+                        let event = msui_core::HyprlandIpc::parse_event(&line);
+                        match event {
+                            msui_core::HyprlandEvent::FocusedWindow { class, title } => {
+                                let _ = output.send(Message::HyprlandFocusedWindow { class, title }).await;
+                            }
+                            msui_core::HyprlandEvent::WorkspaceChanged(id) => {
+                                let _ = output.send(Message::HyprlandWorkspaceChanged(id)).await;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+    })
+}
+
+fn app_icon_for_class(class: &str) -> &'static str {
+    let lower = class.to_lowercase();
+    if lower.contains("term") || lower.contains("kitty") || lower.contains("alacritty") || lower.contains("foot") || lower.contains("ghostty") || lower.contains("wezterm") {
+        "󰄛"
+    } else if lower.contains("code") || lower.contains("cursor") || lower.contains("zed") {
+        "󰨞"
+    } else if lower.contains("firefox") || lower.contains("librewolf") || lower.contains("floorp") || lower.contains("zen") {
+        "󰈹"
+    } else if lower.contains("chrome") || lower.contains("chromium") || lower.contains("brave") || lower.contains("edge") {
+        "󰊯"
+    } else if lower.contains("thunar") || lower.contains("nautilus") || lower.contains("dolphin") || lower.contains("nemo") || lower.contains("file") {
+        "󰉋"
+    } else if lower.contains("spotify") || lower.contains("music") {
+        "󰓇"
+    } else if lower.contains("discord") || lower.contains("vesktop") || lower.contains("webcord") {
+        "󰙯"
+    } else if lower.contains("telegram") {
+        "󰍡"
+    } else if lower.contains("steam") {
+        "󰓓"
+    } else if lower.contains("obsidian") || lower.contains("notion") || lower.contains("notes") {
+        "󰠮"
+    } else if lower.contains("gimp") || lower.contains("inkscape") || lower.contains("krita") {
+        "󰽉"
+    } else if lower.contains("vlc") || lower.contains("mpv") || lower.contains("video") {
+        "󰕼"
+    } else if lower.contains("nvim") || lower.contains("vim") || lower.contains("kate") || lower.contains("gedit") {
+        "󰅩"
+    } else if lower.contains("settings") || lower.contains("control") {
+        "󰒓"
+    } else if lower.contains("antigravity") || lower.contains("gemini") || lower.contains("ai") {
+        "󱚣"
+    } else {
+        ""
     }
 }

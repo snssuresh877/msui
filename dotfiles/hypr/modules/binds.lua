@@ -47,6 +47,10 @@ hl.bind(MOD .. " + I", hl.dsp.exec_cmd("msui wifi"), {
 	description = "Network & Wi-Fi Management",
 })
 
+hl.bind(MOD .. " + S", hl.dsp.exec_cmd("msui fshare"), {
+	description = "msUI FShare Local File Transfer Hub",
+})
+
 -- APPLICATIONS
 
 hl.bind(MOD .. " + RETURN", hl.dsp.exec_cmd("$HOME/.config/hypr/scripts/ui/open_terminal_here.sh foot"), {

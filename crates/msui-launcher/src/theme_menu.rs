@@ -1,6 +1,6 @@
 use iced::keyboard::key::Named;
 use iced::keyboard::{Event as KeyboardEvent, Key};
-use iced::widget::operation::focus;
+use iced::widget::operation::{focus, snap_to, RelativeOffset};
 use iced::widget::{button, column, container, row, scrollable, space, text, text_input};
 use iced::{Alignment, Element, Event, Font, Length, Task as Command, event};
 use iced_exwlshell::actions::ExwlShellCustomActionWithId;
@@ -11,6 +11,7 @@ use msui_core::{ThemeDefinition, ThemeManager, BUILTIN_THEMES};
 use std::sync::LazyLock;
 
 static INPUT_ID: LazyLock<iced::widget::Id> = LazyLock::new(iced::widget::Id::unique);
+static SCROLL_ID: LazyLock<iced::widget::Id> = LazyLock::new(iced::widget::Id::unique);
 
 pub fn run_theme_menu() -> Result<(), iced_exwlshell::Error> {
     application(
@@ -41,6 +42,8 @@ pub struct ThemeMenu {
     filtered: Vec<ThemeDefinition>,
     selected_idx: usize,
     current_theme_name: String,
+    is_standalone: bool,
+    should_close: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -48,6 +51,7 @@ pub enum Message {
     QueryChanged(String),
     SelectPrevious,
     SelectNext,
+    EnsureFocus,
     ApplyTheme(String),
     Close,
     IcedEvent(Event),
@@ -61,7 +65,15 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 }
 
 impl ThemeMenu {
-    fn new() -> (Self, Command<Message>) {
+    pub fn new() -> (Self, Command<Message>) {
+        Self::new_internal(true)
+    }
+
+    pub fn new_embedded() -> (Self, Command<Message>) {
+        Self::new_internal(false)
+    }
+
+    fn new_internal(is_standalone: bool) -> (Self, Command<Message>) {
         let all_themes: Vec<ThemeDefinition> = BUILTIN_THEMES.to_vec();
         let current_theme_name = ThemeManager::current_theme_name();
         let filtered = all_themes.clone();
@@ -73,16 +85,45 @@ impl ThemeMenu {
                 filtered,
                 selected_idx: 0,
                 current_theme_name,
+                is_standalone,
+                should_close: false,
             },
-            focus(INPUT_ID.clone()),
+            Command::batch([
+                focus(INPUT_ID.clone()),
+                Command::perform(tokio::time::sleep(std::time::Duration::from_millis(25)), |_| Message::EnsureFocus),
+                Command::perform(tokio::time::sleep(std::time::Duration::from_millis(75)), |_| Message::EnsureFocus),
+                Command::perform(tokio::time::sleep(std::time::Duration::from_millis(150)), |_| Message::EnsureFocus),
+            ]),
         )
     }
 
-    fn namespace() -> String {
+    pub fn should_close(&self) -> bool {
+        self.should_close
+    }
+
+    pub fn reset_should_close(&mut self) {
+        self.should_close = false;
+    }
+
+    pub fn reset(&mut self) -> Command<Message> {
+        self.query.clear();
+        self.all_themes = BUILTIN_THEMES.to_vec();
+        self.current_theme_name = ThemeManager::current_theme_name();
+        self.update_filtered();
+        self.should_close = false;
+        Command::batch([
+            focus(INPUT_ID.clone()),
+            Command::perform(tokio::time::sleep(std::time::Duration::from_millis(25)), |_| Message::EnsureFocus),
+            Command::perform(tokio::time::sleep(std::time::Duration::from_millis(75)), |_| Message::EnsureFocus),
+            Command::perform(tokio::time::sleep(std::time::Duration::from_millis(150)), |_| Message::EnsureFocus),
+        ])
+    }
+
+    pub fn namespace() -> String {
         String::from("msui-theme-menu")
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
+    pub fn subscription(&self) -> iced::Subscription<Message> {
         event::listen().map(Message::IcedEvent)
     }
 
@@ -103,15 +144,29 @@ impl ThemeMenu {
         self.selected_idx = 0;
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    fn scroll_to_selected(&self) -> Command<Message> {
+        if self.filtered.len() > 1 {
+            let ratio = self.selected_idx as f32 / (self.filtered.len() - 1) as f32;
+            snap_to(SCROLL_ID.clone(), RelativeOffset { x: 0.0, y: ratio })
+        } else {
+            snap_to(SCROLL_ID.clone(), RelativeOffset { x: 0.0, y: 0.0 })
+        }
+    }
+
+    pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
+            Message::EnsureFocus => {
+                return focus(INPUT_ID.clone());
+            }
             Message::QueryChanged(new_query) => {
                 self.query = new_query;
                 self.update_filtered();
+                return self.scroll_to_selected();
             }
             Message::SelectNext => {
                 if !self.filtered.is_empty() {
                     self.selected_idx = (self.selected_idx + 1) % self.filtered.len();
+                    return self.scroll_to_selected();
                 }
             }
             Message::SelectPrevious => {
@@ -121,14 +176,23 @@ impl ThemeMenu {
                     } else {
                         self.selected_idx -= 1;
                     }
+                    return self.scroll_to_selected();
                 }
             }
             Message::ApplyTheme(name) => {
                 ThemeManager::set_theme(&name);
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::Close => {
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::IcedEvent(Event::Keyboard(KeyboardEvent::KeyPressed { key, .. })) => {
                 match key {
@@ -141,20 +205,49 @@ impl ThemeMenu {
                     Key::Named(Named::ArrowUp) => {
                         return Command::done(Message::SelectPrevious);
                     }
+                    Key::Named(Named::PageDown) => {
+                        if !self.filtered.is_empty() {
+                            self.selected_idx = (self.selected_idx + 5).min(self.filtered.len() - 1);
+                            return self.scroll_to_selected();
+                        }
+                    }
+                    Key::Named(Named::PageUp) => {
+                        if !self.filtered.is_empty() {
+                            self.selected_idx = self.selected_idx.saturating_sub(5);
+                            return self.scroll_to_selected();
+                        }
+                    }
+                    Key::Named(Named::Home) => {
+                        if !self.filtered.is_empty() {
+                            self.selected_idx = 0;
+                            return self.scroll_to_selected();
+                        }
+                    }
+                    Key::Named(Named::End) => {
+                        if !self.filtered.is_empty() {
+                            self.selected_idx = self.filtered.len() - 1;
+                            return self.scroll_to_selected();
+                        }
+                    }
                     Key::Named(Named::Enter) => {
                         if let Some(t) = self.filtered.get(self.selected_idx) {
                             return Command::done(Message::ApplyTheme(t.name.to_string()));
                         }
                     }
-                    _ => {}
+                    _ => {
+                        return focus(INPUT_ID.clone());
+                    }
                 }
+            }
+            Message::IcedEvent(Event::Window(_)) => {
+                return focus(INPUT_ID.clone());
             }
             _ => {}
         }
         Command::none()
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         let input = text_input("󰍉 Search themes...", &self.query)
             .id(INPUT_ID.clone())
             .on_input(Message::QueryChanged)
@@ -216,7 +309,7 @@ impl ThemeMenu {
 
         let content = column![
             input,
-            scrollable(list_col).height(Length::Fill),
+            scrollable(list_col).id(SCROLL_ID.clone()).height(Length::Fill),
             footer,
         ]
         .spacing(10)

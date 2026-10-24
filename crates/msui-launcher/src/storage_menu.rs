@@ -35,6 +35,8 @@ pub fn run_storage_menu(_config: MsuiConfig) -> Result<(), iced_exwlshell::Error
 pub struct StorageMenu {
     partitions: Vec<StoragePartition>,
     status_msg: Option<String>,
+    is_standalone: bool,
+    should_close: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -56,28 +58,53 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 }
 
 impl StorageMenu {
-    fn new() -> (Self, Command<Message>) {
+    pub fn new() -> (Self, Command<Message>) {
+        Self::new_internal(true)
+    }
+
+    pub fn new_embedded() -> (Self, Command<Message>) {
+        Self::new_internal(false)
+    }
+
+    fn new_internal(is_standalone: bool) -> (Self, Command<Message>) {
         let partitions = StorageManager::list_partitions();
         (
             Self {
                 partitions,
                 status_msg: None,
+                is_standalone,
+                should_close: false,
             },
             Command::none(),
         )
     }
 
-    fn namespace() -> String {
+    pub fn should_close(&self) -> bool {
+        self.should_close
+    }
+
+    pub fn reset_should_close(&mut self) {
+        self.should_close = false;
+    }
+
+    pub fn reset(&mut self) -> Command<Message> {
+        self.partitions = StorageManager::list_partitions();
+        self.status_msg = None;
+        self.should_close = false;
+        Command::none()
+    }
+
+    pub fn namespace() -> String {
         "msui-storage".into()
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
+    pub fn subscription(&self) -> iced::Subscription<Message> {
         let poll = iced::time::every(Duration::from_secs(3)).map(|_| Message::Refresh);
         let events = event::listen().map(Message::IcedEvent);
         iced::Subscription::batch(vec![poll, events])
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::Mount(dev_path) => {
                 match StorageManager::mount_device(&dev_path) {
@@ -119,11 +146,15 @@ impl StorageMenu {
                 self.partitions = StorageManager::list_partitions();
             }
             Message::Close => {
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::IcedEvent(Event::Keyboard(KeyboardEvent::KeyPressed { key, .. })) => {
                 if let Key::Named(Named::Escape) = key {
-                    std::process::exit(0);
+                    return self.update(Message::Close);
                 }
             }
             Message::IcedEvent(_) => {}
@@ -131,7 +162,7 @@ impl StorageMenu {
         Command::none()
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         // Header
         let header_title = row![
             text("󰋊").size(22),

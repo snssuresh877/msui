@@ -51,6 +51,9 @@ pub struct PolkitDialog {
     password: String,
     error_message: Option<String>,
     is_authenticating: bool,
+    is_standalone: bool,
+    should_close: bool,
+    auth_success: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -70,27 +73,57 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 }
 
 impl PolkitDialog {
-    fn new(args: PolkitDialogArgs) -> (Self, Command<Message>) {
+    pub fn new(args: PolkitDialogArgs) -> (Self, Command<Message>) {
         (
             Self {
                 args,
                 password: String::new(),
                 error_message: None,
                 is_authenticating: false,
+                is_standalone: true,
+                should_close: false,
+                auth_success: None,
             },
             focus(PASSWORD_INPUT_ID.clone()),
         )
     }
 
-    fn namespace() -> String {
+    pub fn new_embedded(args: PolkitDialogArgs) -> (Self, Command<Message>) {
+        (
+            Self {
+                args,
+                password: String::new(),
+                error_message: None,
+                is_authenticating: false,
+                is_standalone: false,
+                should_close: false,
+                auth_success: None,
+            },
+            focus(PASSWORD_INPUT_ID.clone()),
+        )
+    }
+
+    pub fn should_close(&self) -> bool {
+        self.should_close
+    }
+
+    pub fn reset_should_close(&mut self) {
+        self.should_close = false;
+    }
+
+    pub fn auth_success(&self) -> Option<bool> {
+        self.auth_success
+    }
+
+    pub fn namespace() -> String {
         String::from("msui-polkit")
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
+    pub fn subscription(&self) -> iced::Subscription<Message> {
         event::listen().map(Message::IcedEvent)
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::PasswordChanged(val) => {
                 self.password = val;
@@ -120,7 +153,13 @@ impl PolkitDialog {
             Message::AuthResult(success) => {
                 self.is_authenticating = false;
                 if success {
-                    std::process::exit(0);
+                    if self.is_standalone {
+                        std::process::exit(0);
+                    } else {
+                        self.auth_success = Some(true);
+                        self.should_close = true;
+                        Command::none()
+                    }
                 } else {
                     self.error_message = Some("Authentication failed. Please try again.".to_string());
                     self.password.clear();
@@ -128,12 +167,24 @@ impl PolkitDialog {
                 }
             }
             Message::Cancel => {
-                std::process::exit(1);
+                if self.is_standalone {
+                    std::process::exit(1);
+                } else {
+                    self.auth_success = Some(false);
+                    self.should_close = true;
+                    Command::none()
+                }
             }
             Message::IcedEvent(Event::Keyboard(KeyboardEvent::KeyPressed { key, .. })) => {
                 match key {
                     Key::Named(Named::Escape) => {
-                        std::process::exit(1);
+                        if self.is_standalone {
+                            std::process::exit(1);
+                        } else {
+                            self.auth_success = Some(false);
+                            self.should_close = true;
+                            Command::none()
+                        }
                     }
                     Key::Named(Named::Enter) => {
                         return self.update(Message::Submit);
@@ -145,7 +196,7 @@ impl PolkitDialog {
         }
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         // Shield header with action title
         let shield_icon = text("󰌾").size(32);
         let title_col = column![

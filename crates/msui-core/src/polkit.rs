@@ -27,6 +27,35 @@ pub enum PolkitError {
     NotAuthorized(String),
 }
 
+#[derive(Debug, Clone)]
+pub struct PolkitRequest {
+    pub action_id: String,
+    pub message: String,
+    pub icon_name: String,
+    pub user: String,
+    pub cookie: String,
+    pub command: String,
+    pub responder: Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<bool>>>>,
+}
+
+static POLKIT_REQUEST_TX: std::sync::RwLock<Option<tokio::sync::mpsc::UnboundedSender<PolkitRequest>>> =
+    std::sync::RwLock::new(None);
+
+pub fn register_polkit_request_handler(tx: tokio::sync::mpsc::UnboundedSender<PolkitRequest>) {
+    if let Ok(mut lock) = POLKIT_REQUEST_TX.write() {
+        *lock = Some(tx);
+    }
+}
+
+static POLKIT_CANCEL_TX: std::sync::RwLock<Option<tokio::sync::mpsc::UnboundedSender<String>>> =
+    std::sync::RwLock::new(None);
+
+pub fn register_polkit_cancel_handler(tx: tokio::sync::mpsc::UnboundedSender<String>) {
+    if let Ok(mut lock) = POLKIT_CANCEL_TX.write() {
+        *lock = Some(tx);
+    }
+}
+
 /// Helper method to verify credentials against /run/polkit/agent-helper.socket
 /// (or fallback to setuid fork-exec helper if socket is unavailable).
 pub async fn verify_polkit_credentials(user: &str, cookie: &str, password: &str) -> anyhow::Result<bool> {
@@ -152,7 +181,39 @@ impl PolkitAgent {
             .cloned()
             .unwrap_or_else(|| parse_command_from_message(&message));
 
-        // Spawn msui-polkit elevation dialog
+        // If an in-process dialog handler is registered (daemon mode), send request and await response
+        let in_process_tx = POLKIT_REQUEST_TX.read().ok().and_then(|r| r.clone());
+        if let Some(tx) = in_process_tx {
+            let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
+            let req = PolkitRequest {
+                action_id: action_id.clone(),
+                message: message.clone(),
+                icon_name: icon_name.clone(),
+                user: target_user.clone(),
+                cookie: cookie.clone(),
+                command: command.clone(),
+                responder: Arc::new(std::sync::Mutex::new(Some(resp_tx))),
+            };
+
+            if tx.send(req).is_ok() {
+                match resp_rx.await {
+                    Ok(true) => {
+                        info!("In-process polkit elevation dialog authenticated successfully");
+                        return Ok(());
+                    }
+                    Ok(false) => {
+                        warn!("In-process polkit authentication cancelled or failed by user");
+                        return Err(PolkitError::Cancelled("Authentication cancelled".to_string()));
+                    }
+                    Err(_) => {
+                        warn!("In-process polkit dialog responder dropped");
+                        return Err(PolkitError::Cancelled("Authentication cancelled".to_string()));
+                    }
+                }
+            }
+        }
+
+        // Fallback: Spawn msui-polkit elevation dialog
         let bin = env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("msui"));
         let mut cmd = tokio::process::Command::new(bin);
         cmd.arg("polkit-dialog");
@@ -196,6 +257,9 @@ impl PolkitAgent {
 
     async fn cancel_authentication(&self, cookie: String) -> Result<(), PolkitError> {
         info!("Polkit CancelAuthentication for cookie {}", cookie);
+        if let Some(cancel_tx) = POLKIT_CANCEL_TX.read().ok().and_then(|r| r.clone()) {
+            let _ = cancel_tx.send(cookie.clone());
+        }
         let pid = self.active_child_pid.swap(0, Ordering::SeqCst);
         if pid > 0 {
             let _ = Command::new("kill").arg("-TERM").arg(pid.to_string()).status();

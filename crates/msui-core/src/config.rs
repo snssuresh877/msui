@@ -29,6 +29,8 @@ pub struct BarConfig {
     #[serde(default = "default_true")]
     pub show_workspaces: bool,
     #[serde(default = "default_true")]
+    pub show_active_window: bool,
+    #[serde(default = "default_true")]
     pub show_media: bool,
     #[serde(default = "default_true")]
     pub show_clock: bool,
@@ -121,6 +123,7 @@ impl Default for BarConfig {
             sysinfo_refresh_seconds: default_sysinfo_refresh(),
             show_brand: true,
             show_workspaces: true,
+            show_active_window: true,
             show_media: true,
             show_clock: true,
             show_reminders_badge: true,

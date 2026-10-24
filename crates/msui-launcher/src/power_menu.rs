@@ -31,7 +31,10 @@ pub fn run_power_menu() -> Result<(), iced_exwlshell::Error> {
     .run()
 }
 
-pub struct PowerMenu;
+pub struct PowerMenu {
+    is_standalone: bool,
+    should_close: bool,
+}
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -52,47 +55,99 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 }
 
 impl PowerMenu {
-    fn new() -> (Self, Command<Message>) {
-        (Self, Command::none())
+    pub fn new() -> (Self, Command<Message>) {
+        (
+            Self {
+                is_standalone: true,
+                should_close: false,
+            },
+            Command::none(),
+        )
     }
 
-    fn namespace() -> String {
+    pub fn new_embedded() -> (Self, Command<Message>) {
+        (
+            Self {
+                is_standalone: false,
+                should_close: false,
+            },
+            Command::none(),
+        )
+    }
+
+    pub fn should_close(&self) -> bool {
+        self.should_close
+    }
+
+    pub fn reset_should_close(&mut self) {
+        self.should_close = false;
+    }
+
+    pub fn reset(&mut self) {
+        self.should_close = false;
+    }
+
+    pub fn namespace() -> String {
         String::from("msui-power-menu")
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
+    pub fn subscription(&self) -> iced::Subscription<Message> {
         event::listen().map(Message::IcedEvent)
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::Lock => {
                 SystemControl::lock();
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::Suspend => {
                 SystemControl::suspend();
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::Reboot => {
                 SystemControl::reboot();
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::Poweroff => {
                 SystemControl::poweroff();
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::Logout => {
                 SystemControl::logout();
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::Close => {
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::IcedEvent(Event::Keyboard(KeyboardEvent::KeyPressed { key, .. })) => {
                 match key {
                     Key::Named(Named::Escape) => {
-                        std::process::exit(0);
+                        return Command::done(Message::Close);
                     }
                     Key::Character(c) => match c.to_lowercase().as_str() {
                         "l" => return Command::done(Message::Lock),
@@ -110,7 +165,7 @@ impl PowerMenu {
         Command::none()
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         let header = text("Power & Session").size(20);
 
         let lock_btn = button(column![text("🔒 Lock").size(16), text("[L]").size(11)])

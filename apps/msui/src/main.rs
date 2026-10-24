@@ -1,20 +1,47 @@
-use msui_core::ipc::{IpcClient, IpcCommand, IpcServer};
+mod daemon;
+
+use msui_core::ipc::{IpcClient, IpcCommand};
 use msui_core::{MsuiConfig, ReminderManager, ThemeManager, WallpaperManager};
 use std::env;
 use std::path::Path;
 
-struct ModalManager {
+pub(crate) struct ModalManager {
     current: Option<(String, tokio::process::Child)>,
 }
 
 impl ModalManager {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { current: None }
     }
 
-    async fn handle_command(&mut self, cmd: IpcCommand) {
+    pub(crate) async fn handle_command(&mut self, cmd: IpcCommand) {
+        let is_embedded = |target: &str| -> bool {
+            matches!(
+                target,
+                "bar" | "wallpaper" | "wall" | "dnd" | "launcher" | "power"
+                    | "control" | "quicksettings" | "cc"
+                    | "clipboard" | "clip"
+                    | "notifications" | "notifs"
+                    | "drawer" | "tasks" | "apps" | "appdrawer"
+                    | "wifi" | "network"
+                    | "bluetooth" | "bt"
+                    | "audio" | "mixer"
+                    | "theme" | "themes"
+                    | "fshare" | "share" | "fileshare"
+                    | "battery" | "bat"
+                    | "display" | "disp" | "monitors"
+                    | "media" | "player"
+                    | "storage" | "disks"
+                    | "reminder" | "reminders"
+            )
+        };
+
         match cmd {
             IpcCommand::Toggle(target) => {
+                if is_embedded(&target) {
+                    return;
+                }
+
                 if let Some((current_target, mut child)) = self.current.take() {
                     match child.try_wait() {
                         Ok(None) => {
@@ -31,7 +58,7 @@ impl ModalManager {
                 let bin = env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("msui"));
                 let mut cmd = tokio::process::Command::new(bin);
                 cmd.arg(&target);
-                cmd.env("MSUI_DIRECT", "1");
+                cmd.arg("--direct");
                 match cmd.spawn() {
                     Ok(child) => {
                         self.current = Some((target, child));
@@ -42,6 +69,10 @@ impl ModalManager {
                 }
             }
             IpcCommand::Open(target) => {
+                if is_embedded(&target) {
+                    return;
+                }
+
                 if let Some((current_target, mut child)) = self.current.take() {
                     match child.try_wait() {
                         Ok(None) => {
@@ -59,7 +90,7 @@ impl ModalManager {
                 let bin = env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("msui"));
                 let mut cmd = tokio::process::Command::new(bin);
                 cmd.arg(&target);
-                cmd.env("MSUI_DIRECT", "1");
+                cmd.arg("--direct");
                 if let Ok(child) = cmd.spawn() {
                     self.current = Some((target, child));
                 }
@@ -90,13 +121,14 @@ impl ModalManager {
                     let _ = msui_core::emit_notification_closed(id, reason).await;
                 });
             }
-            IpcCommand::Ping | IpcCommand::Unknown(_) => {}
+            IpcCommand::Ping | IpcCommand::Osd { .. } | IpcCommand::ReloadConfig | IpcCommand::Unknown(_) => {}
         }
     }
 }
 
 fn try_ipc_toggle(target: &str) -> bool {
-    if env::var("MSUI_DIRECT").is_ok() {
+    let args: Vec<String> = env::args().collect();
+    if args.iter().any(|a| a == "--direct") {
         return false;
     }
     match IpcClient::send_blocking(&IpcCommand::Toggle(target.to_string())) {
@@ -113,44 +145,57 @@ fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let args: Vec<String> = env::args().collect();
-    let command = args.get(1).map(|s| s.as_str()).unwrap_or("bar");
+    let command = args.get(1).map(|s| s.as_str()).unwrap_or("daemon");
 
     match command {
-        "bar" => {
-            tracing::info!("Starting msUI Top Bar & Background Services...");
-            // Start background Tokio runtime for clipboard watcher, D-Bus notifications, and IPC socket
-            std::thread::spawn(|| {
-                let rt = tokio::runtime::Builder::new_multi_thread()
-                    .enable_all()
-                    .build()
-                    .expect("Failed to create Tokio runtime");
-
-                rt.block_on(async {
-                    tokio::spawn(msui_core::start_clipboard_watcher());
-                    tokio::spawn(msui_core::run_notification_service());
-                    tokio::spawn(msui_core::run_tray_watcher());
-
-                    let (tx, mut rx) = tokio::sync::mpsc::channel(32);
-                    let server = IpcServer::new();
-                    if let Err(e) = server.start(tx).await {
-                        tracing::warn!("Failed to start IPC server: {:?}", e);
-                    } else {
-                        tokio::spawn(async move {
-                            let mut modal_mgr = ModalManager::new();
-                            while let Some(cmd) = rx.recv().await {
-                                modal_mgr.handle_command(cmd).await;
-                            }
-                        });
-                    }
-
-                    std::future::pending::<()>().await;
-                    drop(server);
-                });
-            });
-
+        "daemon" | "run" => {
             let config = MsuiConfig::load_or_default();
-            if let Err(e) = msui_bar::run_bar(config) {
-                tracing::error!("msUI Bar exited with error: {:?}", e);
+            daemon::run_daemon(config)?;
+        }
+        "bar" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            match sub {
+                Some("toggle") | None => {
+                    match IpcClient::send_blocking(&IpcCommand::Toggle("bar".to_string())) {
+                        Ok(res) => {
+                            println!("{}", res);
+                            return Ok(());
+                        }
+                        Err(_) => {
+                            tracing::info!("msUI daemon not running; launching unified daemon for bar...");
+                            let config = MsuiConfig::load_or_default();
+                            daemon::run_daemon(config)?;
+                        }
+                    }
+                }
+                Some("open") => {
+                    match IpcClient::send_blocking(&IpcCommand::Open("bar".to_string())) {
+                        Ok(res) => {
+                            println!("{}", res);
+                            return Ok(());
+                        }
+                        Err(_) => {
+                            let config = MsuiConfig::load_or_default();
+                            daemon::run_daemon(config)?;
+                        }
+                    }
+                }
+                Some("close") => {
+                    match IpcClient::send_blocking(&IpcCommand::Close) {
+                        Ok(res) => {
+                            println!("{}", res);
+                            return Ok(());
+                        }
+                        Err(e) => {
+                            eprintln!("msUI daemon not running: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                Some(other) => {
+                    eprintln!("Unknown bar subcommand: '{}'. Usage: msui bar [toggle|open|close]", other);
+                    std::process::exit(1);
+                }
             }
         }
         "clipboard" => {
@@ -314,7 +359,11 @@ fn main() -> anyhow::Result<()> {
             }
         }
         "bg" | "wallpaper-daemon" => {
-            tracing::info!("Starting msUI Native Wallpaper Background Daemon...");
+            if IpcClient::send_blocking(&IpcCommand::Ping).is_ok() {
+                println!("msUI unified daemon is already running (native wallpaper engine active).");
+                return Ok(());
+            }
+            tracing::info!("Starting standalone msUI Native Wallpaper Background Daemon...");
             if let Err(e) = msui_launcher::run_wallpaper_daemon() {
                 tracing::error!("msUI Wallpaper Daemon exited with error: {:?}", e);
             }
@@ -761,6 +810,25 @@ fn main() -> anyhow::Result<()> {
         "osd" => {
             let target = args.get(2).map(|s| s.as_str()).unwrap_or("");
             let action = args.get(3).map(|s| s.as_str()).unwrap_or("");
+
+            // Try sending over IPC to the running unified daemon first
+            let ipc_cmd = IpcCommand::Osd {
+                kind: target.to_string(),
+                action: action.to_string(),
+            };
+            if IpcClient::send_blocking(&ipc_cmd).is_ok() {
+                if target == "volume" || target == "vol" {
+                    let audio = msui_core::AudioMonitor::read();
+                    println!("Volume: {}% (Muted: {})", audio.volume_percent, audio.is_muted);
+                } else if target == "brightness" || target == "bright" {
+                    let bright_mon = msui_core::BrightnessMonitor::new();
+                    let b = bright_mon.read().map(|b| b.percent).unwrap_or(0);
+                    println!("Brightness: {}%", b);
+                }
+                return Ok(());
+            }
+
+            // Fallback to standalone if daemon is not running
             match target {
                 "volume" | "vol" => {
                     msui_core::OsdManager::trigger_volume(action);
@@ -944,6 +1012,180 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        "fshare" | "share" | "fileshare" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            match sub {
+                Some("history") => {
+                    let history = msui_core::fshare::load_transfer_history();
+                    if history.is_empty() {
+                        println!("No FShare transfers found in history.");
+                    } else {
+                        println!("{:<6} {:<32} {:<12} {}", "DIR", "FILENAME", "SIZE", "TIMESTAMP");
+                        println!("{}", "-".repeat(70));
+                        for h in history {
+                            let size_mb = h.size_bytes as f64 / (1024.0 * 1024.0);
+                            println!("{:<6} {:<32} {:<12} {}", h.direction, h.filename, format!("{:.2} MB", size_mb), h.timestamp);
+                        }
+                    }
+                }
+                Some("send") => {
+                    if let Some(target_file_str) = args.get(3) {
+                        let path = if let Some(stripped) = target_file_str.strip_prefix("~/") {
+                            if let Some(home) = std::env::var_os("HOME") {
+                                std::path::PathBuf::from(home).join(stripped)
+                            } else {
+                                std::path::PathBuf::from(target_file_str)
+                            }
+                        } else {
+                            std::path::PathBuf::from(target_file_str)
+                        };
+
+                        if !path.exists() {
+                            eprintln!("Error: File '{}' does not exist.", target_file_str);
+                            std::process::exit(1);
+                        }
+
+                        let local_ip = match msui_core::fshare::get_local_ip() {
+                            Some(ip) => ip,
+                            None => {
+                                eprintln!("Error: Could not detect active Wi-Fi LAN IP.");
+                                std::process::exit(1);
+                            }
+                        };
+
+                        let token = msui_core::fshare::generate_token();
+                        let pin = msui_core::fshare::generate_pin();
+                        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+
+                        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+                        rt.block_on(async move {
+                            let handle = msui_core::fshare::FShareServer::start_send(
+                                path.clone(),
+                                local_ip.clone(),
+                                token.clone(),
+                                pin.clone(),
+                                tx,
+                            ).await?;
+
+                            let url = format!("http://{}:{}/d/{}", local_ip, handle.port, token);
+                            println!("========================================");
+                            println!("  msUI FShare - File Sharing Server");
+                            println!("========================================");
+                            println!("Sharing File: {}", path.display());
+                            println!("Direct URL:   {}", url);
+                            println!("PIN Code:     {}", pin);
+                            println!();
+                            if let Ok(qr) = msui_core::fshare::generate_qr_terminal(&url) {
+                                println!("{}", qr);
+                            }
+                            println!("Scan QR code with phone camera or open the URL.");
+                            println!("Press Ctrl+C to terminate.");
+                            println!("========================================");
+
+                            while let Some(ev) = rx.recv().await {
+                                match ev {
+                                    msui_core::fshare::FShareEvent::ClientConnected { peer_ip } => {
+                                        println!("📱 Phone connected from {}", peer_ip);
+                                    }
+                                    msui_core::fshare::FShareEvent::Progress { transferred_bytes, total_bytes, speed_mbps } => {
+                                        let pct = if total_bytes > 0 { (transferred_bytes as f32 / total_bytes as f32) * 100.0 } else { 0.0 };
+                                        print!("\rTransferring: {:.1}% ({:.1} MB/s)...", pct, speed_mbps);
+                                        let _ = std::io::Write::flush(&mut std::io::stdout());
+                                    }
+                                    msui_core::fshare::FShareEvent::FileSent { filename, size_bytes } => {
+                                        println!("\n✅ Successfully sent '{}' ({:.2} MB)!", filename, size_bytes as f64 / (1024.0 * 1024.0));
+                                        msui_core::fshare::log_transfer("Sent", &filename, size_bytes);
+                                        break;
+                                    }
+                                    msui_core::fshare::FShareEvent::Error(e) => {
+                                        eprintln!("\n❌ Transfer error: {}", e);
+                                        break;
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            handle.stop();
+                            Ok::<(), anyhow::Error>(())
+                        })?;
+                    } else {
+                        eprintln!("Usage: msui fshare send <file-path>");
+                        std::process::exit(1);
+                    }
+                }
+                Some("receive") | Some("recv") => {
+                    let save_dir = msui_core::fshare::default_save_dir();
+                    let local_ip = match msui_core::fshare::get_local_ip() {
+                        Some(ip) => ip,
+                        None => {
+                            eprintln!("Error: Could not detect active Wi-Fi LAN IP.");
+                            std::process::exit(1);
+                        }
+                    };
+
+                    let token = msui_core::fshare::generate_token();
+                    let pin = msui_core::fshare::generate_pin();
+                    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+
+                    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+                    rt.block_on(async move {
+                        let handle = msui_core::fshare::FShareServer::start_recv(
+                            save_dir.clone(),
+                            local_ip.clone(),
+                            token.clone(),
+                            pin.clone(),
+                            tx,
+                        ).await?;
+
+                        let url = format!("http://{}:{}/r/{}", local_ip, handle.port, token);
+                        println!("========================================");
+                        println!("  msUI FShare - File Dropzone Receiver");
+                        println!("========================================");
+                        println!("Destination: {}", save_dir.display());
+                        println!("Direct URL:  {}", url);
+                        println!("PIN Code:    {}", pin);
+                        println!();
+                        if let Ok(qr) = msui_core::fshare::generate_qr_terminal(&url) {
+                            println!("{}", qr);
+                        }
+                        println!("Scan QR code with phone camera to send files to PC.");
+                        println!("Press Ctrl+C to terminate.");
+                        println!("========================================");
+
+                        while let Some(ev) = rx.recv().await {
+                            match ev {
+                                msui_core::fshare::FShareEvent::ClientConnected { peer_ip } => {
+                                    println!("📱 Phone connected from {}", peer_ip);
+                                }
+                                msui_core::fshare::FShareEvent::Progress { transferred_bytes, total_bytes, speed_mbps } => {
+                                    let pct = if total_bytes > 0 { (transferred_bytes as f32 / total_bytes as f32) * 100.0 } else { 0.0 };
+                                    print!("\rReceiving: {:.1}% ({:.1} MB/s)...", pct, speed_mbps);
+                                    let _ = std::io::Write::flush(&mut std::io::stdout());
+                                }
+                                msui_core::fshare::FShareEvent::FileReceived { filename, size_bytes, path } => {
+                                    println!("\n✅ Received '{}' -> {}", filename, path.display());
+                                    msui_core::fshare::log_transfer("Received", &filename, size_bytes);
+                                }
+                                msui_core::fshare::FShareEvent::Error(e) => {
+                                    eprintln!("\n❌ Error: {}", e);
+                                }
+                                _ => {}
+                            }
+                        }
+                        handle.stop();
+                        Ok::<(), anyhow::Error>(())
+                    })?;
+                }
+                _ => {
+                    if try_ipc_toggle("fshare") {
+                        return Ok(());
+                    }
+                    tracing::info!("Starting msUI FShare Hub...");
+                    if let Err(e) = msui_launcher::run_fshare_modal() {
+                        tracing::error!("msUI FShare exited with error: {:?}", e);
+                    }
+                }
+            }
+        }
         "toggle" => {
             if let Some(target) = args.get(2) {
                 match IpcClient::send_blocking(&IpcCommand::Toggle(target.to_string())) {
@@ -990,8 +1232,26 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        "reload" => {
+            match IpcClient::send_blocking(&IpcCommand::ReloadConfig) {
+                Ok(res) => println!("Daemon response: {}", res),
+                Err(e) => {
+                    eprintln!("Failed to reload config via IPC: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
         "polkit" => {
-            tracing::info!("Starting msUI Native Polkit 1 Authentication Agent...");
+            match IpcClient::send_blocking(&IpcCommand::Ping) {
+                Ok(_) => {
+                    println!("msUI unified daemon is already running (PolicyKit 1 authentication agent active).");
+                    return Ok(());
+                }
+                Err(e) => {
+                    tracing::debug!("Daemon ping check failed: {:?}", e);
+                }
+            }
+            tracing::info!("Starting standalone msUI Native Polkit 1 Authentication Agent...");
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()?;
@@ -1090,11 +1350,13 @@ fn print_help() {
           wallpaper     Open the Wallpaper changer overlay (or 'cycle', 'random', 'set <path>')\n  \
           bg            Run the native Wayland background wallpaper daemon\n  \
           theme         Open the Theme switcher overlay (or pass theme name)\n  \
+          fshare        Open the msUI FShare local Wi-Fi & QR code file sharing hub (or 'history')\n  \
           power         Open the Power & Session menu overlay\n  \
           polkit        Run the native D-Bus PolicyKit 1 authentication agent daemon\n  \
           toggle        Toggle a modal overlay via instant IPC socket (e.g. 'msui toggle launcher')\n  \
           open          Open a modal overlay via instant IPC socket\n  \
           close         Close the currently active modal overlay via instant IPC socket\n  \
+          reload        Reload msUI configuration from ~/.config/msui/msui.toml live\n  \
           ping          Ping the running msUI IPC daemon\n  \
           toast         Run the Toast notifications overlay\n  \
           help          Display this help message\n\n\

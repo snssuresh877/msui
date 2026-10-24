@@ -28,6 +28,8 @@ pub enum IpcCommand {
     WallpaperCycle,
     NotificationAction { id: u32, action: String },
     NotificationClose { id: u32, reason: u32 },
+    Osd { kind: String, action: String },
+    ReloadConfig,
     Ping,
     Unknown(String),
 }
@@ -37,12 +39,20 @@ impl IpcCommand {
         let parts: Vec<&str> = s.trim().split_whitespace().collect();
         match parts.as_slice() {
             ["toggle", target] => IpcCommand::Toggle(target.to_string()),
+            ["bar", "toggle"] | ["bar"] => IpcCommand::Toggle("bar".to_string()),
+            ["bar", "open"] => IpcCommand::Open("bar".to_string()),
+            ["bar", "close"] => IpcCommand::Close,
             ["open", target] => IpcCommand::Open(target.to_string()),
             ["close"] => IpcCommand::Close,
             ["dnd", "toggle"] => IpcCommand::DndToggle,
             ["dnd", "on"] | ["dnd", "enable"] => IpcCommand::DndSet(true),
             ["dnd", "off"] | ["dnd", "disable"] => IpcCommand::DndSet(false),
             ["wallpaper", "cycle"] => IpcCommand::WallpaperCycle,
+            ["reload"] | ["config", "reload"] => IpcCommand::ReloadConfig,
+            ["osd", kind, action] => IpcCommand::Osd {
+                kind: kind.to_string(),
+                action: action.to_string(),
+            },
             ["notif-action", id_str, action] => {
                 if let Ok(id) = id_str.parse::<u32>() {
                     IpcCommand::NotificationAction {
@@ -74,6 +84,8 @@ impl IpcCommand {
             IpcCommand::DndSet(true) => "dnd on".to_string(),
             IpcCommand::DndSet(false) => "dnd off".to_string(),
             IpcCommand::WallpaperCycle => "wallpaper cycle".to_string(),
+            IpcCommand::ReloadConfig => "reload".to_string(),
+            IpcCommand::Osd { kind, action } => format!("osd {} {}", kind, action),
             IpcCommand::NotificationAction { id, action } => {
                 format!("notif-action {} {}", id, action)
             }
@@ -93,7 +105,7 @@ impl IpcClient {
     /// Send command to running msUI daemon. Returns Ok(response) or Err if daemon not running.
     pub async fn send(cmd: &IpcCommand) -> anyhow::Result<String> {
         let socket_path = get_socket_path();
-        let timeout = std::time::Duration::from_millis(80);
+        let timeout = std::time::Duration::from_millis(500);
 
         let stream = tokio::time::timeout(timeout, UnixStream::connect(&socket_path)).await??;
         let (reader, mut writer) = stream.into_split();
@@ -173,6 +185,7 @@ impl IpcServer {
                                 }
                             };
                             let _ = writer.write_all(resp.as_bytes()).await;
+                            let _ = writer.flush().await;
                         }
                     }
                 });

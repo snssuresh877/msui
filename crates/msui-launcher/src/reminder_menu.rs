@@ -41,6 +41,8 @@ pub struct ReminderMenu {
     input_title: String,
     duration_mins: u32,
     status_msg: Option<String>,
+    is_standalone: bool,
+    should_close: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -64,7 +66,15 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 }
 
 impl ReminderMenu {
-    fn new() -> (Self, Command<Message>) {
+    pub fn new() -> (Self, Command<Message>) {
+        Self::new_internal(true)
+    }
+
+    pub fn new_embedded() -> (Self, Command<Message>) {
+        Self::new_internal(false)
+    }
+
+    fn new_internal(is_standalone: bool) -> (Self, Command<Message>) {
         let reminders = ReminderManager::list_active();
         (
             Self {
@@ -72,22 +82,40 @@ impl ReminderMenu {
                 input_title: String::new(),
                 duration_mins: 15,
                 status_msg: None,
+                is_standalone,
+                should_close: false,
             },
             focus(TITLE_INPUT_ID.clone()),
         )
     }
 
-    fn namespace() -> String {
+    pub fn should_close(&self) -> bool {
+        self.should_close
+    }
+
+    pub fn reset_should_close(&mut self) {
+        self.should_close = false;
+    }
+
+    pub fn reset(&mut self) -> Command<Message> {
+        self.reminders = ReminderManager::list_active();
+        self.input_title.clear();
+        self.status_msg = None;
+        self.should_close = false;
+        focus(TITLE_INPUT_ID.clone())
+    }
+
+    pub fn namespace() -> String {
         "msui-reminders".into()
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
+    pub fn subscription(&self) -> iced::Subscription<Message> {
         let tick = iced::time::every(Duration::from_secs(1)).map(|_| Message::Tick);
         let events = event::listen().map(Message::IcedEvent);
         iced::Subscription::batch(vec![tick, events])
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::TitleChanged(val) => {
                 self.input_title = val;
@@ -132,11 +160,15 @@ impl ReminderMenu {
                 self.reminders = ReminderManager::list_active();
             }
             Message::Close => {
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::IcedEvent(Event::Keyboard(KeyboardEvent::KeyPressed { key, .. })) => {
                 if let Key::Named(Named::Escape) = key {
-                    std::process::exit(0);
+                    return self.update(Message::Close);
                 }
             }
             Message::IcedEvent(_) => {}
@@ -144,7 +176,7 @@ impl ReminderMenu {
         Command::none()
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         // Header
         let active_count = self.reminders.iter().filter(|r| !r.is_expired()).count();
         let header_title = row![

@@ -2,6 +2,7 @@ use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use iced::keyboard::key::Named;
 use iced::keyboard::{Event as KeyboardEvent, Key, Modifiers};
+use iced::widget::operation::{focus, snap_to, RelativeOffset};
 use iced::widget::{button, column, container, image, row, scrollable, space, svg, text, text_input};
 use iced::{Alignment, Element, Event, Font, Length, Task as Command, Theme, event};
 use iced_exwlshell::actions::ExwlShellCustomActionWithId;
@@ -16,6 +17,7 @@ use std::path::PathBuf;
 use std::sync::LazyLock;
 
 static INPUT_ID: LazyLock<iced::widget::Id> = LazyLock::new(iced::widget::Id::unique);
+static SCROLL_ID: LazyLock<iced::widget::Id> = LazyLock::new(iced::widget::Id::unique);
 
 pub fn run_app_drawer(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
     let width = 780;
@@ -74,8 +76,10 @@ pub struct AppDrawer {
     tray_items: Vec<TrayItem>,
     all_apps: Vec<DesktopApp>,
     filtered: Vec<DrawerItem>,
-    selected_idx: usize,
+    selected_idx: Option<usize>,
     matcher: SkimMatcherV2,
+    is_standalone: bool,
+    should_close: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -84,6 +88,7 @@ pub enum Message {
     SetTab(DrawerTab),
     SelectPrevious,
     SelectNext,
+    EnsureFocus,
     ActivateItem(usize),
     ActivateTray(String, String),
     FocusWindow(String),
@@ -103,6 +108,14 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 
 impl AppDrawer {
     pub fn new(config: MsuiConfig) -> (Self, Command<Message>) {
+        Self::new_internal(config, true)
+    }
+
+    pub fn new_embedded(config: MsuiConfig) -> (Self, Command<Message>) {
+        Self::new_internal(config, false)
+    }
+
+    fn new_internal(config: MsuiConfig, is_standalone: bool) -> (Self, Command<Message>) {
         let clients = HyprlandIpc::get_clients();
         let tray_items = msui_core::get_tray_items();
         let all_apps = scan_desktop_apps();
@@ -115,15 +128,52 @@ impl AppDrawer {
             tray_items,
             all_apps,
             filtered: Vec::new(),
-            selected_idx: 0,
+            selected_idx: None,
             matcher: SkimMatcherV2::default(),
+            is_standalone,
+            should_close: false,
         };
 
         drawer.rebuild_filtered();
 
-        (drawer, iced::widget::operation::focus(INPUT_ID.clone()))
+        (
+            drawer,
+            Command::batch([
+                focus(INPUT_ID.clone()),
+                Command::perform(tokio::time::sleep(std::time::Duration::from_millis(20)), |_| Message::EnsureFocus),
+                Command::perform(tokio::time::sleep(std::time::Duration::from_millis(50)), |_| Message::EnsureFocus),
+                Command::perform(tokio::time::sleep(std::time::Duration::from_millis(100)), |_| Message::EnsureFocus),
+                Command::perform(tokio::time::sleep(std::time::Duration::from_millis(180)), |_| Message::EnsureFocus),
+                Command::perform(tokio::time::sleep(std::time::Duration::from_millis(300)), |_| Message::EnsureFocus),
+            ]),
+        )
     }
 
+    pub fn should_close(&self) -> bool {
+        self.should_close
+    }
+
+    pub fn reset_should_close(&mut self) {
+        self.should_close = false;
+    }
+
+    pub fn reset(&mut self) -> Command<Message> {
+        self.query.clear();
+        self.clients = HyprlandIpc::get_clients();
+        self.tray_items = msui_core::get_tray_items();
+        self.all_apps = scan_desktop_apps();
+        self.rebuild_filtered();
+        self.selected_idx = None;
+        self.should_close = false;
+        Command::batch([
+            focus(INPUT_ID.clone()),
+            Command::perform(tokio::time::sleep(std::time::Duration::from_millis(20)), |_| Message::EnsureFocus),
+            Command::perform(tokio::time::sleep(std::time::Duration::from_millis(50)), |_| Message::EnsureFocus),
+            Command::perform(tokio::time::sleep(std::time::Duration::from_millis(100)), |_| Message::EnsureFocus),
+            Command::perform(tokio::time::sleep(std::time::Duration::from_millis(180)), |_| Message::EnsureFocus),
+            Command::perform(tokio::time::sleep(std::time::Duration::from_millis(300)), |_| Message::EnsureFocus),
+        ])
+    }
 
     pub fn namespace() -> String {
         "msui-app-drawer".to_string()
@@ -228,35 +278,56 @@ impl AppDrawer {
         }
 
         self.filtered = items;
-        if self.selected_idx >= self.filtered.len() {
-            self.selected_idx = 0;
+        self.selected_idx = None;
+    }
+
+    fn scroll_to_selected(&self) -> Command<Message> {
+        if let Some(idx) = self.selected_idx {
+            if self.filtered.len() > 1 {
+                let ratio = idx as f32 / (self.filtered.len() - 1) as f32;
+                snap_to(SCROLL_ID.clone(), RelativeOffset { x: 0.0, y: ratio })
+            } else {
+                snap_to(SCROLL_ID.clone(), RelativeOffset { x: 0.0, y: 0.0 })
+            }
+        } else {
+            snap_to(SCROLL_ID.clone(), RelativeOffset { x: 0.0, y: 0.0 })
         }
     }
 
     pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
+            Message::EnsureFocus => {
+                return focus(INPUT_ID.clone());
+            }
             Message::QueryChanged(new_query) => {
                 self.query = new_query;
-                self.selected_idx = 0;
+                self.selected_idx = None;
                 self.rebuild_filtered();
+                return self.scroll_to_selected();
             }
             Message::SetTab(tab) => {
                 self.tab = tab;
-                self.selected_idx = 0;
+                self.selected_idx = None;
                 self.rebuild_filtered();
+                return self.scroll_to_selected();
             }
             Message::SelectPrevious => {
                 if !self.filtered.is_empty() {
-                    if self.selected_idx == 0 {
-                        self.selected_idx = self.filtered.len() - 1;
-                    } else {
-                        self.selected_idx -= 1;
-                    }
+                    self.selected_idx = match self.selected_idx {
+                        None => Some(self.filtered.len() - 1),
+                        Some(0) => None,
+                        Some(idx) => Some(idx - 1),
+                    };
+                    return self.scroll_to_selected();
                 }
             }
             Message::SelectNext => {
                 if !self.filtered.is_empty() {
-                    self.selected_idx = (self.selected_idx + 1) % self.filtered.len();
+                    self.selected_idx = match self.selected_idx {
+                        None => Some(0),
+                        Some(idx) => Some((idx + 1) % self.filtered.len()),
+                    };
+                    return self.scroll_to_selected();
                 }
             }
             Message::ActivateItem(idx) => {
@@ -264,11 +335,19 @@ impl AppDrawer {
                     match item {
                         DrawerItem::Window { client, .. } => {
                             HyprlandIpc::activate_client(client);
-                            std::process::exit(0);
+                            if self.is_standalone {
+                                std::process::exit(0);
+                            } else {
+                                self.should_close = true;
+                            }
                         }
                         DrawerItem::Tray { item, .. } => {
                             msui_core::activate_tray_item_blocking(&item.service, &item.path);
-                            std::process::exit(0);
+                            if self.is_standalone {
+                                std::process::exit(0);
+                            } else {
+                                self.should_close = true;
+                            }
                         }
                         DrawerItem::App { app } => {
                             if let Some(client) = app.find_running_client(&self.clients) {
@@ -279,18 +358,30 @@ impl AppDrawer {
                                 }
                                 let _ = app.launch();
                             }
-                            std::process::exit(0);
+                            if self.is_standalone {
+                                std::process::exit(0);
+                            } else {
+                                self.should_close = true;
+                            }
                         }
                     }
                 }
             }
             Message::ActivateTray(service, path) => {
                 msui_core::activate_tray_item_blocking(&service, &path);
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::FocusWindow(addr) => {
                 HyprlandIpc::focus_window(&addr);
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::CloseWindow(addr) => {
                 HyprlandIpc::close_window(&addr);
@@ -310,7 +401,11 @@ impl AppDrawer {
                                 }
                                 let _ = app.launch();
                             }
-                            std::process::exit(0);
+                            if self.is_standalone {
+                                std::process::exit(0);
+                            } else {
+                                self.should_close = true;
+                            }
                         }
                         DrawerItem::Tray { item, .. } => {
                             msui_core::activate_tray_item_blocking(&item.service, &item.path);
@@ -321,7 +416,11 @@ impl AppDrawer {
                             }) {
                                 let _ = app.launch();
                             }
-                            std::process::exit(0);
+                            if self.is_standalone {
+                                std::process::exit(0);
+                            } else {
+                                self.should_close = true;
+                            }
                         }
                         DrawerItem::Window { client, .. } => {
                             if let Some(app) = self.all_apps.iter().find(|a| {
@@ -337,7 +436,11 @@ impl AppDrawer {
                                     .stderr(std::process::Stdio::null())
                                     .spawn();
                             }
-                            std::process::exit(0);
+                            if self.is_standalone {
+                                std::process::exit(0);
+                            } else {
+                                self.should_close = true;
+                            }
                         }
                     }
                 }
@@ -348,7 +451,11 @@ impl AppDrawer {
                 self.rebuild_filtered();
             }
             Message::Close => {
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::IcedEvent(Event::Keyboard(KeyboardEvent::KeyPressed {
                 key,
@@ -397,23 +504,61 @@ impl AppDrawer {
                     Key::Named(Named::ArrowUp) => {
                         return Command::done(Message::SelectPrevious);
                     }
-                    Key::Named(Named::Enter) => {
+                    Key::Named(Named::PageDown) => {
                         if !self.filtered.is_empty() {
-                            return Command::done(Message::ActivateItem(self.selected_idx));
+                            let next = match self.selected_idx {
+                                None => 5.min(self.filtered.len() - 1),
+                                Some(idx) => (idx + 5).min(self.filtered.len() - 1),
+                            };
+                            self.selected_idx = Some(next);
+                            return self.scroll_to_selected();
+                        }
+                    }
+                    Key::Named(Named::PageUp) => {
+                        if !self.filtered.is_empty() {
+                            self.selected_idx = match self.selected_idx {
+                                None | Some(0..=5) => None,
+                                Some(idx) => Some(idx - 5),
+                            };
+                            return self.scroll_to_selected();
+                        }
+                    }
+                    Key::Named(Named::Home) => {
+                        self.selected_idx = None;
+                        return self.scroll_to_selected();
+                    }
+                    Key::Named(Named::End) => {
+                        if !self.filtered.is_empty() {
+                            self.selected_idx = Some(self.filtered.len() - 1);
+                            return self.scroll_to_selected();
+                        }
+                    }
+                    Key::Named(Named::Enter) => {
+                        if let Some(idx) = self.selected_idx {
+                            return Command::done(Message::ActivateItem(idx));
+                        } else if !self.filtered.is_empty() {
+                            return Command::done(Message::ActivateItem(0));
                         }
                     }
                     Key::Named(Named::Delete) => {
-                        if let Some(DrawerItem::Window { client, .. }) = self.filtered.get(self.selected_idx) {
+                        let target_idx = self.selected_idx.unwrap_or(0);
+                        if let Some(DrawerItem::Window { client, .. }) = self.filtered.get(target_idx) {
                             return Command::done(Message::CloseWindow(client.address.clone()));
                         }
                     }
                     Key::Character(ref c) if (c == "w" || c == "W") && modifiers.contains(Modifiers::CTRL) => {
-                        if let Some(DrawerItem::Window { client, .. }) = self.filtered.get(self.selected_idx) {
+                        let target_idx = self.selected_idx.unwrap_or(0);
+                        if let Some(DrawerItem::Window { client, .. }) = self.filtered.get(target_idx) {
                             return Command::done(Message::CloseWindow(client.address.clone()));
                         }
                     }
-                    _ => {}
+                    _ => {
+                        return focus(INPUT_ID.clone());
+                    }
                 }
+            }
+            Message::IcedEvent(Event::Window(_)) => {
+                return focus(INPUT_ID.clone());
             }
             _ => {}
         }
@@ -468,9 +613,9 @@ impl AppDrawer {
 
         // --- 2. Search Input ---
         let placeholder = match self.tab {
-            DrawerTab::Running => "󰍉 Search running windows by title or class...",
-            DrawerTab::Installed => "󰍉 Search installed applications...",
-            DrawerTab::All => "󰍉 Search running tasks and desktop apps...",
+            DrawerTab::Running => "󰍉 Type to search running windows or tasks...",
+            DrawerTab::Installed => "󰍉 Type to search installed applications...",
+            DrawerTab::All => "󰍉 Type to search all windows & applications...",
         };
         let input = text_input(placeholder, &self.query)
             .id(INPUT_ID.clone())
@@ -494,7 +639,7 @@ impl AppDrawer {
             );
         } else {
             for (idx, item) in self.filtered.iter().enumerate() {
-                let is_selected = idx == self.selected_idx;
+                let is_selected = self.selected_idx == Some(idx);
 
                 match item {
                     DrawerItem::Window { client, icon } => {
@@ -747,17 +892,21 @@ impl AppDrawer {
             }
         }
 
-        let scroll = scrollable(list_col).height(Length::Fill);
+        let scroll = scrollable(list_col).id(SCROLL_ID.clone()).height(Length::Fill);
 
         // --- 4. Footer ---
         let footer = row![
-            text("↑↓ Navigate").size(11),
-            text("•").size(11),
-            text("Enter Focus/Launch").size(11),
-            text("•").size(11),
-            text("Del / Ctrl+W Close Window").size(11),
-            text("•").size(11),
-            text("Esc Close").size(11),
+            text("Type to search").size(11).color([0.65, 0.67, 0.78]),
+            text("•").size(11).color([0.45, 0.47, 0.58]),
+            text("↓ Navigate list").size(11).color([0.65, 0.67, 0.78]),
+            text("•").size(11).color([0.45, 0.47, 0.58]),
+            text("Tab Tabs").size(11).color([0.65, 0.67, 0.78]),
+            text("•").size(11).color([0.45, 0.47, 0.58]),
+            text("Enter Focus/Launch").size(11).color([0.54, 0.71, 0.98]),
+            text("•").size(11).color([0.45, 0.47, 0.58]),
+            text("Del Close").size(11).color([0.96, 0.44, 0.44]),
+            text("•").size(11).color([0.45, 0.47, 0.58]),
+            text("Esc Close").size(11).color([0.65, 0.67, 0.78]),
         ]
         .spacing(8)
         .align_y(Alignment::Center);

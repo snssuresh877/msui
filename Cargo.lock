@@ -2480,6 +2480,12 @@ name = "msui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "futures",
+ "iced",
+ "iced_exwlshell",
+ "iced_runtime",
+ "iced_wayland_subscriber",
+ "libc",
  "msui-bar",
  "msui-core",
  "msui-launcher",
@@ -2493,6 +2499,7 @@ name = "msui-bar"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "futures",
  "iced",
  "iced_exwlshell",
  "iced_runtime",
@@ -2510,6 +2517,7 @@ dependencies = [
  "chrono",
  "freedesktop-desktop-entry",
  "iced",
+ "qrcode",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -3438,6 +3446,12 @@ checksum = "7f6d64c71eb498fe9eae14ce4ec935c555749aef511cca85b5568910d6e48001"
 dependencies = [
  "bytemuck",
 ]
+
+[[package]]
+name = "qrcode"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
 
 [[package]]
 name = "quick-error"

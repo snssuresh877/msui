@@ -37,6 +37,8 @@ pub struct BatteryMenu {
     battery_info: Option<BatteryInfo>,
     battery_monitor: BatteryMonitor,
     status_msg: Option<String>,
+    is_standalone: bool,
+    should_close: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -55,7 +57,15 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 }
 
 impl BatteryMenu {
-    fn new() -> (Self, Command<Message>) {
+    pub fn new() -> (Self, Command<Message>) {
+        Self::new_internal(true)
+    }
+
+    pub fn new_embedded() -> (Self, Command<Message>) {
+        Self::new_internal(false)
+    }
+
+    fn new_internal(is_standalone: bool) -> (Self, Command<Message>) {
         let profile = PowerProfileManager::get_profile();
         let battery_monitor = BatteryMonitor::new();
         let battery_info = battery_monitor.read();
@@ -66,22 +76,40 @@ impl BatteryMenu {
                 battery_info,
                 battery_monitor,
                 status_msg: None,
+                is_standalone,
+                should_close: false,
             },
             Command::none(),
         )
     }
 
-    fn namespace() -> String {
+    pub fn should_close(&self) -> bool {
+        self.should_close
+    }
+
+    pub fn reset_should_close(&mut self) {
+        self.should_close = false;
+    }
+
+    pub fn reset(&mut self) -> Command<Message> {
+        self.profile = PowerProfileManager::get_profile();
+        self.battery_info = self.battery_monitor.read();
+        self.status_msg = None;
+        self.should_close = false;
+        Command::none()
+    }
+
+    pub fn namespace() -> String {
         String::from("msui-battery-menu")
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
+    pub fn subscription(&self) -> iced::Subscription<Message> {
         let tick = iced::time::every(Duration::from_millis(2500)).map(|_| Message::Refresh);
         let events = event::listen().map(Message::IcedEvent);
         iced::Subscription::batch([tick, events])
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::SelectProfile(prof) => {
                 if PowerProfileManager::set_profile(prof) {
@@ -96,12 +124,16 @@ impl BatteryMenu {
                 self.battery_info = self.battery_monitor.read();
             }
             Message::Close => {
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::IcedEvent(Event::Keyboard(KeyboardEvent::KeyPressed { key, .. })) => {
                 match key {
                     Key::Named(Named::Escape) => {
-                        std::process::exit(0);
+                        return self.update(Message::Close);
                     }
                     Key::Character(c) => match c.as_str() {
                         "1" => return self.update(Message::SelectProfile(PowerProfile::PowerSaver)),
@@ -117,7 +149,7 @@ impl BatteryMenu {
         Command::none()
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         // Header
         let header_title = text("󰂄  Power & Battery Manager").size(18);
 

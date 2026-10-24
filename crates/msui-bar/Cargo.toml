@@ -14,3 +14,4 @@ iced_wayland_subscriber.workspace = true
 chrono.workspace = true
 tracing.workspace = true
 tokio.workspace = true
+futures = "0.3"

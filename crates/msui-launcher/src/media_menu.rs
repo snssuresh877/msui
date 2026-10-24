@@ -40,6 +40,8 @@ pub struct MediaMenu {
     info: Option<MediaInfo>,
     players: Vec<String>,
     selected_player: Option<String>,
+    is_standalone: bool,
+    should_close: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +68,14 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 
 impl MediaMenu {
     pub fn new() -> (Self, Command<Message>) {
+        Self::new_internal(true)
+    }
+
+    pub fn new_embedded() -> (Self, Command<Message>) {
+        Self::new_internal(false)
+    }
+
+    fn new_internal(is_standalone: bool) -> (Self, Command<Message>) {
         let players = MediaMonitor::list_players();
         let selected_player = players.first().cloned();
         let info = MediaMonitor::read_player(selected_player.as_deref());
@@ -75,9 +85,29 @@ impl MediaMenu {
                 info,
                 players,
                 selected_player,
+                is_standalone,
+                should_close: false,
             },
             Command::none(),
         )
+    }
+
+    pub fn should_close(&self) -> bool {
+        self.should_close
+    }
+
+    pub fn reset_should_close(&mut self) {
+        self.should_close = false;
+    }
+
+    pub fn reset(&mut self) -> Command<Message> {
+        self.players = MediaMonitor::list_players();
+        if self.selected_player.is_none() || !self.players.contains(self.selected_player.as_ref().unwrap_or(&String::new())) {
+            self.selected_player = self.players.first().cloned();
+        }
+        self.info = MediaMonitor::read_player(self.selected_player.as_deref());
+        self.should_close = false;
+        Command::none()
     }
 
     pub fn namespace() -> String {
@@ -145,7 +175,11 @@ impl MediaMenu {
                 self.info = MediaMonitor::read_player(self.selected_player.as_deref());
             }
             Message::Close => {
-                std::process::exit(0);
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
             }
             Message::IcedEvent(Event::Keyboard(KeyboardEvent::KeyPressed { key, .. })) => {
                 match key {

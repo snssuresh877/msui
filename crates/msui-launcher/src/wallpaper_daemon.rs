@@ -53,7 +53,7 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 }
 
 impl WallpaperDaemon {
-    fn new() -> (Self, Command<Message>) {
+    pub fn new() -> (Self, Command<Message>) {
         let current_path = WallpaperManager::get_current();
         let image_handle = current_path
             .as_ref()
@@ -68,15 +68,15 @@ impl WallpaperDaemon {
         )
     }
 
-    fn namespace() -> String {
+    pub fn namespace() -> String {
         String::from("msui-wallpaper-daemon")
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
-        iced::time::every(Duration::from_millis(500)).map(|_| Message::CheckFile)
+    pub fn subscription(&self) -> iced::Subscription<Message> {
+        iced::time::every(Duration::from_secs(5)).map(|_| Message::CheckFile)
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::CheckFile => {
                 let latest = WallpaperManager::get_current();
@@ -89,7 +89,7 @@ impl WallpaperDaemon {
         Command::none()
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         if let Some(handle) = &self.image_handle {
             image(handle.clone())
                 .width(Length::Fill)
