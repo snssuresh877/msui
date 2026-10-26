@@ -500,7 +500,7 @@ impl Bar {
             }
             Message::OpenTerminal => {
                 let term = &self.config.launcher.terminal;
-                spawn_detached(&mut std::process::Command::new(term));
+                SystemControl::launch_terminal(term);
             }
             Message::OpenPowerMenu => {
                 let bin = std::env::current_exe()

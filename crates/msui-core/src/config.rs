@@ -123,7 +123,16 @@ fn default_launcher_height() -> u32 { 420 }
 fn default_max_results() -> usize { 8 }
 fn default_launcher_layer() -> String { "overlay".into() }
 fn default_placeholder() -> String { "Search applications...".into() }
-fn default_terminal() -> String { "alacritty".into() }
+fn default_terminal() -> String {
+    for term in ["kitty", "foot", "alacritty", "ghostty", "wezterm", "xterm", "gnome-terminal", "konsole"] {
+        if let Ok(child) = std::process::Command::new("which").arg(term).output() {
+            if child.status.success() {
+                return term.to_string();
+            }
+        }
+    }
+    "alacritty".into()
+}
 
 impl Default for MsuiConfig {
     fn default() -> Self {

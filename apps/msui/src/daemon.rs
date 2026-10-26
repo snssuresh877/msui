@@ -386,6 +386,11 @@ impl UnifiedShell {
             "theme" | "themes" => "theme",
             "wallpaper" | "wall" => "wallpaper",
             "fshare" | "share" | "fileshare" => "fshare",
+            "battery" | "bat" => "battery",
+            "display" | "disp" | "monitors" => "display",
+            "media" | "player" => "media",
+            "reminder" | "reminders" | "timer" | "timers" => "reminder",
+            "storage" | "disks" | "drives" => "storage",
             _ => return Task::none(),
         };
 
@@ -808,6 +813,14 @@ impl UnifiedShell {
                     BarMessage::OpenMedia => return self.toggle_modal("media"),
                     BarMessage::OpenStorage => return self.toggle_modal("storage"),
                     BarMessage::OpenReminders => return self.toggle_modal("reminder"),
+                    BarMessage::OpenTerminal => {
+                        msui_core::SystemControl::launch_terminal(&self.config.launcher.terminal);
+                        return Task::none();
+                    }
+                    BarMessage::TakeScreenshot => {
+                        msui_core::SystemControl::screenshot();
+                        return Task::none();
+                    }
                     _ => {}
                 }
                 self.bar.update(msg).map(DaemonMessage::Bar)
@@ -959,6 +972,20 @@ impl UnifiedShell {
                     IpcCommand::Open(target) => {
                         let target_norm = match target.as_str() {
                             "control" | "quicksettings" | "cc" | "topbar" | "bar-settings" => "control",
+                            "clipboard" | "clip" => "clipboard",
+                            "notifications" | "notifs" => "notifications",
+                            "drawer" | "tasks" | "apps" | "appdrawer" => "drawer",
+                            "wifi" | "network" => "wifi",
+                            "bluetooth" | "bt" => "bluetooth",
+                            "audio" | "mixer" => "audio",
+                            "theme" | "themes" => "theme",
+                            "wallpaper" | "wall" => "wallpaper",
+                            "fshare" | "share" | "fileshare" => "fshare",
+                            "battery" | "bat" => "battery",
+                            "display" | "disp" | "monitors" => "display",
+                            "media" | "player" => "media",
+                            "reminder" | "reminders" | "timer" | "timers" => "reminder",
+                            "storage" | "disks" | "drives" => "storage",
                             other => other,
                         };
                         if let Some(ActiveModal::ControlCenter(cc)) = &mut self.active_modal {
