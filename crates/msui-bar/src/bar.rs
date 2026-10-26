@@ -159,16 +159,15 @@ pub enum Message {
     Ignored,
 }
 
-fn bar_btn_transparent(theme: &Theme, status: button::Status) -> button::Style {
-    let p = theme.palette();
+fn bar_btn_transparent(_theme: &Theme, status: button::Status) -> button::Style {
     let bg = match status {
-        button::Status::Hovered => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.09).into()),
-        button::Status::Pressed => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.16).into()),
+        button::Status::Hovered => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10).into()),
+        button::Status::Pressed => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.18).into()),
         _ => None,
     };
     let text_color = match status {
         button::Status::Hovered => iced::Color::WHITE,
-        _ => p.text,
+        _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.94),
     };
     button::Style {
         background: bg,
@@ -200,16 +199,16 @@ fn bar_btn_stepper(theme: &Theme, status: button::Status) -> button::Style {
 fn bar_btn_brand(theme: &Theme, status: button::Status) -> button::Style {
     let p = theme.palette();
     let bg = match status {
-        button::Status::Hovered => Some(iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.24).into()),
-        button::Status::Pressed => Some(iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.32).into()),
-        _ => Some(iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.12).into()),
+        button::Status::Hovered => Some(iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.28).into()),
+        button::Status::Pressed => Some(iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.38).into()),
+        _ => Some(iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.16).into()),
     };
     let mut border = iced::border::rounded(6);
     border.width = 1.0;
-    border.color = iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.35);
+    border.color = iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.45);
     button::Style {
         background: bg,
-        text_color: p.primary,
+        text_color: iced::Color::WHITE,
         border,
         ..Default::default()
     }
@@ -218,31 +217,30 @@ fn bar_btn_brand(theme: &Theme, status: button::Status) -> button::Style {
 fn bar_btn_active(theme: &Theme, status: button::Status) -> button::Style {
     let p = theme.palette();
     let bg = match status {
-        button::Status::Hovered => iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.28),
-        button::Status::Pressed => iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.38),
-        _ => iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.16),
+        button::Status::Hovered => iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.38),
+        button::Status::Pressed => iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.48),
+        _ => iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.25),
     };
     let mut border = iced::border::rounded(6);
     border.width = 1.0;
-    border.color = iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.45);
+    border.color = iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.50);
     button::Style {
         background: Some(bg.into()),
-        text_color: p.primary,
+        text_color: iced::Color::WHITE,
         border,
         ..Default::default()
     }
 }
 
-fn bar_btn_inactive_ws(theme: &Theme, status: button::Status) -> button::Style {
-    let p = theme.palette();
+fn bar_btn_inactive_ws(_theme: &Theme, status: button::Status) -> button::Style {
     let bg = match status {
-        button::Status::Hovered => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()),
-        button::Status::Pressed => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.14).into()),
+        button::Status::Hovered => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.12).into()),
+        button::Status::Pressed => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.20).into()),
         _ => None,
     };
     let text_color = match status {
         button::Status::Hovered => iced::Color::WHITE,
-        _ => iced::Color::from_rgba(p.text.r, p.text.g, p.text.b, 0.55),
+        _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.72),
     };
     button::Style {
         background: bg,
@@ -796,7 +794,11 @@ impl Bar {
         // CPU & RAM stats
         if self.config.bar.show_cpu {
             let cpu_str = format!(" {:.0}%", self.system_metrics.cpu_usage_percent);
-            right_row = right_row.push(text(cpu_str).size(13));
+            let cpu_btn = button(text(cpu_str).size(13))
+                .style(bar_btn_transparent)
+                .padding([2, 4])
+                .on_press(Message::OpenStorage);
+            right_row = right_row.push(cpu_btn);
         }
 
         if self.config.bar.show_memory {
@@ -925,6 +927,12 @@ impl Bar {
                     || item.title.to_lowercase().contains("wechat")
                 {
                     "󰘑"
+                } else if item.id.to_lowercase().contains("antigravity")
+                    || item.title.to_lowercase().contains("antigravity")
+                    || item.id.to_lowercase().contains("code")
+                    || item.id.to_lowercase().contains("vscode")
+                {
+                    "󰨞"
                 } else if item.id.to_lowercase().contains("proton")
                     || item.title.to_lowercase().contains("proton")
                     || item.id.to_lowercase().contains("vpn")
@@ -1041,10 +1049,10 @@ impl Bar {
                             ..Default::default()
                         }
                     } else {
-                        // Frosted Glass
-                        border.color = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.14);
+                        // Frosted Glass: Smoked dark acrylic with Wayland GPU hardware blur
+                        border.color = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.12);
                         container::Style {
-                            background: Some(iced::Color::from_rgba(p.background.r, p.background.g, p.background.b, 0.42).into()),
+                            background: Some(iced::Color::from_rgba(12.0 / 255.0, 14.0 / 255.0, 20.0 / 255.0, 0.58).into()),
                             border,
                             ..Default::default()
                         }
@@ -1067,9 +1075,9 @@ impl Bar {
                             ..Default::default()
                         }
                     } else {
-                        // Frosted Glass in classic docked mode
+                        // Frosted Glass in classic docked mode: Smoked dark acrylic
                         container::Style {
-                            background: Some(iced::Color::from_rgba(p.background.r, p.background.g, p.background.b, 0.45).into()),
+                            background: Some(iced::Color::from_rgba(12.0 / 255.0, 14.0 / 255.0, 20.0 / 255.0, 0.58).into()),
                             border: iced::Border {
                                 color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08),
                                 width: 1.0,
