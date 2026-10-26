@@ -38,6 +38,8 @@ pub struct BarConfig {
     pub show_brand: bool,
     #[serde(default = "default_true")]
     pub show_workspaces: bool,
+    #[serde(default = "default_workspace_count")]
+    pub workspace_count: usize,
     #[serde(default = "default_true")]
     pub show_active_window: bool,
     #[serde(default = "default_true")]
@@ -116,6 +118,7 @@ fn default_border_width() -> f32 { 1.0 }
 fn default_time_format() -> String { "%a %b %d  %I:%M %p".into() }
 fn default_battery_refresh() -> u64 { 5 }
 fn default_sysinfo_refresh() -> u64 { 2 }
+fn default_workspace_count() -> usize { 3 }
 fn default_true() -> bool { true }
 
 fn default_launcher_width() -> u32 { 680 }
@@ -159,6 +162,7 @@ impl Default for BarConfig {
             sysinfo_refresh_seconds: default_sysinfo_refresh(),
             show_brand: true,
             show_workspaces: true,
+            workspace_count: default_workspace_count(),
             show_active_window: true,
             show_media: true,
             show_clock: true,
@@ -258,6 +262,7 @@ mod tests {
         assert_eq!(bar.margin_horizontal, 12);
         assert_eq!(bar.corner_radius, 14.0);
         assert_eq!(bar.border_width, 1.0);
+        assert_eq!(bar.workspace_count, 3);
     }
 
     #[test]

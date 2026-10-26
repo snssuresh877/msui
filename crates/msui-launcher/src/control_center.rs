@@ -93,7 +93,7 @@ impl BarModule {
     pub fn details(&self) -> (&'static str, &'static str, &'static str) {
         match self {
             BarModule::Brand => ("msUI Launcher & Apps", "󰣇", "Leftmost logo button opening app drawer"),
-            BarModule::Workspaces => ("Workspace Pager", "󰮯", "Hyprland workspace indicators (1..8)"),
+            BarModule::Workspaces => ("Workspace Pager", "󰮯", "Active Hyprland workspace indicators (configurable count)"),
             BarModule::Clock => ("Clock & Calendar", "󰃭", "Current time and date display"),
             BarModule::RemindersBadge => ("Timer Countdown Badge", "󰥔", "Live ticking badge for active reminders"),
             BarModule::Network => ("Wi-Fi & Network Status", "󰤨", "Wi-Fi signal strength and SSID pill"),
@@ -194,6 +194,7 @@ pub struct ControlCenter {
 pub enum Message {
     SwitchTab(ControlCenterTab),
     SetBarStyle(String),
+    SetWorkspaceCount(usize),
     ToggleBarModule(BarModule),
     EnableAllBarModules,
     MinimalBarPreset,
@@ -315,6 +316,10 @@ impl ControlCenter {
             }
             Message::SetBarStyle(style) => {
                 self.config.bar.style = style;
+                let _ = self.config.save_to_default_path();
+            }
+            Message::SetWorkspaceCount(count) => {
+                self.config.bar.workspace_count = count.clamp(1, 10);
                 let _ = self.config.save_to_default_path();
             }
             Message::ToggleBarModule(module) => {
@@ -637,6 +642,63 @@ impl ControlCenter {
             .padding([10, 12])
             .width(Length::Fill);
 
+            let cur_ws = self.config.bar.workspace_count;
+            let ws_3_btn = button(
+                row![text("󰮯").size(13), text("3 Slots").size(11)]
+                    .spacing(5)
+                    .align_y(Alignment::Center),
+            )
+            .width(Length::FillPortion(1))
+            .style(if cur_ws == 3 { button::primary } else { button::secondary })
+            .padding([6, 8])
+            .on_press(Message::SetWorkspaceCount(3));
+
+            let ws_4_btn = button(
+                row![text("󰮯").size(13), text("4 Slots").size(11)]
+                    .spacing(5)
+                    .align_y(Alignment::Center),
+            )
+            .width(Length::FillPortion(1))
+            .style(if cur_ws == 4 { button::primary } else { button::secondary })
+            .padding([6, 8])
+            .on_press(Message::SetWorkspaceCount(4));
+
+            let ws_5_btn = button(
+                row![text("󰮯").size(13), text("5 Slots").size(11)]
+                    .spacing(5)
+                    .align_y(Alignment::Center),
+            )
+            .width(Length::FillPortion(1))
+            .style(if cur_ws == 5 { button::primary } else { button::secondary })
+            .padding([6, 8])
+            .on_press(Message::SetWorkspaceCount(5));
+
+            let ws_8_btn = button(
+                row![text("󰮯").size(13), text("8 Slots").size(11)]
+                    .spacing(5)
+                    .align_y(Alignment::Center),
+            )
+            .width(Length::FillPortion(1))
+            .style(if cur_ws == 8 { button::primary } else { button::secondary })
+            .padding([6, 8])
+            .on_press(Message::SetWorkspaceCount(8));
+
+            let workspace_card = container(
+                column![
+                    row![
+                        text("Workspace Pager Slots").size(12),
+                        space().width(Length::Fill),
+                        text(format!("{} Workspaces Displayed", cur_ws)).size(10).style(text::secondary),
+                    ]
+                    .align_y(Alignment::Center),
+                    row![ws_3_btn, ws_4_btn, ws_5_btn, ws_8_btn].spacing(8),
+                ]
+                .spacing(8),
+            )
+            .style(container::bordered_box)
+            .padding([10, 12])
+            .width(Length::Fill);
+
             let btn_enable_all = button(
                 row![text("󰐥").size(12), text("Enable All").size(11)]
                     .spacing(4)
@@ -722,6 +784,7 @@ impl ControlCenter {
                 header,
                 tab_row,
                 style_card,
+                workspace_card,
                 presets_row,
                 scrollable_content,
             ]

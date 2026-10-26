@@ -564,7 +564,16 @@ impl Bar {
         if self.config.bar.show_workspaces {
             let mut ws_row = row![].spacing(3).align_y(Alignment::Center);
 
-            for slot in 1..=8 {
+            let count = self.config.bar.workspace_count.clamp(1, 10);
+            let active = self.hyprland_workspace.max(1);
+            let start = if active > count as i32 {
+                active - count as i32 + 1
+            } else {
+                1
+            };
+            let end = start + count as i32 - 1;
+
+            for slot in start..=end {
                 let is_active = slot == self.hyprland_workspace;
                 let label = if is_active {
                     format!("󰮯 {slot}")
