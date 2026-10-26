@@ -462,7 +462,7 @@ impl UnifiedShell {
             }
             "power" => {
                 let (mid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
-                    size: LayerSize::px(500, 260),
+                    size: LayerSize::px(520, 290),
                     layer: Layer::Overlay,
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
