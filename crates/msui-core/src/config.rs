@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MsuiConfig {
     #[serde(default)]
     pub bar: BarConfig,
@@ -10,7 +10,7 @@ pub struct MsuiConfig {
     pub launcher: LauncherConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BarConfig {
     #[serde(default = "default_bar_height")]
     pub height: u32,
@@ -86,7 +86,7 @@ pub struct BarConfig {
     pub show_power: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LauncherConfig {
     #[serde(default = "default_launcher_width")]
     pub width: u32,

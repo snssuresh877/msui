@@ -307,6 +307,7 @@ impl PolkitDialog {
             .width(Length::Fill)
             .height(Length::Fill)
             .padding(20)
+            .style(container::bordered_box)
             .into()
     }
 }

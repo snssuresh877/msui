@@ -4,7 +4,8 @@ use iced::widget::{container, space};
 use iced::{Element, Font, Length, Task};
 use iced_exwlshell::daemon;
 use iced_exwlshell::reexport::{
-    Anchor, KeyboardInteractivity, Layer, LayerSize, Margin, NewLayerShellSettings, OutputOption,
+    Anchor, BlurOption, KeyboardInteractivity, Layer, LayerSize, Margin, NewLayerShellSettings,
+    OutputOption,
 };
 use iced_exwlshell::settings::{ExWlSettings, LayerShellSettings, StartMode};
 use iced_exwlshell::to_layer_message;
@@ -337,6 +338,12 @@ impl UnifiedShell {
             (None, Some(height as i32))
         };
 
+        let blur_option = if self.config.bar.is_frosted() {
+            BlurOption::FullRegion
+        } else {
+            BlurOption::None
+        };
+
         let (bid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
             size: LayerSize::fill_width(height),
             layer: bar_layer,
@@ -345,6 +352,7 @@ impl UnifiedShell {
             exclusive_zone,
             keyboard_interactivity: KeyboardInteractivity::None,
             output_option,
+            blur_option,
             ..Default::default()
         });
         self.bar_id = Some(bid);
@@ -837,7 +845,58 @@ impl UnifiedShell {
                         inst.update(m).map(|x| DaemonMessage::Modal(ModalMessage::Power(x)))
                     }
                     (ModalMessage::ControlCenter(m), Some(ActiveModal::ControlCenter(inst))) => {
-                        inst.update(m).map(|x| DaemonMessage::Modal(ModalMessage::ControlCenter(x)))
+                        let cmd = inst.update(m).map(|x| DaemonMessage::Modal(ModalMessage::ControlCenter(x)));
+                        if self.config != inst.config {
+                            tracing::info!("ControlCenter updated config live! Synchronizing bar...");
+                            self.config = inst.config.clone();
+                            self.bar.reload_config(self.config.clone());
+
+                            let mut tasks = vec![cmd];
+                            tasks.push(self.bar.update(BarMessage::ConfigReloaded).map(DaemonMessage::Bar));
+
+                            if let Some(bid) = self.bar_id {
+                                let is_modern = self.config.bar.is_modern();
+                                let height = self.config.bar.height;
+                                let (bar_margin, exclusive_zone) = if is_modern {
+                                    (
+                                        Margin {
+                                            top: self.config.bar.margin_top as i32,
+                                            right: self.config.bar.margin_horizontal as i32,
+                                            bottom: 0,
+                                            left: self.config.bar.margin_horizontal as i32,
+                                        },
+                                        (height + self.config.bar.margin_top + 4) as i32,
+                                    )
+                                } else {
+                                    (
+                                        Margin { top: 0, right: 0, bottom: 0, left: 0 },
+                                        height as i32,
+                                    )
+                                };
+
+                                let blur_opt = if self.config.bar.is_frosted() {
+                                    BlurOption::FullRegion
+                                } else {
+                                    BlurOption::None
+                                };
+
+                                tasks.push(Task::done(DaemonMessage::MarginChange {
+                                    id: bid,
+                                    margin: bar_margin,
+                                }));
+                                tasks.push(Task::done(DaemonMessage::ExclusiveZoneChange {
+                                    id: bid,
+                                    zone_size: exclusive_zone,
+                                }));
+                                tasks.push(Task::done(DaemonMessage::BlurOptionChange {
+                                    id: bid,
+                                    option: blur_opt,
+                                }));
+                            }
+
+                            return Task::batch(tasks);
+                        }
+                        cmd
                     }
                     (ModalMessage::Clipboard(m), Some(ActiveModal::Clipboard(inst))) => {
                         inst.update(m).map(|x| DaemonMessage::Modal(ModalMessage::Clipboard(x)))
@@ -1015,24 +1074,53 @@ impl UnifiedShell {
                     }
                     IpcCommand::ReloadConfig => {
                         tracing::info!("ReloadConfig: Reloading configuration from disk...");
-                        let old_style = self.config.bar.style.clone();
-                        let old_height = self.config.bar.height;
-                        let old_margin_top = self.config.bar.margin_top;
-                        let old_margin_h = self.config.bar.margin_horizontal;
                         self.config = MsuiConfig::load_or_default();
                         self.bar.reload_config(self.config.clone());
-                        let geometry_changed = old_style != self.config.bar.style
-                            || old_height != self.config.bar.height
-                            || old_margin_top != self.config.bar.margin_top
-                            || old_margin_h != self.config.bar.margin_horizontal;
-                        if geometry_changed && self.bar_id.is_some() {
-                            tracing::info!("ReloadConfig: Bar geometry/style changed, recreating layer surface");
-                            let close_task = iced::window::close(self.bar_id.take().unwrap());
-                            let open_task = self.open_bar();
-                            Task::batch([close_task, open_task])
-                        } else {
-                            Task::none()
+
+                        let mut tasks = Vec::new();
+                        tasks.push(self.bar.update(BarMessage::ConfigReloaded).map(DaemonMessage::Bar));
+
+                        if let Some(bid) = self.bar_id {
+                            let is_modern = self.config.bar.is_modern();
+                            let height = self.config.bar.height;
+                            let (bar_margin, exclusive_zone) = if is_modern {
+                                (
+                                    Margin {
+                                        top: self.config.bar.margin_top as i32,
+                                        right: self.config.bar.margin_horizontal as i32,
+                                        bottom: 0,
+                                        left: self.config.bar.margin_horizontal as i32,
+                                    },
+                                    (height + self.config.bar.margin_top + 4) as i32,
+                                )
+                            } else {
+                                (
+                                    Margin { top: 0, right: 0, bottom: 0, left: 0 },
+                                    height as i32,
+                                )
+                            };
+
+                            let blur_opt = if self.config.bar.is_frosted() {
+                                BlurOption::FullRegion
+                            } else {
+                                BlurOption::None
+                            };
+
+                            tasks.push(Task::done(DaemonMessage::MarginChange {
+                                id: bid,
+                                margin: bar_margin,
+                            }));
+                            tasks.push(Task::done(DaemonMessage::ExclusiveZoneChange {
+                                id: bid,
+                                zone_size: exclusive_zone,
+                            }));
+                            tasks.push(Task::done(DaemonMessage::BlurOptionChange {
+                                id: bid,
+                                option: blur_opt,
+                            }));
                         }
+
+                        Task::batch(tasks)
                     }
                     IpcCommand::WallpaperCycle => {
                         WallpaperManager::cycle();
@@ -1378,6 +1466,10 @@ pub fn run_daemon(config: MsuiConfig) -> anyhow::Result<()> {
         UnifiedShell::view,
     )
     .theme(UnifiedShell::theme)
+    .style(|_state, theme| iced::theme::Style {
+        background_color: iced::Color::TRANSPARENT,
+        text_color: theme.palette().text,
+    })
     .default_font(Font {
         family: iced::font::Family::Name("JetBrainsMono Nerd Font"),
         ..Font::DEFAULT

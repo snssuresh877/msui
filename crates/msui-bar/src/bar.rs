@@ -4,7 +4,7 @@ use futures::SinkExt;
 use iced::widget::{button, container, row, space, text};
 use iced::{Alignment, Element, Font, Length, Task as Command, Theme};
 use iced_exwlshell::layershell::application;
-use iced_exwlshell::reexport::{Anchor, Layer, LayerSize, Margin};
+use iced_exwlshell::reexport::{Anchor, BlurOption, Layer, LayerSize, Margin};
 use iced_exwlshell::settings::{ExWlSettings, LayerShellSettings, StartMode};
 use iced_exwlshell::to_layer_message;
 use iced_wayland_subscriber::OutputId;
@@ -58,6 +58,12 @@ pub fn run_bar(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
         (Margin::default(), height as i32)
     };
 
+    let blur_option = if config.bar.is_frosted() {
+        BlurOption::FullRegion
+    } else {
+        BlurOption::None
+    };
+
     application(
         move || Bar::new(cfg_clone.clone(), shell_events.clone()),
         Bar::namespace,
@@ -65,6 +71,10 @@ pub fn run_bar(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
         Bar::view,
     )
     .theme(ThemeManager::current_theme())
+    .style(|_state, theme| iced::theme::Style {
+        background_color: iced::Color::TRANSPARENT,
+        text_color: theme.palette().text,
+    })
     .default_font(Font {
         family: iced::font::Family::Name("JetBrainsMono Nerd Font"),
         ..Font::DEFAULT
@@ -78,6 +88,7 @@ pub fn run_bar(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
             layer,
             margin,
             start_mode,
+            blur_option,
             ..Default::default()
         },
         shell_broadcast,
@@ -113,6 +124,7 @@ pub struct Bar {
 #[to_layer_message]
 #[derive(Debug, Clone)]
 pub enum Message {
+    ConfigReloaded,
     ClockTick,
     MetricsTick,
     SwitchWorkspace(i32),

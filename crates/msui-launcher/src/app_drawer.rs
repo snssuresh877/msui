@@ -918,6 +918,7 @@ impl AppDrawer {
         container(content)
             .width(Length::Fill)
             .height(Length::Fill)
+            .style(container::bordered_box)
             .into()
     }
 }

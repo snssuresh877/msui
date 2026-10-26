@@ -197,6 +197,7 @@ fn main() -> anyhow::Result<()> {
                     let mut config = MsuiConfig::load_or_default();
                     config.bar.transparency = mode.to_string();
                     config.save_to_default_path()?;
+                    let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
                     println!("Top bar transparency set to '{}'", mode);
                     return Ok(());
                 }
@@ -205,6 +206,7 @@ fn main() -> anyhow::Result<()> {
                     let mut config = MsuiConfig::load_or_default();
                     config.bar.style = style.to_string();
                     config.save_to_default_path()?;
+                    let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
                     println!("Top bar appearance style set to '{}'", style);
                     return Ok(());
                 }

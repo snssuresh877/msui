@@ -174,7 +174,7 @@ impl BarModule {
 
 pub struct ControlCenter {
     active_tab: ControlCenterTab,
-    config: MsuiConfig,
+    pub config: MsuiConfig,
     battery_info: Option<BatteryInfo>,
     system_metrics: SystemMetrics,
     audio_info: AudioInfo,
@@ -858,6 +858,7 @@ impl ControlCenter {
             return container(content)
                 .width(Length::Fill)
                 .height(Length::Fill)
+                .style(container::bordered_box)
                 .into();
         }
 
@@ -1250,6 +1251,7 @@ impl ControlCenter {
         container(content)
             .width(Length::Fill)
             .height(Length::Fill)
+            .style(container::bordered_box)
             .into()
     }
 }

@@ -373,6 +373,7 @@ impl MediaMenu {
             .padding(16)
             .center_x(Length::Fill)
             .center_y(Length::Fill)
+            .style(container::bordered_box)
             .into()
     }
 }
