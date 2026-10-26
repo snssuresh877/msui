@@ -4,6 +4,7 @@ use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize, Margin};
 use iced_exwlshell::settings::LayerShellSettings;
+use crate::modal_style::default_modal_card_style;
 use msui_core::{
     clear_active_toasts, dismiss_active_toast, load_active_toasts, record_toast_pid,
     remove_toast_pid, IpcClient, IpcCommand, Notification,
@@ -258,7 +259,7 @@ impl ToastApp {
             let card = container(card_content)
                 .width(Length::Fill)
                 .padding(10)
-                .style(container::bordered_box);
+                .style(default_modal_card_style());
 
             cards = cards.push(card);
         }

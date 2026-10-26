@@ -6,6 +6,7 @@ use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
+use crate::modal_style::{default_modal_card_style, default_subcard_style};
 use msui_core::{MediaInfo, MediaMonitor, MsuiConfig, ThemeManager};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -227,7 +228,7 @@ impl MediaMenu {
                         .width(Length::Fixed(140.0))
                         .height(Length::Fixed(140.0))
                 )
-                .style(container::bordered_box)
+                .style(default_subcard_style())
                 .into()
             } else {
                 container(
@@ -242,7 +243,7 @@ impl MediaMenu {
                 .height(Length::Fixed(140.0))
                 .center_x(Length::Fixed(140.0))
                 .center_y(Length::Fixed(140.0))
-                .style(container::bordered_box)
+                .style(default_subcard_style())
                 .into()
             };
 
@@ -373,7 +374,7 @@ impl MediaMenu {
             .padding(16)
             .center_x(Length::Fill)
             .center_y(Length::Fill)
-            .style(container::bordered_box)
+            .style(default_modal_card_style())
             .into()
     }
 }

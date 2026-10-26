@@ -13,6 +13,65 @@ use msui_core::{
     SystemMonitor, ThemeManager,
 };
 
+use crate::modal_style::{modal_card_style, subcard_style};
+
+fn toggle_tile_style(active: bool, is_frosted: bool) -> impl Fn(&iced::Theme, iced::widget::button::Status) -> iced::widget::button::Style {
+    toggle_tile_custom_style(active, false, is_frosted)
+}
+
+fn toggle_tile_custom_style(active: bool, is_danger: bool, is_frosted: bool) -> impl Fn(&iced::Theme, iced::widget::button::Status) -> iced::widget::button::Style {
+    move |theme, status| {
+        let p = theme.palette();
+        if active {
+            let color = if is_danger { p.danger } else { p.primary };
+            let bg = match status {
+                iced::widget::button::Status::Hovered => iced::Color::from_rgba(color.r, color.g, color.b, 0.90),
+                iced::widget::button::Status::Pressed => iced::Color::from_rgba(color.r, color.g, color.b, 0.70),
+                _ => color,
+            };
+            let mut border = iced::border::rounded(10);
+            border.width = 1.0;
+            border.color = iced::Color::from_rgba(color.r, color.g, color.b, 0.50);
+            iced::widget::button::Style {
+                background: Some(bg.into()),
+                text_color: iced::Color::WHITE,
+                border,
+                ..Default::default()
+            }
+        } else if is_frosted {
+            let bg = match status {
+                iced::widget::button::Status::Hovered => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.14),
+                iced::widget::button::Status::Pressed => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.20),
+                _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+            };
+            let mut border = iced::border::rounded(10);
+            border.width = 1.0;
+            border.color = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08);
+            iced::widget::button::Style {
+                background: Some(bg.into()),
+                text_color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.90),
+                border,
+                ..Default::default()
+            }
+        } else {
+            let bg = match status {
+                iced::widget::button::Status::Hovered => iced::Color::from_rgba(p.text.r, p.text.g, p.text.b, 0.10),
+                iced::widget::button::Status::Pressed => iced::Color::from_rgba(p.text.r, p.text.g, p.text.b, 0.16),
+                _ => iced::Color::from_rgba(p.text.r, p.text.g, p.text.b, 0.05),
+            };
+            let mut border = iced::border::rounded(10);
+            border.width = 1.0;
+            border.color = iced::Color::from_rgba(p.text.r, p.text.g, p.text.b, 0.10);
+            iced::widget::button::Style {
+                background: Some(bg.into()),
+                text_color: p.text,
+                border,
+                ..Default::default()
+            }
+        }
+    }
+}
+
 static INITIAL_TAB: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 pub fn run_control_center(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
@@ -609,6 +668,8 @@ impl ControlCenter {
         let tab_row = row![tab_quick, tab_bar].spacing(8);
 
         // --- Top Bar Settings View ---
+        let is_frosted = self.config.bar.is_frosted();
+
         if self.active_tab == ControlCenterTab::TopBarSettings {
             let is_modern = self.config.bar.is_modern();
             let modern_btn = button(
@@ -643,11 +704,10 @@ impl ControlCenter {
                 ]
                 .spacing(8),
             )
-            .style(container::bordered_box)
+            .style(subcard_style(is_frosted))
             .padding([10, 12])
             .width(Length::Fill);
 
-            let is_frosted = self.config.bar.is_frosted();
             let is_transp = self.config.bar.is_transparent();
             let is_solid = self.config.bar.is_solid();
 
@@ -701,7 +761,7 @@ impl ControlCenter {
                 ]
                 .spacing(8),
             )
-            .style(container::bordered_box)
+            .style(subcard_style(is_frosted))
             .padding([10, 12])
             .width(Length::Fill);
 
@@ -758,7 +818,7 @@ impl ControlCenter {
                 ]
                 .spacing(8),
             )
-            .style(container::bordered_box)
+            .style(subcard_style(is_frosted))
             .padding([10, 12])
             .width(Length::Fill);
 
@@ -858,7 +918,7 @@ impl ControlCenter {
             return container(content)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .style(container::bordered_box)
+                .style(modal_card_style(is_frosted))
                 .into();
         }
 
@@ -878,12 +938,12 @@ impl ControlCenter {
             .align_y(Alignment::Center)
         )
         .width(Length::FillPortion(1))
-        .style(if wifi_active { button::primary } else { button::secondary })
+        .style(toggle_tile_style(wifi_active, is_frosted))
         .padding([8, 10])
         .on_press(Message::ToggleWifi);
 
         let wifi_detail = button(text("󰅂").size(12))
-            .style(button::secondary)
+            .style(toggle_tile_style(false, is_frosted))
             .padding([8, 6])
             .on_press(Message::OpenWifiManager);
 
@@ -910,12 +970,12 @@ impl ControlCenter {
             .align_y(Alignment::Center)
         )
         .width(Length::FillPortion(1))
-        .style(if bt_active { button::primary } else { button::secondary })
+        .style(toggle_tile_style(bt_active, is_frosted))
         .padding([8, 10])
         .on_press(Message::ToggleBluetooth);
 
         let bt_detail = button(text("󰅂").size(12))
-            .style(button::secondary)
+            .style(toggle_tile_style(false, is_frosted))
             .padding([8, 6])
             .on_press(Message::OpenBluetoothManager);
 
@@ -936,7 +996,7 @@ impl ControlCenter {
             .align_y(Alignment::Center)
         )
         .width(Length::FillPortion(1))
-        .style(if self.is_night_light { button::primary } else { button::secondary })
+        .style(toggle_tile_style(self.is_night_light, is_frosted))
         .padding([8, 10])
         .on_press(Message::ToggleNightLight);
 
@@ -953,7 +1013,7 @@ impl ControlCenter {
             .align_y(Alignment::Center)
         )
         .width(Length::FillPortion(1))
-        .style(if self.is_dnd { button::danger } else { button::secondary })
+        .style(toggle_tile_custom_style(self.is_dnd, true, is_frosted))
         .padding([8, 10])
         .on_press(Message::ToggleDnd);
 
@@ -978,7 +1038,7 @@ impl ControlCenter {
             .align_y(Alignment::Center)
         )
         .width(Length::FillPortion(1))
-        .style(if is_muted { button::danger } else { button::secondary })
+        .style(toggle_tile_custom_style(is_muted, true, is_frosted))
         .padding([8, 10])
         .on_press(Message::ToggleMute);
 
@@ -995,7 +1055,7 @@ impl ControlCenter {
             .align_y(Alignment::Center)
         )
         .width(Length::FillPortion(1))
-        .style(button::secondary)
+        .style(toggle_tile_style(false, is_frosted))
         .padding([8, 10])
         .on_press(Message::OpenDisplayManager);
 
@@ -1014,7 +1074,7 @@ impl ControlCenter {
             .align_y(Alignment::Center)
         )
         .width(Length::FillPortion(1))
-        .style(button::secondary)
+        .style(toggle_tile_style(false, is_frosted))
         .padding([8, 10])
         .on_press(Message::OpenStorageManager);
 
@@ -1031,7 +1091,7 @@ impl ControlCenter {
             .align_y(Alignment::Center)
         )
         .width(Length::FillPortion(1))
-        .style(button::secondary)
+        .style(toggle_tile_style(false, is_frosted))
         .padding([8, 10])
         .on_press(Message::OpenMediaManager);
 
@@ -1050,7 +1110,7 @@ impl ControlCenter {
             .align_y(Alignment::Center)
         )
         .width(Length::FillPortion(1))
-        .style(button::secondary)
+        .style(toggle_tile_style(false, is_frosted))
         .padding([8, 10])
         .on_press(Message::OpenReminderManager);
 
@@ -1067,7 +1127,7 @@ impl ControlCenter {
             .align_y(Alignment::Center)
         )
         .width(Length::FillPortion(1))
-        .style(button::secondary)
+        .style(toggle_tile_style(false, is_frosted))
         .padding([8, 10])
         .on_press(Message::OpenAppDrawer);
 
@@ -1086,7 +1146,7 @@ impl ControlCenter {
             .align_y(Alignment::Center)
         )
         .width(Length::FillPortion(1))
-        .style(button::secondary)
+        .style(toggle_tile_style(false, is_frosted))
         .padding([8, 10])
         .on_press(Message::OpenClipboardManager);
 
@@ -1103,7 +1163,7 @@ impl ControlCenter {
             .align_y(Alignment::Center)
         )
         .width(Length::FillPortion(1))
-        .style(button::secondary)
+        .style(toggle_tile_style(false, is_frosted))
         .padding([8, 10])
         .on_press(Message::OpenFShare);
 
@@ -1148,7 +1208,7 @@ impl ControlCenter {
             ].spacing(10)
         )
         .padding(12)
-        .style(container::bordered_box);
+        .style(subcard_style(is_frosted));
 
         // --- 4. Power Profiles Segmented Control ---
         let prof_saver = button(text("🍃 Saver").size(11))
@@ -1176,7 +1236,7 @@ impl ControlCenter {
             ].spacing(6)
         )
         .padding(10)
-        .style(container::bordered_box);
+        .style(subcard_style(is_frosted));
 
         // --- 5. Battery & Telemetry Status Card ---
         let (bat_icon, bat_label) = if let Some(bat) = &self.battery_info {
@@ -1207,7 +1267,7 @@ impl ControlCenter {
             .align_y(Alignment::Center)
         )
         .padding([8, 12])
-        .style(container::bordered_box);
+        .style(subcard_style(is_frosted));
 
         // --- 6. Footer Session Actions ---
         let btn_lock = button(text("󰌾 Lock").size(11))
@@ -1251,7 +1311,7 @@ impl ControlCenter {
         container(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(container::bordered_box)
+            .style(modal_card_style(is_frosted))
             .into()
     }
 }
@@ -1279,7 +1339,7 @@ fn view_module_row(module: BarModule, cfg: &BarConfig) -> Element<'_, Message> {
         .align_y(Alignment::Center);
 
     container(item_row)
-        .style(container::bordered_box)
+        .style(subcard_style(cfg.is_frosted()))
         .padding([6, 10])
         .width(Length::Fill)
         .into()

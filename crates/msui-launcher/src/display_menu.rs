@@ -6,6 +6,7 @@ use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
+use crate::modal_style::{default_modal_card_style, default_subcard_style};
 use msui_core::{
     BrightnessInfo, BrightnessMonitor, DisplayManager, DisplayMonitorInfo, NightLightManager,
     ThemeManager,
@@ -292,7 +293,7 @@ impl DisplayMenu {
         container(main_layout)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(container::bordered_box)
+            .style(default_modal_card_style())
             .into()
     }
 
@@ -360,7 +361,7 @@ impl DisplayMenu {
 
         container(content)
             .padding(14)
-            .style(container::bordered_box)
+            .style(default_subcard_style())
             .into()
     }
 
@@ -424,7 +425,7 @@ impl DisplayMenu {
 
         container(content)
             .padding(14)
-            .style(container::bordered_box)
+            .style(default_modal_card_style())
             .into()
     }
 }

@@ -7,6 +7,7 @@ use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
+use crate::modal_style::default_modal_card_style;
 use msui_core::{ThemeDefinition, ThemeManager, BUILTIN_THEMES};
 use std::sync::LazyLock;
 
@@ -318,7 +319,7 @@ impl ThemeMenu {
         container(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(container::bordered_box)
+            .style(default_modal_card_style())
             .into()
     }
 }

@@ -7,6 +7,7 @@ use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
+use crate::modal_style::{default_modal_card_style, default_subcard_style};
 use msui_core::{IpcClient, IpcCommand, Notification, GLOBAL_NOTIFICATIONS};
 use std::sync::LazyLock;
 
@@ -293,16 +294,17 @@ impl NotificationCenter {
                     card_content = card_content.push(action_row);
                 }
 
-                let card_style = if is_selected {
-                    container::bordered_box
+                let card = if is_selected {
+                    container(card_content)
+                        .width(Length::Fill)
+                        .padding(10)
+                        .style(default_subcard_style())
                 } else {
-                    container::transparent
+                    container(card_content)
+                        .width(Length::Fill)
+                        .padding(10)
+                        .style(container::transparent)
                 };
-
-                let card = container(card_content)
-                    .width(Length::Fill)
-                    .padding(10)
-                    .style(card_style);
 
                 list_col = list_col.push(card);
             }
@@ -334,7 +336,7 @@ impl NotificationCenter {
         container(container_content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(container::bordered_box)
+            .style(default_modal_card_style())
             .into()
     }
 }

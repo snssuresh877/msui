@@ -4,6 +4,7 @@ use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize, Margin};
 use iced_exwlshell::settings::LayerShellSettings;
+use crate::modal_style::default_modal_card_style;
 use msui_core::{OsdKind, OsdManager, OsdState, ThemeManager};
 use std::time::Duration;
 
@@ -192,7 +193,7 @@ impl OsdWindow {
             .height(Length::Fill)
             .padding([8, 16])
             .center_y(Length::Fill)
-            .style(container::bordered_box)
+            .style(default_modal_card_style())
             .into()
     }
 }

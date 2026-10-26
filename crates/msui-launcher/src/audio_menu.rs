@@ -6,6 +6,7 @@ use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
+use crate::modal_style::{default_modal_card_style, default_subcard_style};
 use msui_core::{AudioDevice, AudioMonitor, ThemeManager};
 use std::time::Duration;
 
@@ -326,7 +327,7 @@ impl AudioMenu {
         container(main_layout)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(container::bordered_box)
+            .style(default_modal_card_style())
             .into()
     }
 
@@ -341,7 +342,7 @@ impl AudioMenu {
         // Active Badge or Set Default Button
         let action_btn: Element<'a, Message> = if device.is_default {
             container(text("󰄬 Active").size(12))
-                .style(container::bordered_box)
+                .style(default_subcard_style())
                 .padding([4, 10])
                 .into()
         } else {
@@ -435,7 +436,7 @@ impl AudioMenu {
 
         container(card_content)
             .padding(14)
-            .style(container::bordered_box)
+            .style(default_subcard_style())
             .into()
     }
 }

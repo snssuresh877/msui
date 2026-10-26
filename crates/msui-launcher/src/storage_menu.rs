@@ -6,6 +6,7 @@ use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
+use crate::modal_style::{default_modal_card_style, default_subcard_style};
 use msui_core::{MsuiConfig, StorageManager, StoragePartition, ThemeManager};
 use std::time::Duration;
 
@@ -204,7 +205,7 @@ impl StorageMenu {
             .align_y(Alignment::Center)
         )
         .padding([4, 10])
-        .style(container::bordered_box);
+        .style(default_subcard_style());
 
         // Removable Drives Section
         let removable_parts: Vec<&StoragePartition> = self.partitions.iter().filter(|p| p.is_removable).collect();
@@ -230,7 +231,7 @@ impl StorageMenu {
                 .align_y(Alignment::Center)
             )
             .padding([8, 14])
-            .style(container::bordered_box);
+            .style(default_subcard_style());
 
             content = content.push(status_bar);
         }
@@ -244,7 +245,7 @@ impl StorageMenu {
         .padding(20)
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(container::bordered_box)
+        .style(default_modal_card_style())
         .into()
     }
 
@@ -267,7 +268,7 @@ impl StorageMenu {
             )
             .padding([14, 18])
             .width(Length::Fill)
-            .style(container::bordered_box);
+            .style(default_subcard_style());
 
             return column![section_header, empty_banner].spacing(8).into();
         }
@@ -416,7 +417,7 @@ impl StorageMenu {
         )
         .padding(12)
         .width(Length::Fill)
-        .style(container::bordered_box)
+        .style(default_subcard_style())
         .into()
     }
 }

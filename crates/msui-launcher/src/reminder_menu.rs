@@ -7,6 +7,7 @@ use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
+use crate::modal_style::{default_modal_card_style, default_subcard_style};
 use msui_core::{MsuiConfig, ReminderItem, ReminderManager, ThemeManager};
 use std::sync::LazyLock;
 use std::time::Duration;
@@ -230,7 +231,7 @@ impl ReminderMenu {
                 .align_y(Alignment::Center)
             )
             .padding([6, 12])
-            .style(container::bordered_box);
+            .style(default_subcard_style());
 
             content = content.push(status_badge);
         }
@@ -243,7 +244,7 @@ impl ReminderMenu {
         .padding(20)
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(container::bordered_box)
+        .style(default_modal_card_style())
         .into()
     }
 
@@ -313,7 +314,7 @@ impl ReminderMenu {
             .spacing(10)
         )
         .padding(12)
-        .style(container::bordered_box)
+        .style(default_subcard_style())
         .into()
     }
 
@@ -341,7 +342,7 @@ impl ReminderMenu {
             )
             .padding([28, 16])
             .center_x(Length::Fill)
-            .style(container::bordered_box);
+            .style(default_subcard_style());
 
             return column![section_header, empty_banner].spacing(8).into();
         }
@@ -372,7 +373,7 @@ impl ReminderMenu {
                 .align_y(Alignment::Center)
             )
             .padding([3, 8])
-            .style(container::bordered_box)
+            .style(default_subcard_style())
         } else {
             container(
                 row![
@@ -383,7 +384,7 @@ impl ReminderMenu {
                 .align_y(Alignment::Center)
             )
             .padding([3, 8])
-            .style(container::bordered_box)
+            .style(default_subcard_style())
         };
 
         let action_btn = if is_expired {
@@ -424,7 +425,7 @@ impl ReminderMenu {
         )
         .padding(10)
         .width(Length::Fill)
-        .style(container::bordered_box)
+        .style(default_subcard_style())
         .into()
     }
 }

@@ -18,7 +18,10 @@ pub mod theme_menu;
 pub mod toast;
 pub mod wallpaper_daemon;
 pub mod wallpaper_menu;
+pub mod modal_style;
 pub mod wifi_menu;
+
+pub use modal_style::{default_modal_card_style, default_subcard_style, modal_card_style, subcard_style};
 
 pub use app_drawer::{run_app_drawer, AppDrawer, Message as AppDrawerMessage};
 pub use audio_menu::{run_audio_menu, AudioMenu, Message as AudioMessage};

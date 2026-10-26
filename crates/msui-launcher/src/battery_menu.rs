@@ -6,6 +6,7 @@ use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
+use crate::modal_style::{default_modal_card_style, default_subcard_style};
 use msui_core::{BatteryInfo, BatteryMonitor, BatteryStatus, PowerProfile, PowerProfileManager, ThemeManager};
 use std::time::Duration;
 
@@ -215,7 +216,7 @@ impl BatteryMenu {
         container(main_layout)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(container::bordered_box)
+            .style(default_modal_card_style())
             .into()
     }
 
@@ -229,7 +230,7 @@ impl BatteryMenu {
         let status_badge: Element<'_, Message> = if is_active {
             container(text("󰄬 Active").size(11))
                 .padding([2, 8])
-                .style(container::bordered_box)
+                .style(default_subcard_style())
                 .into()
         } else {
             space().height(0).into()
@@ -263,7 +264,7 @@ impl BatteryMenu {
             )
             .padding(30)
             .center(Length::Fill)
-            .style(container::bordered_box)
+            .style(default_subcard_style())
             .into();
         };
 
@@ -274,7 +275,7 @@ impl BatteryMenu {
         } else if bat.percentage > 60 {
             "󰂀"
         } else if bat.percentage > 40 {
-            "󰁾"
+            "󰁼"
         } else if bat.percentage > 20 {
             "󰁼"
         } else {
@@ -295,7 +296,7 @@ impl BatteryMenu {
             space().width(Length::Fill),
             container(text(status_badge).size(12))
                 .padding([4, 10])
-                .style(container::bordered_box),
+                .style(default_subcard_style()),
         ]
         .align_y(Alignment::Center);
 
@@ -357,7 +358,7 @@ impl BatteryMenu {
 
         container(content)
             .padding(16)
-            .style(container::bordered_box)
+            .style(default_modal_card_style())
             .into()
     }
 }

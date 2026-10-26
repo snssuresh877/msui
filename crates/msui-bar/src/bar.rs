@@ -633,8 +633,9 @@ impl Bar {
         if self.config.bar.show_media {
             if let Some(media) = &self.media_info {
                 let symbol = if media.is_playing { "󰏤" } else { "󰐊" };
-                let short_title = if media.title.len() > 20 {
-                    format!("{}…", &media.title[..18])
+                let short_title = if media.title.chars().count() > 20 {
+                    let s: String = media.title.chars().take(18).collect();
+                    format!("{s}…")
                 } else {
                     media.title.clone()
                 };

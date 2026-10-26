@@ -262,6 +262,12 @@ impl UnifiedShell {
             (None, Some(height as i32))
         };
 
+        let bar_blur = if config.bar.is_frosted() {
+            BlurOption::FullRegion
+        } else {
+            BlurOption::None
+        };
+
         let (bar_id, bar_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
             size: LayerSize::fill_width(height),
             layer: bar_layer,
@@ -270,6 +276,7 @@ impl UnifiedShell {
             exclusive_zone,
             keyboard_interactivity: KeyboardInteractivity::None,
             output_option,
+            blur_option: bar_blur,
             ..Default::default()
         });
 
@@ -428,6 +435,12 @@ impl UnifiedShell {
             OutputOption::Active
         };
 
+        let blur_option = if self.config.bar.is_frosted() {
+            BlurOption::FullRegion
+        } else {
+            BlurOption::None
+        };
+
         match target_norm {
             "launcher" => {
                 let (mid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
@@ -436,6 +449,7 @@ impl UnifiedShell {
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut launcher, init_cmd) = Launcher::new_embedded(self.config.clone());
@@ -453,6 +467,7 @@ impl UnifiedShell {
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut power, init_cmd) = PowerMenu::new_embedded();
@@ -480,6 +495,7 @@ impl UnifiedShell {
                     }),
                     keyboard_interactivity: KeyboardInteractivity::OnDemand,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut cc, init_cmd) = ControlCenter::new_embedded(self.config.clone());
@@ -500,6 +516,7 @@ impl UnifiedShell {
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut clip, init_cmd) = ClipboardMenu::new_embedded();
@@ -517,6 +534,7 @@ impl UnifiedShell {
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut notifs, init_cmd) = NotificationCenter::new_embedded();
@@ -534,6 +552,7 @@ impl UnifiedShell {
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut drawer, init_cmd) = AppDrawer::new_embedded(self.config.clone());
@@ -551,6 +570,7 @@ impl UnifiedShell {
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut wifi, init_cmd) = WifiMenu::new_embedded();
@@ -568,6 +588,7 @@ impl UnifiedShell {
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut bt, init_cmd) = BluetoothMenu::new_embedded();
@@ -585,6 +606,7 @@ impl UnifiedShell {
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut audio, init_cmd) = AudioMenu::new_embedded();
@@ -602,6 +624,7 @@ impl UnifiedShell {
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut theme, init_cmd) = ThemeMenu::new_embedded();
@@ -619,6 +642,7 @@ impl UnifiedShell {
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut wall, init_cmd) = WallpaperMenu::new_embedded();
@@ -636,6 +660,7 @@ impl UnifiedShell {
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut fshare, init_cmd) = FShareModal::new_embedded();
@@ -653,6 +678,7 @@ impl UnifiedShell {
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut bat, init_cmd) = BatteryMenu::new_embedded();
@@ -670,6 +696,7 @@ impl UnifiedShell {
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut disp, init_cmd) = DisplayMenu::new_embedded();
@@ -687,6 +714,7 @@ impl UnifiedShell {
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut med, init_cmd) = MediaMenu::new_embedded();
@@ -704,6 +732,7 @@ impl UnifiedShell {
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut rem, init_cmd) = ReminderMenu::new_embedded();
@@ -721,6 +750,7 @@ impl UnifiedShell {
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let (mut stor, init_cmd) = StorageMenu::new_embedded();
@@ -890,8 +920,14 @@ impl UnifiedShell {
                                 }));
                                 tasks.push(Task::done(DaemonMessage::BlurOptionChange {
                                     id: bid,
-                                    option: blur_opt,
+                                    option: blur_opt.clone(),
                                 }));
+                                if let Some(mid) = self.modal_id {
+                                    tasks.push(Task::done(DaemonMessage::BlurOptionChange {
+                                        id: mid,
+                                        option: blur_opt,
+                                    }));
+                                }
                             }
 
                             return Task::batch(tasks);
@@ -977,6 +1013,12 @@ impl UnifiedShell {
                         OutputOption::Active
                     };
 
+                    let blur_option = if self.config.bar.is_frosted() {
+                        BlurOption::FullRegion
+                    } else {
+                        BlurOption::None
+                    };
+
                     let (tid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
                         size: LayerSize::px(380, 250),
                         layer: Layer::Overlay,
@@ -989,6 +1031,7 @@ impl UnifiedShell {
                         }),
                         keyboard_interactivity: KeyboardInteractivity::None,
                         output_option,
+                        blur_option,
                         ..Default::default()
                     });
                     self.toast_id = Some(tid);
@@ -1116,8 +1159,14 @@ impl UnifiedShell {
                             }));
                             tasks.push(Task::done(DaemonMessage::BlurOptionChange {
                                 id: bid,
-                                option: blur_opt,
+                                option: blur_opt.clone(),
                             }));
+                            if let Some(mid) = self.modal_id {
+                                tasks.push(Task::done(DaemonMessage::BlurOptionChange {
+                                    id: mid,
+                                    option: blur_opt,
+                                }));
+                            }
                         }
 
                         Task::batch(tasks)
@@ -1179,6 +1228,12 @@ impl UnifiedShell {
                                 OutputOption::Active
                             };
 
+                            let blur_option = if self.config.bar.is_frosted() {
+                                BlurOption::FullRegion
+                            } else {
+                                BlurOption::None
+                            };
+
                             let (oid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
                                 size: LayerSize::px(280, 64),
                                 layer: Layer::Overlay,
@@ -1191,6 +1246,7 @@ impl UnifiedShell {
                                 }),
                                 keyboard_interactivity: KeyboardInteractivity::None,
                                 output_option,
+                                blur_option,
                                 ..Default::default()
                             });
                             self.osd_id = Some(oid);
@@ -1235,12 +1291,19 @@ impl UnifiedShell {
                     OutputOption::Active
                 };
 
+                let blur_option = if self.config.bar.is_frosted() {
+                    BlurOption::FullRegion
+                } else {
+                    BlurOption::None
+                };
+
                 let (mid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
                     size: LayerSize::px(480, 360),
                     layer: Layer::Overlay,
                     anchor: Anchor::empty(), // Centered on screen
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
                     output_option,
+                    blur_option,
                     ..Default::default()
                 });
                 let args = PolkitDialogArgs {

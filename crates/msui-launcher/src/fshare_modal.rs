@@ -9,6 +9,7 @@ use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
+use crate::modal_style::default_modal_card_style;
 use msui_core::fshare::{
     default_save_dir, generate_pin, generate_qr_svg, generate_token, get_local_ip,
     load_transfer_history, log_transfer, FShareEvent, FShareServer, FShareServerHandle,
@@ -742,11 +743,7 @@ impl FShareModal {
         .width(Length::Fill)
         .height(Length::Fill)
         .padding(24)
-        .style(|_| container::Style {
-            background: Some(iced::Color::from_rgb(0.12, 0.12, 0.18).into()),
-            border: iced::border::rounded(18),
-            ..Default::default()
-        });
+        .style(default_modal_card_style());
 
         container(main_card)
             .width(Length::Fill)

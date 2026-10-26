@@ -6,6 +6,7 @@ use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
+use crate::modal_style::default_modal_card_style;
 use msui_core::SystemControl;
 
 pub fn run_power_menu() -> Result<(), iced_exwlshell::Error> {
@@ -211,7 +212,7 @@ impl PowerMenu {
             .height(Length::Fill)
             .align_x(Alignment::Center)
             .align_y(Alignment::Center)
-            .style(container::bordered_box)
+            .style(default_modal_card_style())
             .into()
     }
 }

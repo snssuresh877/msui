@@ -7,6 +7,7 @@ use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
+use crate::modal_style::default_modal_card_style;
 use msui_core::{NetworkMonitor, ThemeManager, WifiNetwork};
 use std::sync::LazyLock;
 use std::time::Duration;
@@ -458,7 +459,7 @@ impl WifiMenu {
             .width(Length::Fill)
             .height(Length::Fill)
             .padding(16)
-            .style(container::bordered_box)
+            .style(default_modal_card_style())
             .into()
     }
 }

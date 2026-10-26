@@ -13,6 +13,7 @@ use msui_core::{
     find_icon_for_class, scan_desktop_apps, DesktopApp, HyprlandClient, HyprlandIpc, MsuiConfig,
     TrayItem,
 };
+use crate::modal_style::modal_card_style;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
@@ -918,7 +919,7 @@ impl AppDrawer {
         container(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(container::bordered_box)
+            .style(modal_card_style(self._config.bar.is_frosted()))
             .into()
     }
 }
