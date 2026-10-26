@@ -194,6 +194,7 @@ pub struct ControlCenter {
 pub enum Message {
     SwitchTab(ControlCenterTab),
     SetBarStyle(String),
+    SetBarTransparency(String),
     SetWorkspaceCount(usize),
     ToggleBarModule(BarModule),
     EnableAllBarModules,
@@ -316,6 +317,10 @@ impl ControlCenter {
             }
             Message::SetBarStyle(style) => {
                 self.config.bar.style = style;
+                let _ = self.config.save_to_default_path();
+            }
+            Message::SetBarTransparency(transparency) => {
+                self.config.bar.transparency = transparency;
                 let _ = self.config.save_to_default_path();
             }
             Message::SetWorkspaceCount(count) => {
@@ -642,6 +647,64 @@ impl ControlCenter {
             .padding([10, 12])
             .width(Length::Fill);
 
+            let is_frosted = self.config.bar.is_frosted();
+            let is_transp = self.config.bar.is_transparent();
+            let is_solid = self.config.bar.is_solid();
+
+            let frosted_btn = button(
+                row![text("󰖲").size(13), text("Frosted Glass").size(11)]
+                    .spacing(5)
+                    .align_y(Alignment::Center),
+            )
+            .width(Length::FillPortion(1))
+            .style(if is_frosted { button::primary } else { button::secondary })
+            .padding([6, 8])
+            .on_press(Message::SetBarTransparency("frosted".to_string()));
+
+            let transp_btn = button(
+                row![text("󰈈").size(13), text("Pure Transparent").size(11)]
+                    .spacing(5)
+                    .align_y(Alignment::Center),
+            )
+            .width(Length::FillPortion(1))
+            .style(if is_transp { button::primary } else { button::secondary })
+            .padding([6, 8])
+            .on_press(Message::SetBarTransparency("transparent".to_string()));
+
+            let solid_btn = button(
+                row![text("󰃞").size(13), text("Solid Opaque").size(11)]
+                    .spacing(5)
+                    .align_y(Alignment::Center),
+            )
+            .width(Length::FillPortion(1))
+            .style(if is_solid { button::primary } else { button::secondary })
+            .padding([6, 8])
+            .on_press(Message::SetBarTransparency("solid".to_string()));
+
+            let glass_card = container(
+                column![
+                    row![
+                        text("Bar Glass & Transparency").size(12),
+                        space().width(Length::Fill),
+                        text(if is_frosted {
+                            "Frosted Acrylic Blur"
+                        } else if is_transp {
+                            "100% Pure Transparent"
+                        } else {
+                            "Solid Theme Fill"
+                        })
+                        .size(10)
+                        .style(text::secondary),
+                    ]
+                    .align_y(Alignment::Center),
+                    row![frosted_btn, transp_btn, solid_btn].spacing(8),
+                ]
+                .spacing(8),
+            )
+            .style(container::bordered_box)
+            .padding([10, 12])
+            .width(Length::Fill);
+
             let cur_ws = self.config.bar.workspace_count;
             let ws_3_btn = button(
                 row![text("󰮯").size(13), text("3 Slots").size(11)]
@@ -784,6 +847,7 @@ impl ControlCenter {
                 header,
                 tab_row,
                 style_card,
+                glass_card,
                 workspace_card,
                 presets_row,
                 scrollable_content,

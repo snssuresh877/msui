@@ -1001,6 +1001,9 @@ impl Bar {
         .padding([2, 10]);
 
         let is_modern = self.config.bar.is_modern();
+        let is_transp = self.config.bar.is_transparent();
+        let is_solid = self.config.bar.is_solid();
+
         let bar_container = if is_modern {
             let radius = self.config.bar.corner_radius;
             let b_width = self.config.bar.border_width;
@@ -1011,22 +1014,57 @@ impl Bar {
                     let p = theme.palette();
                     let mut border = iced::border::rounded(radius);
                     border.width = b_width;
-                    border.color = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.12);
-                    container::Style {
-                        background: Some(iced::Color::from_rgba(p.background.r, p.background.g, p.background.b, 0.45).into()),
-                        border,
-                        ..Default::default()
+                    if is_transp {
+                        border.color = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.05);
+                        container::Style {
+                            background: None,
+                            border,
+                            ..Default::default()
+                        }
+                    } else if is_solid {
+                        border.color = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.12);
+                        container::Style {
+                            background: Some(p.background.into()),
+                            border,
+                            ..Default::default()
+                        }
+                    } else {
+                        // Frosted Glass
+                        border.color = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.14);
+                        container::Style {
+                            background: Some(iced::Color::from_rgba(p.background.r, p.background.g, p.background.b, 0.42).into()),
+                            border,
+                            ..Default::default()
+                        }
                     }
                 })
         } else {
             container(bar_content)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .style(|theme: &Theme| {
+                .style(move |theme: &Theme| {
                     let p = theme.palette();
-                    container::Style {
-                        background: Some(p.background.into()),
-                        ..Default::default()
+                    if is_transp {
+                        container::Style {
+                            background: None,
+                            ..Default::default()
+                        }
+                    } else if is_solid {
+                        container::Style {
+                            background: Some(p.background.into()),
+                            ..Default::default()
+                        }
+                    } else {
+                        // Frosted Glass in classic docked mode
+                        container::Style {
+                            background: Some(iced::Color::from_rgba(p.background.r, p.background.g, p.background.b, 0.45).into()),
+                            border: iced::Border {
+                                color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                                width: 1.0,
+                                radius: 0.0.into(),
+                            },
+                            ..Default::default()
+                        }
                     }
                 })
         };

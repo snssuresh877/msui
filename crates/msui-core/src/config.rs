@@ -20,6 +20,8 @@ pub struct BarConfig {
     pub anchor: String,
     #[serde(default = "default_bar_style")]
     pub style: String,
+    #[serde(default = "default_bar_transparency")]
+    pub transparency: String,
     #[serde(default = "default_margin_top")]
     pub margin_top: u32,
     #[serde(default = "default_margin_horizontal")]
@@ -105,12 +107,25 @@ impl BarConfig {
         let s = self.style.to_lowercase();
         s == "modern" || s == "floating" || s == "island"
     }
+
+    pub fn is_transparent(&self) -> bool {
+        matches!(self.transparency.to_lowercase().as_str(), "transparent" | "clear" | "none")
+    }
+
+    pub fn is_solid(&self) -> bool {
+        matches!(self.transparency.to_lowercase().as_str(), "solid" | "opaque")
+    }
+
+    pub fn is_frosted(&self) -> bool {
+        !self.is_transparent() && !self.is_solid()
+    }
 }
 
 fn default_bar_height() -> u32 { 32 }
 fn default_bar_layer() -> String { "top".into() }
 fn default_bar_anchor() -> String { "top".into() }
 fn default_bar_style() -> String { "modern".into() }
+fn default_bar_transparency() -> String { "frosted".into() }
 fn default_margin_top() -> u32 { 6 }
 fn default_margin_horizontal() -> u32 { 12 }
 fn default_corner_radius() -> f32 { 14.0 }
@@ -153,6 +168,7 @@ impl Default for BarConfig {
             layer: default_bar_layer(),
             anchor: default_bar_anchor(),
             style: default_bar_style(),
+            transparency: default_bar_transparency(),
             margin_top: default_margin_top(),
             margin_horizontal: default_margin_horizontal(),
             corner_radius: default_corner_radius(),
@@ -263,6 +279,26 @@ mod tests {
         assert_eq!(bar.corner_radius, 14.0);
         assert_eq!(bar.border_width, 1.0);
         assert_eq!(bar.workspace_count, 3);
+        assert_eq!(bar.transparency, "frosted");
+        assert!(bar.is_frosted());
+    }
+
+    #[test]
+    fn test_bar_config_transparency() {
+        let mut bar = BarConfig::default();
+        assert!(bar.is_frosted());
+        assert!(!bar.is_transparent());
+        assert!(!bar.is_solid());
+
+        bar.transparency = "transparent".into();
+        assert!(bar.is_transparent());
+        assert!(!bar.is_frosted());
+        assert!(!bar.is_solid());
+
+        bar.transparency = "solid".into();
+        assert!(bar.is_solid());
+        assert!(!bar.is_frosted());
+        assert!(!bar.is_transparent());
     }
 
     #[test]

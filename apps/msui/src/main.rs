@@ -192,8 +192,24 @@ fn main() -> anyhow::Result<()> {
                         }
                     }
                 }
+                Some("glass" | "transparency") => {
+                    let mode = args.get(3).map(|s| s.as_str()).unwrap_or("frosted");
+                    let mut config = MsuiConfig::load_or_default();
+                    config.bar.transparency = mode.to_string();
+                    config.save_to_default_path()?;
+                    println!("Top bar transparency set to '{}'", mode);
+                    return Ok(());
+                }
+                Some("style") => {
+                    let style = args.get(3).map(|s| s.as_str()).unwrap_or("modern");
+                    let mut config = MsuiConfig::load_or_default();
+                    config.bar.style = style.to_string();
+                    config.save_to_default_path()?;
+                    println!("Top bar appearance style set to '{}'", style);
+                    return Ok(());
+                }
                 Some(other) => {
-                    eprintln!("Unknown bar subcommand: '{}'. Usage: msui bar [toggle|open|close]", other);
+                    eprintln!("Unknown bar subcommand: '{}'. Usage: msui bar [toggle|open|close|glass <frosted|transparent|solid>|style <modern|classic>]", other);
                     std::process::exit(1);
                 }
             }
