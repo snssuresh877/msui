@@ -207,11 +207,21 @@ hl.window_rule({
 	rounding = 14,
 })
 
--- Thunar File Manager Popups & Dialogs
+-- File Manager (msUI Files, Strata, PCManFM, Nautilus & Thunar)
 hl.window_rule({
 	match = {
-		class = "^([Tt]hunar)$",
-		title = "^(File Operation Progress|Confirm to replace files|Attention|Preferences|Properties|Create New Folder|Create New File|Rename.*)$",
+		class = "^(com\\.msui\\.FileManager|msui-fm|io\\.github\\.lgse\\.Strata|strata|pcmanfm|org\\.gnome\\.Nautilus|nautilus|[Tt]hunar)$",
+	},
+
+	rounding = 14,
+	opacity = "0.96 override 0.92 override 1.0 override",
+})
+
+-- File Manager Popups & Dialogs
+hl.window_rule({
+	match = {
+		class = "^(com\\.msui\\.FileManager|msui-fm|io\\.github\\.lgse\\.Strata|strata|pcmanfm|org\\.gnome\\.Nautilus|nautilus|[Tt]hunar)$",
+		title = "^(File Operation Progress|Confirm to replace files|Attention|Preferences|Properties|File Properties|Find Files.*|Create New Folder|Create New File|Compress|Extract.*|Rename.*|Settings)$",
 	},
 
 	float = true,
@@ -219,19 +229,10 @@ hl.window_rule({
 	rounding = 14,
 })
 
--- Thunar File Manager
+-- GNOME Sushi (Spacebar Quick File Previewer)
 hl.window_rule({
 	match = {
-		class = "^([Tt]hunar)$",
-	},
-
-	rounding = 14,
-})
-
-hl.window_rule({
-	match = {
-		class = "^([Tt]hunar)$",
-		title = "^(File Operation Progress|Confirm to replace files|Properties|Preferences)$",
+		class = "^(org.gnome.NautilusPreviewer|sushi)$",
 	},
 
 	float = true,

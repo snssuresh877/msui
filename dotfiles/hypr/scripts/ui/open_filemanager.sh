@@ -45,8 +45,6 @@ fi
 # GUI Mode
 if command -v thunar >/dev/null 2>&1; then
     exec thunar --window "$TARGET_DIR"
-elif command -v nautilus >/dev/null 2>&1; then
-    exec nautilus "$TARGET_DIR"
 elif command -v dolphin >/dev/null 2>&1; then
     exec dolphin "$TARGET_DIR"
 elif command -v cosmic-files >/dev/null 2>&1; then
