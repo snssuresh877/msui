@@ -40,7 +40,7 @@ view = [
     { run = 'imv "$@"', desc = "View in imv", orphan = true },
 ]
 pdf = [
-    { run = 'zathura "$@"', desc = "Read in Zathura", orphan = true },
+    { run = 'evince "$@"', desc = "View in Evince", orphan = true },
     { run = 'xdg-open "$@"', desc = "Open with System Default", orphan = true },
 ]
 open = [
@@ -77,7 +77,7 @@ prepend_rules = [
     { url = "*.svg", use = [ "view", "vector", "edit", "thunar", "open" ] },
     { url = "*.SVG", use = [ "view", "vector", "edit", "thunar", "open" ] },
 
-    # Adobe Illustrator (.ai): Enter opens in Inkscape; Shift+O offers Zathura (PDF preview), Krita, or Thunar
+    # Adobe Illustrator (.ai): Enter opens in Inkscape; Shift+O offers Evince, Krita, or Thunar
     { mime = "application/illustrator", use = [ "vector", "pdf", "krita", "open" ] },
     { mime = "application/vnd.adobe.illustrator", use = [ "vector", "pdf", "krita", "open" ] },
     { url = "*.ai", use = [ "vector", "pdf", "krita", "open" ] },
@@ -87,7 +87,7 @@ prepend_rules = [
     { mime = "image/*", use = [ "view", "gimp", "open", "thunar" ] },
     { url = "*.{png,jpg,jpeg,webp,gif,bmp,avif}", use = [ "view", "gimp", "open", "thunar" ] },
 
-    # Documents & PDFs: Enter opens in Zathura; Shift+O offers Thunar
+    # Documents & PDFs: Enter opens in Evince; Shift+O offers Thunar
     { mime = "application/pdf", use = [ "pdf", "open", "thunar" ] },
     { url = "*.pdf", use = [ "pdf", "open", "thunar" ] },
     { url = "*.PDF", use = [ "pdf", "open", "thunar" ] },
