@@ -46,9 +46,6 @@ open = [
 thunar = [
     { run = 'thunar --window "$1"', desc = "Reveal in Thunar", orphan = true, for = "unix" },
 ]
-strata = [
-    { run = 'strata "$@"', desc = "Reveal in Strata", orphan = true, for = "unix" },
-]
 vector = [
     { run = 'inkscape "$@"', desc = "Edit in Inkscape", orphan = true, for = "unix" },
 ]
@@ -64,54 +61,54 @@ gimp = [
 # =========================================================
 [open]
 prepend_rules = [
-    # Directories: Enter enters folder; Shift+O lets you open in Neovim or GUI file manager
-    { url = "*/", use = [ "edit", "thunar", "strata", "open" ] },
+    # Directories: Enter enters folder; Shift+O lets you open in Neovim or Thunar
+    { url = "*/", use = [ "edit", "thunar", "open" ] },
 
-    # Media (Video / Audio): Enter plays in MPV; Shift+O gives system default or file manager
+    # Media (Video / Audio): Enter plays in MPV; Shift+O gives system default or Thunar
     { mime = "video/*", use = [ "play", "open", "thunar" ] },
     { mime = "audio/*", use = [ "play", "open", "thunar" ] },
     { url = "*.{mp4,mkv,avi,mov,flv,webm,mp3,wav,flac,opus,ogg,m4a}", use = [ "play", "open", "thunar" ] },
 
-    # Vector Graphics (.svg): Enter previews in imv; Shift+O offers Inkscape, Neovim (XML source), or Strata
-    { mime = "image/svg+xml", use = [ "view", "vector", "edit", "strata", "open" ] },
-    { url = "*.svg", use = [ "view", "vector", "edit", "strata", "open" ] },
-    { url = "*.SVG", use = [ "view", "vector", "edit", "strata", "open" ] },
+    # Vector Graphics (.svg): Enter previews in imv; Shift+O offers Inkscape, Neovim (XML source), or Thunar
+    { mime = "image/svg+xml", use = [ "view", "vector", "edit", "thunar", "open" ] },
+    { url = "*.svg", use = [ "view", "vector", "edit", "thunar", "open" ] },
+    { url = "*.SVG", use = [ "view", "vector", "edit", "thunar", "open" ] },
 
-    # Adobe Illustrator (.ai): Enter opens in Inkscape; Shift+O offers Zathura (PDF preview), Krita, or Strata
+    # Adobe Illustrator (.ai): Enter opens in Inkscape; Shift+O offers Zathura (PDF preview), Krita, or Thunar
     { mime = "application/illustrator", use = [ "vector", "pdf", "krita", "open" ] },
     { mime = "application/vnd.adobe.illustrator", use = [ "vector", "pdf", "krita", "open" ] },
     { url = "*.ai", use = [ "vector", "pdf", "krita", "open" ] },
     { url = "*.AI", use = [ "vector", "pdf", "krita", "open" ] },
 
-    # Raster Images: Enter views in imv; Shift+O offers GIMP, System default, or Strata
-    { mime = "image/*", use = [ "view", "gimp", "open", "strata" ] },
-    { url = "*.{png,jpg,jpeg,webp,gif,bmp,avif}", use = [ "view", "gimp", "open", "strata" ] },
+    # Raster Images: Enter views in imv; Shift+O offers GIMP, System default, or Thunar
+    { mime = "image/*", use = [ "view", "gimp", "open", "thunar" ] },
+    { url = "*.{png,jpg,jpeg,webp,gif,bmp,avif}", use = [ "view", "gimp", "open", "thunar" ] },
 
-    # Documents & PDFs: Enter opens in Zathura; Shift+O offers Strata preview
-    { mime = "application/pdf", use = [ "pdf", "strata", "open" ] },
-    { url = "*.pdf", use = [ "pdf", "strata", "open" ] },
-    { url = "*.PDF", use = [ "pdf", "strata", "open" ] },
+    # Documents & PDFs: Enter opens in Zathura; Shift+O offers Thunar
+    { mime = "application/pdf", use = [ "pdf", "open", "thunar" ] },
+    { url = "*.pdf", use = [ "pdf", "open", "thunar" ] },
+    { url = "*.PDF", use = [ "pdf", "open", "thunar" ] },
 
-    # Code, configs, scripts: Enter opens in Neovim; Shift+O offers Neovim, System Default, or Strata
-    { mime = "text/*", use = [ "edit", "open", "strata", "thunar" ] },
-    { url = "*.json", use = [ "edit", "open", "strata" ] },
-    { url = "*.toml", use = [ "edit", "open", "strata" ] },
-    { url = "*.yaml", use = [ "edit", "open", "strata" ] },
-    { url = "*.yml",  use = [ "edit", "open", "strata" ] },
-    { url = "*.conf", use = [ "edit", "open", "strata" ] },
-    { url = "*.cfg",  use = [ "edit", "open", "strata" ] },
-    { url = "*.ini",  use = [ "edit", "open", "strata" ] },
-    { url = "*.sh",   use = [ "edit", "open", "strata" ] },
-    { url = "*.rs",   use = [ "edit", "open", "strata" ] },
-    { url = "*.py",   use = [ "edit", "open", "strata" ] },
-    { mime = "application/json", use = [ "edit", "open", "strata" ] },
-    { mime = "application/x-yaml", use = [ "edit", "open", "strata" ] },
-    { mime = "application/toml", use = [ "edit", "open", "strata" ] },
-    { mime = "*/javascript", use = [ "edit", "open", "strata" ] },
-    { mime = "*/x-shellscript", use = [ "edit", "open", "strata" ] },
+    # Code, configs, scripts: Enter opens in Neovim; Shift+O offers Neovim, System Default, or Thunar
+    { mime = "text/*", use = [ "edit", "open", "thunar" ] },
+    { url = "*.json", use = [ "edit", "open", "thunar" ] },
+    { url = "*.toml", use = [ "edit", "open", "thunar" ] },
+    { url = "*.yaml", use = [ "edit", "open", "thunar" ] },
+    { url = "*.yml",  use = [ "edit", "open", "thunar" ] },
+    { url = "*.conf", use = [ "edit", "open", "thunar" ] },
+    { url = "*.cfg",  use = [ "edit", "open", "thunar" ] },
+    { url = "*.ini",  use = [ "edit", "open", "thunar" ] },
+    { url = "*.sh",   use = [ "edit", "open", "thunar" ] },
+    { url = "*.rs",   use = [ "edit", "open", "thunar" ] },
+    { url = "*.py",   use = [ "edit", "open", "thunar" ] },
+    { mime = "application/json", use = [ "edit", "open", "thunar" ] },
+    { mime = "application/x-yaml", use = [ "edit", "open", "thunar" ] },
+    { mime = "application/toml", use = [ "edit", "open", "thunar" ] },
+    { mime = "*/javascript", use = [ "edit", "open", "thunar" ] },
+    { mime = "*/x-shellscript", use = [ "edit", "open", "thunar" ] },
 
     # Universal fallback for unhandled / binary files: System Default first, Neovim second
-    { url = "*", use = [ "open", "edit", "thunar", "strata" ] },
+    { url = "*", use = [ "open", "edit", "thunar" ] },
 ]
 
 [plugin]
