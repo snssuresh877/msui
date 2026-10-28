@@ -22,38 +22,41 @@ image_filter    = "triangle"
 image_quality   = 85
 sixel_fraction  = 15
 ueberzug_scale  = 1
-ueberzug_offset = [ 0, 0, 0, 0 ]
+[tasks]
+image_alloc = 0
+image_bound = [ 0, 0 ]
 
 # =========================================================
 # 🚀 Defined Openers
 # =========================================================
 [opener]
 edit = [
-    { run = '${EDITOR:-nvim} "$@"', desc = "Edit with Neovim", block = true, for = "unix" },
+    { run = '${EDITOR:-nvim} "$@"', desc = "Edit with Neovim", block = true },
 ]
 play = [
-    { run = 'mpv "$@"', desc = "Play in MPV", orphan = true, for = "unix" },
+    { run = 'mpv "$@"', desc = "Play in MPV", orphan = true },
 ]
 view = [
-    { run = 'imv "$@"', desc = "View in imv", orphan = true, for = "unix" },
+    { run = 'imv "$@"', desc = "View in imv", orphan = true },
 ]
 pdf = [
-    { run = 'zathura "$@"', desc = "Read in Zathura", orphan = true, for = "unix" },
+    { run = 'zathura "$@"', desc = "Read in Zathura", orphan = true },
+    { run = 'xdg-open "$@"', desc = "Open with System Default", orphan = true },
 ]
 open = [
-    { run = 'xdg-open "$@"', desc = "Open with System Default", orphan = true, for = "unix" },
+    { run = 'xdg-open "$@"', desc = "Open with System Default", orphan = true },
 ]
 thunar = [
-    { run = 'thunar --window "$1"', desc = "Reveal in Thunar", orphan = true, for = "unix" },
+    { run = 'thunar --window "$1"', desc = "Reveal in Thunar", orphan = true },
 ]
 vector = [
-    { run = 'inkscape "$@"', desc = "Edit in Inkscape", orphan = true, for = "unix" },
+    { run = 'inkscape "$@"', desc = "Edit in Inkscape", orphan = true },
 ]
 krita = [
-    { run = 'krita "$@"', desc = "Edit in Krita", orphan = true, for = "unix" },
+    { run = 'krita "$@"', desc = "Edit in Krita", orphan = true },
 ]
 gimp = [
-    { run = 'gimp "$@"', desc = "Edit in GIMP", orphan = true, for = "unix" },
+    { run = 'gimp "$@"', desc = "Edit in GIMP", orphan = true },
 ]
 
 # =========================================================
