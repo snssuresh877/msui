@@ -43,11 +43,11 @@ pdf = [
 open = [
     { run = 'xdg-open "$@"', desc = "Open with System Default", orphan = true, for = "unix" },
 ]
-msui = [
-    { run = 'msui-fm "$@"', desc = "Reveal in msUI Files", orphan = true, for = "unix" },
-]
 thunar = [
     { run = 'thunar --window "$1"', desc = "Reveal in Thunar", orphan = true, for = "unix" },
+]
+strata = [
+    { run = 'strata "$@"', desc = "Reveal in Strata", orphan = true, for = "unix" },
 ]
 vector = [
     { run = 'inkscape "$@"', desc = "Edit in Inkscape", orphan = true, for = "unix" },
@@ -65,53 +65,53 @@ gimp = [
 [open]
 prepend_rules = [
     # Directories: Enter enters folder; Shift+O lets you open in Neovim or GUI file manager
-    { url = "*/", use = [ "edit", "msui", "thunar", "open" ] },
+    { url = "*/", use = [ "edit", "thunar", "strata", "open" ] },
 
     # Media (Video / Audio): Enter plays in MPV; Shift+O gives system default or file manager
-    { mime = "video/*", use = [ "play", "open", "msui" ] },
-    { mime = "audio/*", use = [ "play", "open", "msui" ] },
-    { url = "*.{mp4,mkv,avi,mov,flv,webm,mp3,wav,flac,opus,ogg,m4a}", use = [ "play", "open", "msui" ] },
+    { mime = "video/*", use = [ "play", "open", "thunar" ] },
+    { mime = "audio/*", use = [ "play", "open", "thunar" ] },
+    { url = "*.{mp4,mkv,avi,mov,flv,webm,mp3,wav,flac,opus,ogg,m4a}", use = [ "play", "open", "thunar" ] },
 
-    # Vector Graphics (.svg): Enter previews in imv; Shift+O offers Inkscape, Neovim (XML source), or msUI Files
-    { mime = "image/svg+xml", use = [ "view", "vector", "edit", "msui", "open" ] },
-    { url = "*.svg", use = [ "view", "vector", "edit", "msui", "open" ] },
-    { url = "*.SVG", use = [ "view", "vector", "edit", "msui", "open" ] },
+    # Vector Graphics (.svg): Enter previews in imv; Shift+O offers Inkscape, Neovim (XML source), or Strata
+    { mime = "image/svg+xml", use = [ "view", "vector", "edit", "strata", "open" ] },
+    { url = "*.svg", use = [ "view", "vector", "edit", "strata", "open" ] },
+    { url = "*.SVG", use = [ "view", "vector", "edit", "strata", "open" ] },
 
-    # Adobe Illustrator (.ai): Enter opens in Inkscape; Shift+O offers Zathura (PDF preview), Krita, or msUI Files
+    # Adobe Illustrator (.ai): Enter opens in Inkscape; Shift+O offers Zathura (PDF preview), Krita, or Strata
     { mime = "application/illustrator", use = [ "vector", "pdf", "krita", "open" ] },
     { mime = "application/vnd.adobe.illustrator", use = [ "vector", "pdf", "krita", "open" ] },
     { url = "*.ai", use = [ "vector", "pdf", "krita", "open" ] },
     { url = "*.AI", use = [ "vector", "pdf", "krita", "open" ] },
 
-    # Raster Images: Enter views in imv; Shift+O offers GIMP, System default, or msUI Files
-    { mime = "image/*", use = [ "view", "gimp", "open", "msui" ] },
-    { url = "*.{png,jpg,jpeg,webp,gif,bmp,avif}", use = [ "view", "gimp", "open", "msui" ] },
+    # Raster Images: Enter views in imv; Shift+O offers GIMP, System default, or Strata
+    { mime = "image/*", use = [ "view", "gimp", "open", "strata" ] },
+    { url = "*.{png,jpg,jpeg,webp,gif,bmp,avif}", use = [ "view", "gimp", "open", "strata" ] },
 
-    # Documents & PDFs: Enter opens in Zathura
-    { mime = "application/pdf", use = [ "pdf", "open", "msui" ] },
-    { url = "*.pdf", use = [ "pdf", "open", "msui" ] },
-    { url = "*.PDF", use = [ "pdf", "open", "msui" ] },
+    # Documents & PDFs: Enter opens in Zathura; Shift+O offers Strata preview
+    { mime = "application/pdf", use = [ "pdf", "strata", "open" ] },
+    { url = "*.pdf", use = [ "pdf", "strata", "open" ] },
+    { url = "*.PDF", use = [ "pdf", "strata", "open" ] },
 
-    # Code, configs, scripts: Enter opens in Neovim; Shift+O offers Neovim, System Default, or msUI Files
-    { mime = "text/*", use = [ "edit", "open", "msui", "thunar" ] },
-    { url = "*.json", use = [ "edit", "open", "msui" ] },
-    { url = "*.toml", use = [ "edit", "open", "msui" ] },
-    { url = "*.yaml", use = [ "edit", "open", "msui" ] },
-    { url = "*.yml",  use = [ "edit", "open", "msui" ] },
-    { url = "*.conf", use = [ "edit", "open", "msui" ] },
-    { url = "*.cfg",  use = [ "edit", "open", "msui" ] },
-    { url = "*.ini",  use = [ "edit", "open", "msui" ] },
-    { url = "*.sh",   use = [ "edit", "open", "msui" ] },
-    { url = "*.rs",   use = [ "edit", "open", "msui" ] },
-    { url = "*.py",   use = [ "edit", "open", "msui" ] },
-    { mime = "application/json", use = [ "edit", "open", "msui" ] },
-    { mime = "application/x-yaml", use = [ "edit", "open", "msui" ] },
-    { mime = "application/toml", use = [ "edit", "open", "msui" ] },
-    { mime = "*/javascript", use = [ "edit", "open", "msui" ] },
-    { mime = "*/x-shellscript", use = [ "edit", "open", "msui" ] },
+    # Code, configs, scripts: Enter opens in Neovim; Shift+O offers Neovim, System Default, or Strata
+    { mime = "text/*", use = [ "edit", "open", "strata", "thunar" ] },
+    { url = "*.json", use = [ "edit", "open", "strata" ] },
+    { url = "*.toml", use = [ "edit", "open", "strata" ] },
+    { url = "*.yaml", use = [ "edit", "open", "strata" ] },
+    { url = "*.yml",  use = [ "edit", "open", "strata" ] },
+    { url = "*.conf", use = [ "edit", "open", "strata" ] },
+    { url = "*.cfg",  use = [ "edit", "open", "strata" ] },
+    { url = "*.ini",  use = [ "edit", "open", "strata" ] },
+    { url = "*.sh",   use = [ "edit", "open", "strata" ] },
+    { url = "*.rs",   use = [ "edit", "open", "strata" ] },
+    { url = "*.py",   use = [ "edit", "open", "strata" ] },
+    { mime = "application/json", use = [ "edit", "open", "strata" ] },
+    { mime = "application/x-yaml", use = [ "edit", "open", "strata" ] },
+    { mime = "application/toml", use = [ "edit", "open", "strata" ] },
+    { mime = "*/javascript", use = [ "edit", "open", "strata" ] },
+    { mime = "*/x-shellscript", use = [ "edit", "open", "strata" ] },
 
     # Universal fallback for unhandled / binary files: System Default first, Neovim second
-    { url = "*", use = [ "open", "edit", "msui", "thunar" ] },
+    { url = "*", use = [ "open", "edit", "thunar", "strata" ] },
 ]
 
 [plugin]
