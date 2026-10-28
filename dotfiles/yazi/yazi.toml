@@ -24,38 +24,94 @@ sixel_fraction  = 15
 ueberzug_scale  = 1
 ueberzug_offset = [ 0, 0, 0, 0 ]
 
+# =========================================================
+# 🚀 Defined Openers
+# =========================================================
 [opener]
 edit = [
     { run = '${EDITOR:-nvim} "$@"', desc = "Edit with Neovim", block = true, for = "unix" },
 ]
-open = [
-    { run = 'xdg-open "$@"', desc = "Open with System Default", for = "unix" },
+play = [
+    { run = 'mpv "$@"', desc = "Play in MPV", orphan = true, for = "unix" },
 ]
-reveal = [
-    { run = 'thunar --window "$1"', desc = "Reveal in Thunar", for = "unix" },
+view = [
+    { run = 'imv "$@"', desc = "View in imv", orphan = true, for = "unix" },
+]
+pdf = [
+    { run = 'zathura "$@"', desc = "Read in Zathura", orphan = true, for = "unix" },
+]
+open = [
+    { run = 'xdg-open "$@"', desc = "Open with System Default", orphan = true, for = "unix" },
+]
+msui = [
+    { run = 'msui-fm "$@"', desc = "Reveal in msUI Files", orphan = true, for = "unix" },
+]
+thunar = [
+    { run = 'thunar --window "$1"', desc = "Reveal in Thunar", orphan = true, for = "unix" },
+]
+vector = [
+    { run = 'inkscape "$@"', desc = "Edit in Inkscape", orphan = true, for = "unix" },
+]
+krita = [
+    { run = 'krita "$@"', desc = "Edit in Krita", orphan = true, for = "unix" },
+]
+gimp = [
+    { run = 'gimp "$@"', desc = "Edit in GIMP", orphan = true, for = "unix" },
 ]
 
+# =========================================================
+# 🎯 Open Rules (First = Enter key, All = Shift+O menu)
+# =========================================================
 [open]
 prepend_rules = [
-    # Any directory: can be opened directly in Neovim
-    { url = "*/", use = [ "edit", "open", "reveal" ] },
-    # Text, code, and configuration files
-    { mime = "text/*", use = [ "edit", "reveal" ] },
-    { url = "*.json", use = [ "edit", "reveal" ] },
-    { url = "*.toml", use = [ "edit", "reveal" ] },
-    { url = "*.yaml", use = [ "edit", "reveal" ] },
-    { url = "*.yml", use = [ "edit", "reveal" ] },
-    { url = "*.conf", use = [ "edit", "reveal" ] },
-    { url = "*.cfg", use = [ "edit", "reveal" ] },
-    { url = "*.ini", use = [ "edit", "reveal" ] },
-    { url = "*.sh", use = [ "edit", "reveal" ] },
-    { mime = "application/json", use = [ "edit", "reveal" ] },
-    { mime = "application/x-yaml", use = [ "edit", "reveal" ] },
-    { mime = "application/toml", use = [ "edit", "reveal" ] },
-    { mime = "*/javascript", use = [ "edit", "reveal" ] },
-    { mime = "*/x-shellscript", use = [ "edit", "reveal" ] },
-    # Universal fallback: any file opens in Neovim by default
-    { url = "*", use = [ "edit", "open", "reveal" ] },
+    # Directories: Enter enters folder; Shift+O lets you open in Neovim or GUI file manager
+    { url = "*/", use = [ "edit", "msui", "thunar", "open" ] },
+
+    # Media (Video / Audio): Enter plays in MPV; Shift+O gives system default or file manager
+    { mime = "video/*", use = [ "play", "open", "msui" ] },
+    { mime = "audio/*", use = [ "play", "open", "msui" ] },
+    { url = "*.{mp4,mkv,avi,mov,flv,webm,mp3,wav,flac,opus,ogg,m4a}", use = [ "play", "open", "msui" ] },
+
+    # Vector Graphics (.svg): Enter previews in imv; Shift+O offers Inkscape, Neovim (XML source), or msUI Files
+    { mime = "image/svg+xml", use = [ "view", "vector", "edit", "msui", "open" ] },
+    { url = "*.svg", use = [ "view", "vector", "edit", "msui", "open" ] },
+    { url = "*.SVG", use = [ "view", "vector", "edit", "msui", "open" ] },
+
+    # Adobe Illustrator (.ai): Enter opens in Inkscape; Shift+O offers Zathura (PDF preview), Krita, or msUI Files
+    { mime = "application/illustrator", use = [ "vector", "pdf", "krita", "open" ] },
+    { mime = "application/vnd.adobe.illustrator", use = [ "vector", "pdf", "krita", "open" ] },
+    { url = "*.ai", use = [ "vector", "pdf", "krita", "open" ] },
+    { url = "*.AI", use = [ "vector", "pdf", "krita", "open" ] },
+
+    # Raster Images: Enter views in imv; Shift+O offers GIMP, System default, or msUI Files
+    { mime = "image/*", use = [ "view", "gimp", "open", "msui" ] },
+    { url = "*.{png,jpg,jpeg,webp,gif,bmp,avif}", use = [ "view", "gimp", "open", "msui" ] },
+
+    # Documents & PDFs: Enter opens in Zathura
+    { mime = "application/pdf", use = [ "pdf", "open", "msui" ] },
+    { url = "*.pdf", use = [ "pdf", "open", "msui" ] },
+    { url = "*.PDF", use = [ "pdf", "open", "msui" ] },
+
+    # Code, configs, scripts: Enter opens in Neovim; Shift+O offers Neovim, System Default, or msUI Files
+    { mime = "text/*", use = [ "edit", "open", "msui", "thunar" ] },
+    { url = "*.json", use = [ "edit", "open", "msui" ] },
+    { url = "*.toml", use = [ "edit", "open", "msui" ] },
+    { url = "*.yaml", use = [ "edit", "open", "msui" ] },
+    { url = "*.yml",  use = [ "edit", "open", "msui" ] },
+    { url = "*.conf", use = [ "edit", "open", "msui" ] },
+    { url = "*.cfg",  use = [ "edit", "open", "msui" ] },
+    { url = "*.ini",  use = [ "edit", "open", "msui" ] },
+    { url = "*.sh",   use = [ "edit", "open", "msui" ] },
+    { url = "*.rs",   use = [ "edit", "open", "msui" ] },
+    { url = "*.py",   use = [ "edit", "open", "msui" ] },
+    { mime = "application/json", use = [ "edit", "open", "msui" ] },
+    { mime = "application/x-yaml", use = [ "edit", "open", "msui" ] },
+    { mime = "application/toml", use = [ "edit", "open", "msui" ] },
+    { mime = "*/javascript", use = [ "edit", "open", "msui" ] },
+    { mime = "*/x-shellscript", use = [ "edit", "open", "msui" ] },
+
+    # Universal fallback for unhandled / binary files: System Default first, Neovim second
+    { url = "*", use = [ "open", "edit", "msui", "thunar" ] },
 ]
 
 [plugin]
