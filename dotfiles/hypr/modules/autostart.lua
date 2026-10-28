@@ -46,6 +46,12 @@ hl.on("hyprland.start", function()
 	hl.exec_cmd("$HOME/.config/hypr/scripts/ui/sync_keybind_desktop_entries.sh &")
 
 	--------------------------------------------------------
+	-- AUTO-LOCK ON BOOT (Cold boot password protection)
+	--------------------------------------------------------
+
+	hl.exec_cmd("hyprlock")
+
+	--------------------------------------------------------
 	-- CLIPBOARD & NOTIFICATIONS (Managed natively by msUI)
 	--------------------------------------------------------
 	-- msUI automatically monitors Wayland clipboard in-process and runs D-Bus notification service.
