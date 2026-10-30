@@ -60,13 +60,27 @@ hl.config({
 		rounding = 14,
 
 		----------------------------------------------------
-		-- BLUR
+		-- BLUR (Hyprland 0.57+ Blur Shaders & Variants)
 		----------------------------------------------------
-
+		-- Available variants:
+		--   "kawase"       - Standard dual-kawase blur (default, clean & lightweight)
+		--   "frost"        - Frosted glass effect with surface micro-texture
+		--   "ripple"       - Interactive ripple distortion wave effect
+		--   "drops"        - Animated rain / liquid droplets on glass
+		--   "water"        - Animated water waves and fluid surface displacement
+		--   "fluid_jar"    - Viscous fluid physics container
+		--   "prism"        - Rainbow chromatic dispersion & prism refraction
+		--   "heat_shimmer" - Animated heat waves & mirage shimmer
+		--   "acrylic"      - Modern acrylic with chromatic aberration & light diffusion
+		--   "aurora"       - Animated northern lights / aurora borealis ambient color glow
+		--   "haze"         - Iridescent atmospheric color haze
+		-- Live testing: run 'hypr-blur next' or 'hypr-blur set <variant>' in terminal!
 		blur = {
 			enabled = true,
-			size = 2,
-			passes = 1,
+			variant = "kawase", -- change to "acrylic", "aurora", "water", etc. to test
+			size = 2,           -- recommend 4-6 when testing shader variants
+			passes = 1,         -- recommend 2-3 when testing shader variants
+			proportional = false, -- scale blur with window size/resolution
 		},
 
 		----------------------------------------------------
