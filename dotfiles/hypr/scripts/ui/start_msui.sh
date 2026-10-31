@@ -13,9 +13,10 @@ if [ -z "$MSUI_BIN" ] || [ ! -x "$MSUI_BIN" ]; then
   exit 1
 fi
 
-# Ensure clean slate: kill any stale processes
-pkill -x msui 2>/dev/null || true
-sleep 0.2
+# Ensure clean slate: kill any stale processes and remove lingering socket
+pkill -9 -x msui 2>/dev/null || true
+rm -f "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/msui.sock" /run/user/1000/msui.sock 2>/dev/null || true
+sleep 0.3
 
 # Optimize glibc memory arenas to prevent heap fragmentation in multi-threaded runtime
 export MALLOC_ARENA_MAX=2

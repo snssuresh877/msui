@@ -36,12 +36,7 @@ pub fn run_bar(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
 
     let cfg_clone = config.clone();
 
-    let start_mode = if let Some(target) = msui_core::DisplayManager::get_primary_monitor_name() {
-        tracing::info!("Targeting primary display output: {}", target);
-        StartMode::TargetScreen(target)
-    } else {
-        StartMode::Active
-    };
+    let start_mode = StartMode::Active;
 
     let is_modern = config.bar.is_modern();
     let (margin, exclusive_zone) = if is_modern {

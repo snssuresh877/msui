@@ -217,11 +217,7 @@ impl UnifiedShell {
         config: MsuiConfig,
         shell_events: ShellReceiver,
     ) -> (Self, Task<DaemonMessage>) {
-        let output_option = if let Some(target) = msui_core::DisplayManager::get_primary_monitor_name() {
-            OutputOption::OutputName(target)
-        } else {
-            OutputOption::Active
-        };
+        let output_option = OutputOption::Active;
 
         // 1. Wallpaper Layer Shell surface (Background)
         let (wallpaper_id, wallpaper_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
@@ -324,11 +320,7 @@ impl UnifiedShell {
             "bottom" => Anchor::Bottom | Anchor::Left | Anchor::Right,
             _ => Anchor::Top | Anchor::Left | Anchor::Right,
         };
-        let output_option = if let Some(target) = msui_core::DisplayManager::get_primary_monitor_name() {
-            OutputOption::OutputName(target)
-        } else {
-            OutputOption::Active
-        };
+        let output_option = OutputOption::Active;
 
         let is_modern = self.config.bar.is_modern();
         let (bar_margin, exclusive_zone) = if is_modern {
@@ -429,11 +421,7 @@ impl UnifiedShell {
             tasks.push(iced::window::close(old_id));
         }
 
-        let output_option = if let Some(primary) = msui_core::DisplayManager::get_primary_monitor_name() {
-            OutputOption::OutputName(primary)
-        } else {
-            OutputOption::Active
-        };
+        let output_option = OutputOption::Active;
 
         let blur_option = if self.config.bar.is_frosted() {
             BlurOption::FullRegion
@@ -1007,11 +995,7 @@ impl UnifiedShell {
                         return Task::batch([toast_cmd, iced::window::close(tid)]);
                     }
                 } else if self.toast_id.is_none() {
-                    let output_option = if let Some(target) = msui_core::DisplayManager::get_primary_monitor_name() {
-                        OutputOption::OutputName(target)
-                    } else {
-                        OutputOption::Active
-                    };
+                    let output_option = OutputOption::Active;
 
                     let blur_option = if self.config.bar.is_frosted() {
                         BlurOption::FullRegion
@@ -1222,11 +1206,7 @@ impl UnifiedShell {
                         }
 
                         if self.osd_id.is_none() {
-                            let output_option = if let Some(target) = msui_core::DisplayManager::get_primary_monitor_name() {
-                                OutputOption::OutputName(target)
-                            } else {
-                                OutputOption::Active
-                            };
+                            let output_option = OutputOption::Active;
 
                             let blur_option = if self.config.bar.is_frosted() {
                                 BlurOption::FullRegion
@@ -1285,11 +1265,7 @@ impl UnifiedShell {
                 }
                 self.polkit_request = Some(req.clone());
 
-                let output_option = if let Some(target) = msui_core::DisplayManager::get_primary_monitor_name() {
-                    OutputOption::OutputName(target)
-                } else {
-                    OutputOption::Active
-                };
+                let output_option = OutputOption::Active;
 
                 let blur_option = if self.config.bar.is_frosted() {
                     BlurOption::FullRegion

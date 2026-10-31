@@ -142,7 +142,12 @@ fn try_ipc_toggle(target: &str) -> bool {
 
 fn main() -> anyhow::Result<()> {
     // Initialize tracing
-    tracing_subscriber::fmt::init();
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    let _ = tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init();
 
     let args: Vec<String> = env::args().collect();
     let command = args.get(1).map(|s| s.as_str()).unwrap_or("daemon");
@@ -154,6 +159,10 @@ fn main() -> anyhow::Result<()> {
         }
         "bar" => {
             let sub = args.get(2).map(|s| s.as_str());
+            if args.iter().any(|a| a == "--direct" || a == "--standalone") {
+                let config = MsuiConfig::load_or_default();
+                return msui_bar::run_bar(config).map_err(|e| anyhow::anyhow!("{:?}", e));
+            }
             match sub {
                 Some("toggle") | None => {
                     match IpcClient::send_blocking(&IpcCommand::Toggle("bar".to_string())) {

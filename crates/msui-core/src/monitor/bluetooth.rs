@@ -23,7 +23,7 @@ pub struct BluetoothManager;
 impl BluetoothManager {
     pub fn read() -> BluetoothInfo {
         let show_out = Command::new("bluetoothctl")
-            .arg("show")
+            .args(["--timeout", "1", "show"])
             .output();
 
         let Ok(out) = show_out else {
@@ -50,7 +50,7 @@ impl BluetoothManager {
         let mut paired_devices = Vec::new();
         let mut connected_devices = Vec::new();
 
-        if let Ok(dev_out) = Command::new("bluetoothctl").arg("devices").output() {
+        if let Ok(dev_out) = Command::new("bluetoothctl").args(["--timeout", "1", "devices"]).output() {
             if dev_out.status.success() {
                 let dev_text = String::from_utf8_lossy(&dev_out.stdout);
                 for line in dev_text.lines() {
@@ -90,7 +90,7 @@ impl BluetoothManager {
         let mut paired = true;
         let mut icon = Self::guess_icon(name);
 
-        if let Ok(info_out) = Command::new("bluetoothctl").arg("info").arg(mac).output() {
+        if let Ok(info_out) = Command::new("bluetoothctl").args(["--timeout", "1", "info", mac]).output() {
             if info_out.status.success() {
                 let text = String::from_utf8_lossy(&info_out.stdout);
                 for line in text.lines() {

@@ -28,6 +28,9 @@ pub fn get_tray_items() -> Vec<TrayItem> {
 }
 
 pub fn fetch_tray_items_blocking() -> Vec<TrayItem> {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        return Vec::new();
+    }
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build();
