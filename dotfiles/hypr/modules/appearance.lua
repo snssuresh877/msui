@@ -79,7 +79,7 @@ hl.config({
 		--   "aurora"       - Animated northern lights / aurora borealis ambient color glow
 		--   "haze"         - Iridescent atmospheric color haze
 		-- Live testing: run 'hypr-blur menu' or press Super + Alt + B
-				blur = {
+																																																blur = {
 			enabled = true,
 			variant = "drops", -- Active: drops
 			size = 8,
@@ -89,6 +89,9 @@ hl.config({
 			proportional = true,
 			ignore_opacity = true,
 			new_optimizations = true,
+			drops = {
+				speed = 3.5,
+			},
 		},
 
 		----------------------------------------------------
