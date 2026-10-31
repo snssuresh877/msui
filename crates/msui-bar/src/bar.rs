@@ -362,8 +362,6 @@ impl Bar {
                 self.current_time = Local::now().format(&self.config.bar.time_format).to_string();
                 ReminderManager::check_and_trigger_expired();
                 self.next_reminder = ReminderManager::next_expiring();
-                self.hyprland_workspace = msui_core::HyprlandIpc::get_active_workspace_id();
-                self.tray_items = msui_core::get_tray_items();
 
                 // Live dynamic reload if configuration file modified on disk
                 if let Some(cfg_path) = MsuiConfig::default_config_path() {
@@ -379,7 +377,6 @@ impl Bar {
             }
             Message::MetricsTick => {
                 self.system_metrics = self.system_monitor.sample();
-                self.hyprland_workspace = msui_core::HyprlandIpc::get_active_workspace_id();
                 self.tray_items = msui_core::get_tray_items();
 
                 if self.config.bar.show_battery {

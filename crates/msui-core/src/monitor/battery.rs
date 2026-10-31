@@ -80,6 +80,13 @@ pub struct PowerProfileManager;
 
 impl PowerProfileManager {
     pub fn get_profile() -> PowerProfile {
+        // Fast ACPI platform_profile sysfs check (< 0.05ms)
+        if let Ok(text) = std::fs::read_to_string("/sys/firmware/acpi/platform_profile") {
+            if let Some(prof) = PowerProfile::from_str_loose(&text) {
+                return prof;
+            }
+        }
+
         if let Ok(output) = std::process::Command::new("tlpctl").arg("get").output() {
             if output.status.success() {
                 let text = String::from_utf8_lossy(&output.stdout);

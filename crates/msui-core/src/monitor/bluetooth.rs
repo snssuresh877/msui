@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BluetoothDevice {
@@ -18,103 +20,138 @@ pub struct BluetoothInfo {
     pub paired_devices: Vec<BluetoothDevice>,
 }
 
+static BLUETOOTH_CACHE: Mutex<Option<(Instant, BluetoothInfo)>> = Mutex::new(None);
+
 pub struct BluetoothManager;
 
 impl BluetoothManager {
     pub fn read() -> BluetoothInfo {
-        let show_out = Command::new("bluetoothctl")
-            .args(["--timeout", "1", "show"])
-            .output();
-
-        let Ok(out) = show_out else {
-            return BluetoothInfo {
-                is_available: false,
-                is_powered: false,
-                connected_devices: Vec::new(),
-                paired_devices: Vec::new(),
-            };
-        };
-
-        if !out.status.success() {
-            return BluetoothInfo {
-                is_available: false,
-                is_powered: false,
-                connected_devices: Vec::new(),
-                paired_devices: Vec::new(),
-            };
+        // 1. Check in-memory cache (2-second TTL to avoid re-querying in the same frame)
+        if let Ok(guard) = BLUETOOTH_CACHE.lock() {
+            if let Some((instant, ref info)) = *guard {
+                if instant.elapsed() < Duration::from_secs(2) {
+                    return info.clone();
+                }
+            }
         }
 
-        let show_text = String::from_utf8_lossy(&out.stdout);
-        let is_powered = show_text.lines().any(|l| l.trim().starts_with("Powered: yes"));
+        // 2. Ultra-fast sysfs rfkill check (< 0.05ms, 0 subprocesses)
+        if let Ok(entries) = std::fs::read_dir("/sys/class/rfkill") {
+            let mut found_bt = false;
+            let mut is_soft_blocked = false;
 
-        let mut paired_devices = Vec::new();
-        let mut connected_devices = Vec::new();
-
-        if let Ok(dev_out) = Command::new("bluetoothctl").args(["--timeout", "1", "devices"]).output() {
-            if dev_out.status.success() {
-                let dev_text = String::from_utf8_lossy(&dev_out.stdout);
-                for line in dev_text.lines() {
-                    let parts: Vec<&str> = line.split_whitespace().collect();
-                    if parts.len() >= 3 && parts[0] == "Device" {
-                        let mac = parts[1].to_string();
-                        let name = parts[2..].join(" ");
-                        let (connected, paired, icon) = Self::device_info(&mac, &name);
-
-                        let dev = BluetoothDevice {
-                            mac,
-                            name,
-                            connected,
-                            paired,
-                            icon,
-                        };
-
-                        if connected {
-                            connected_devices.push(dev.clone());
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if let Ok(t) = std::fs::read_to_string(p.join("type")) {
+                    if t.trim() == "bluetooth" {
+                        found_bt = true;
+                        if let Ok(s) = std::fs::read_to_string(p.join("soft")) {
+                            if s.trim() == "1" {
+                                is_soft_blocked = true;
+                            }
                         }
-                        paired_devices.push(dev);
+                    }
+                }
+            }
+
+            if found_bt && is_soft_blocked {
+                let info = BluetoothInfo {
+                    is_available: true,
+                    is_powered: false,
+                    connected_devices: Vec::new(),
+                    paired_devices: Vec::new(),
+                };
+                if let Ok(mut guard) = BLUETOOTH_CACHE.lock() {
+                    *guard = Some((Instant::now(), info.clone()));
+                }
+                return info;
+            }
+        }
+
+        // 3. Bluetooth is unblocked / powered on: query connected and paired devices without timeout sleep
+        let mut connected_devices = Vec::new();
+        let mut paired_devices = Vec::new();
+        let mut is_powered = false;
+
+        // Query status
+        if let Ok(out) = Command::new("bluetoothctl")
+            .arg("show")
+            .stdin(Stdio::null())
+            .output()
+        {
+            if out.status.success() {
+                let show_text = String::from_utf8_lossy(&out.stdout);
+                is_powered = show_text.lines().any(|l| l.trim().starts_with("Powered: yes"));
+            }
+        }
+
+        if is_powered {
+            // Connected devices
+            if let Ok(out) = Command::new("bluetoothctl")
+                .args(["devices", "Connected"])
+                .stdin(Stdio::null())
+                .output()
+            {
+                if out.status.success() {
+                    let text = String::from_utf8_lossy(&out.stdout);
+                    for line in text.lines() {
+                        let parts: Vec<&str> = line.split_whitespace().collect();
+                        if parts.len() >= 3 && parts[0] == "Device" {
+                            let mac = parts[1].to_string();
+                            let name = parts[2..].join(" ");
+                            let icon = Self::guess_icon(&name);
+                            connected_devices.push(BluetoothDevice {
+                                mac,
+                                name,
+                                connected: true,
+                                paired: true,
+                                icon,
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Paired devices
+            if let Ok(out) = Command::new("bluetoothctl")
+                .args(["devices", "Paired"])
+                .stdin(Stdio::null())
+                .output()
+            {
+                if out.status.success() {
+                    let text = String::from_utf8_lossy(&out.stdout);
+                    for line in text.lines() {
+                        let parts: Vec<&str> = line.split_whitespace().collect();
+                        if parts.len() >= 3 && parts[0] == "Device" {
+                            let mac = parts[1].to_string();
+                            let name = parts[2..].join(" ");
+                            let is_conn = connected_devices.iter().any(|d| d.mac == mac);
+                            let icon = Self::guess_icon(&name);
+                            paired_devices.push(BluetoothDevice {
+                                mac,
+                                name,
+                                connected: is_conn,
+                                paired: true,
+                                icon,
+                            });
+                        }
                     }
                 }
             }
         }
 
-        BluetoothInfo {
+        let info = BluetoothInfo {
             is_available: true,
             is_powered,
             connected_devices,
             paired_devices,
-        }
-    }
+        };
 
-    fn device_info(mac: &str, name: &str) -> (bool, bool, String) {
-        let mut connected = false;
-        let mut paired = true;
-        let mut icon = Self::guess_icon(name);
-
-        if let Ok(info_out) = Command::new("bluetoothctl").args(["--timeout", "1", "info", mac]).output() {
-            if info_out.status.success() {
-                let text = String::from_utf8_lossy(&info_out.stdout);
-                for line in text.lines() {
-                    let trimmed = line.trim();
-                    if trimmed.starts_with("Connected: yes") {
-                        connected = true;
-                    } else if trimmed.starts_with("Paired: no") {
-                        paired = false;
-                    } else if trimmed.starts_with("Icon:") {
-                        let icon_type = trimmed.strip_prefix("Icon:").unwrap_or("").trim();
-                        icon = match icon_type {
-                            "audio-headphones" | "audio-headset" => "󰋋".to_string(),
-                            "audio-card" => "󰓃".to_string(),
-                            "input-keyboard" => "󰌌".to_string(),
-                            "input-mouse" => "󰍽".to_string(),
-                            "phone" => "󰍡".to_string(),
-                            _ => Self::guess_icon(name),
-                        };
-                    }
-                }
-            }
+        if let Ok(mut guard) = BLUETOOTH_CACHE.lock() {
+            *guard = Some((Instant::now(), info.clone()));
         }
 
-        (connected, paired, icon)
+        info
     }
 
     fn guess_icon(name: &str) -> String {
