@@ -7,11 +7,15 @@ choice=$(printf \
 󰤨 Reload Wi-Fi Driver & NetworkManager
 󰟸 Reload Trackpad / Input Drivers
 󰍹 Reload Monitors & Hyprland Config
+🔋 Battery & Power Diagnostics
 ⚡ Run Full Hardware Diagnostics" | rofi -dmenu -i -p "Hardware Controls")
 
 [ -z "$choice" ] && exit 0
 
 case "$choice" in
+  *Battery*|*Power*)
+    foot -T "Power Diagnostics" -e bash -c "~/.config/hypr/scripts/system/battery-power-hook.sh status; echo ''; read -n1 -r -p 'Press any key to exit...'"
+    ;;
   *Audio*)
     systemctl --user restart pipewire wireplumber pipewire-pulse 2>/dev/null || true
     notify-send "Hardware" "Audio stack (PipeWire) reloaded"
