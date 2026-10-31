@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# hypr-blur: Zero-resident-RAM user controller for Hyprland 0.57+ blur shaders
+# hypr-blur: Zero-resident-RAM user controller for Hyprland 0.57+ blur shaders & appearance modes
 set -e
 
 BACKUP_DIR="$HOME/.config/hypr_backup_pre_blur_057"
 CONFIG_FILE="$HOME/.config/hypr/modules/appearance.lua"
 DOTFILES_CONFIG="$HOME/Projects/msui/dotfiles/hypr/modules/appearance.lua"
 
-# 10 Options exactly as requested:
+# 11 Options:
 # 1) No blur, 2) drops, 3) fluid_jar, 4) prism, 5) frost,
-# 6) acrylic, 7) aurora, 8) water, 9) heat_shimmer, 10) kawase
+# 6) acrylic, 7) aurora, 8) water, 9) heat_shimmer, 10) kawase, 11) solid_color
 OPTIONS=(
     "No blur"
     "drops"
@@ -20,10 +20,11 @@ OPTIONS=(
     "water"
     "heat_shimmer"
     "kawase"
+    "solid_color"
 )
 
 DESCRIPTIONS=(
-    "Disable window & layer background blur (Lowest GPU / RAM)"
+    "Disable blur while preserving window translucency (Lightweight)"
     "Rain droplets trickling & condensing on glass"
     "Viscous fluid container with turbulence & liquid physics"
     "Crystalline prism refraction with rainbow light dispersion"
@@ -33,6 +34,7 @@ DESCRIPTIONS=(
     "Fluid wave displacement equations rippling across background"
     "Atmospheric heat haze mirage distortion waves"
     "Standard dual-kawase pyramid blur (clean & lightweight baseline)"
+    "100% solid opaque windows matching system theme (zero blur, max battery/focus)"
 )
 
 ICONS=(
@@ -46,29 +48,23 @@ ICONS=(
     "🌊"
     "♨️"
     "🌫️"
+    "⬛"
 )
 
 get_current_status() {
-    local enabled var
-    enabled=$(hyprctl -j getoption decoration:blur:enabled 2>/dev/null | jq -r '.bool // true')
+    local enabled var opacity
+    enabled=$(hyprctl -j getoption decoration:blur:enabled 2>/dev/null | jq -r '.bool')
     var=$(hyprctl -j getoption decoration:blur:variant 2>/dev/null | jq -r '.int // 0')
+    opacity=$(hyprctl -j getoption decoration:active_opacity 2>/dev/null | jq -r '.float // 0.84')
+
     if [ "$enabled" = "false" ]; then
-        echo "1"
+        local is_solid
+        is_solid=$(awk -v op="$opacity" 'BEGIN { if (op >= 0.98) print "11"; else print "1" }')
+        echo "$is_solid"
         return
     fi
-    # Map variant index in Hyprland (0..10) to our 1..10 options
-    # Hyprland indices:
-    # 0: kawase -> option 10
-    # 1: frost -> option 5
-    # 2: ripple
-    # 3: drops -> option 2
-    # 4: water -> option 8
-    # 5: fluid_jar -> option 3
-    # 6: prism -> option 4
-    # 7: heat_shimmer -> option 9
-    # 8: acrylic -> option 6
-    # 9: aurora -> option 7
-    # 10: haze
+
+    # Map variant index in Hyprland (0..10) to our 1..11 options
     case "$var" in
         3) echo 2 ;;
         5) echo 3 ;;
@@ -89,12 +85,16 @@ apply_option() {
     local lua_code=""
     local snippet=""
     local enabled="true"
+    local active_op="0.84"
+    local inactive_op="0.75"
 
     case "$num" in
         1|"no-blur"|"none"|"off"|"disable")
             enabled="false"
             opt_name="No blur"
-            lua_code='hl.config({ decoration = { blur = { enabled = false } } })'
+            active_op="0.84"
+            inactive_op="0.75"
+            lua_code='hl.config({ decoration = { active_opacity = 0.84, inactive_opacity = 0.75, blur = { enabled = false } } })'
             snippet='		blur = {
 			enabled = false,
 			variant = "kawase",
@@ -105,7 +105,7 @@ apply_option() {
             ;;
         2|"drops")
             opt_name="drops"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "drops", size = 8, passes = 3, vibrancy = 0.6, contrast = 1.1, proportional = true, ignore_opacity = true, new_optimizations = true, drops = { speed = 3.5 } } } })'
+            lua_code='hl.config({ decoration = { active_opacity = 0.84, inactive_opacity = 0.75, blur = { enabled = true, variant = "drops", size = 8, passes = 3, vibrancy = 0.6, contrast = 1.1, proportional = true, ignore_opacity = true, new_optimizations = true, drops = { speed = 3.5 } } } })'
             snippet='		blur = {
 			enabled = true,
 			variant = "drops", -- Active: drops
@@ -123,7 +123,7 @@ apply_option() {
             ;;
         3|"fluid_jar")
             opt_name="fluid_jar"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "fluid_jar", size = 8, passes = 3, vibrancy = 0.6, contrast = 1.1, proportional = true, ignore_opacity = true, new_optimizations = true, fluid_jar = { fill_amount = 0.52, turbulence = 1.5, speed = 4.0 } } } })'
+            lua_code='hl.config({ decoration = { active_opacity = 0.84, inactive_opacity = 0.75, blur = { enabled = true, variant = "fluid_jar", size = 8, passes = 3, vibrancy = 0.6, contrast = 1.1, proportional = true, ignore_opacity = true, new_optimizations = true, fluid_jar = { fill_amount = 0.52, turbulence = 1.5, speed = 4.0 } } } })'
             snippet='		blur = {
 			enabled = true,
 			variant = "fluid_jar", -- Active: fluid_jar
@@ -143,7 +143,7 @@ apply_option() {
             ;;
         4|"prism")
             opt_name="prism"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "prism", size = 8, passes = 3, vibrancy = 0.7, contrast = 1.15, proportional = true, ignore_opacity = true, new_optimizations = true, glass = { size = 45.0, refraction = 20.0, roughness = 1.0 } } } })'
+            lua_code='hl.config({ decoration = { active_opacity = 0.84, inactive_opacity = 0.75, blur = { enabled = true, variant = "prism", size = 8, passes = 3, vibrancy = 0.7, contrast = 1.15, proportional = true, ignore_opacity = true, new_optimizations = true, glass = { size = 45.0, refraction = 20.0, roughness = 1.0 } } } })'
             snippet='		blur = {
 			enabled = true,
 			variant = "prism", -- Active: prism
@@ -163,7 +163,7 @@ apply_option() {
             ;;
         5|"frost")
             opt_name="frost"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "frost", size = 3, passes = 1, vibrancy = 0.8, contrast = 1.25, proportional = true, ignore_opacity = true, new_optimizations = true, glass = { size = 18.0, refraction = 20.0, roughness = 1.0 } } } })'
+            lua_code='hl.config({ decoration = { active_opacity = 0.84, inactive_opacity = 0.75, blur = { enabled = true, variant = "frost", size = 3, passes = 1, vibrancy = 0.8, contrast = 1.25, proportional = true, ignore_opacity = true, new_optimizations = true, glass = { size = 18.0, refraction = 20.0, roughness = 1.0 } } } })'
             snippet='		blur = {
 			enabled = true,
 			variant = "frost", -- Active: frost
@@ -183,7 +183,7 @@ apply_option() {
             ;;
         6|"acrylic")
             opt_name="acrylic"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "acrylic", size = 8, passes = 3, vibrancy = 0.6, contrast = 1.1, proportional = true, ignore_opacity = true, new_optimizations = true, acrylic = { aberration = 0.25, refraction = 48.0, bulb = 120.0, clarity = 0.80 } } } })'
+            lua_code='hl.config({ decoration = { active_opacity = 0.84, inactive_opacity = 0.75, blur = { enabled = true, variant = "acrylic", size = 8, passes = 3, vibrancy = 0.6, contrast = 1.1, proportional = true, ignore_opacity = true, new_optimizations = true, acrylic = { aberration = 0.25, refraction = 48.0, bulb = 120.0, clarity = 0.80 } } } })'
             snippet='		blur = {
 			enabled = true,
 			variant = "acrylic", -- Active: acrylic
@@ -204,7 +204,7 @@ apply_option() {
             ;;
         7|"aurora")
             opt_name="aurora"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "aurora", size = 6, passes = 2, vibrancy = 0.8, contrast = 1.15, proportional = true, ignore_opacity = true, new_optimizations = true, aurora = { intensity = 1.0, speed = 2.5, color1 = "rgba(00ff88ff)", color2 = "rgba(ff00aaff)" } } } })'
+            lua_code='hl.config({ decoration = { active_opacity = 0.84, inactive_opacity = 0.75, blur = { enabled = true, variant = "aurora", size = 6, passes = 2, vibrancy = 0.8, contrast = 1.15, proportional = true, ignore_opacity = true, new_optimizations = true, aurora = { intensity = 1.0, speed = 2.5, color1 = "rgba(00ff88ff)", color2 = "rgba(ff00aaff)" } } } })'
             snippet='		blur = {
 			enabled = true,
 			variant = "aurora", -- Active: aurora
@@ -225,7 +225,7 @@ apply_option() {
             ;;
         8|"water")
             opt_name="water"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "water", size = 4, passes = 2, vibrancy = 0.7, contrast = 1.15, proportional = true, ignore_opacity = true, new_optimizations = true, water = { strength = 32.0, radius = 80.0, speed = 2.0, damping = 0.98, duration = 15.0 } } } })'
+            lua_code='hl.config({ decoration = { active_opacity = 0.84, inactive_opacity = 0.75, blur = { enabled = true, variant = "water", size = 4, passes = 2, vibrancy = 0.7, contrast = 1.15, proportional = true, ignore_opacity = true, new_optimizations = true, water = { strength = 32.0, radius = 80.0, speed = 2.0, damping = 0.98, duration = 15.0 } } } })'
             snippet='		blur = {
 			enabled = true,
 			variant = "water", -- Active: water
@@ -247,7 +247,7 @@ apply_option() {
             ;;
         9|"heat_shimmer")
             opt_name="heat_shimmer"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "heat_shimmer", size = 4, passes = 2, vibrancy = 0.7, contrast = 1.2, proportional = true, ignore_opacity = true, new_optimizations = true, heat_shimmer = { speed = 3.5 }, glass = { size = 28.0, refraction = 20.0, roughness = 1.0 } } } })'
+            lua_code='hl.config({ decoration = { active_opacity = 0.84, inactive_opacity = 0.75, blur = { enabled = true, variant = "heat_shimmer", size = 4, passes = 2, vibrancy = 0.7, contrast = 1.2, proportional = true, ignore_opacity = true, new_optimizations = true, heat_shimmer = { speed = 3.5 }, glass = { size = 28.0, refraction = 20.0, roughness = 1.0 } } } })'
             snippet='		blur = {
 			enabled = true,
 			variant = "heat_shimmer", -- Active: heat_shimmer
@@ -270,7 +270,7 @@ apply_option() {
             ;;
         10|"kawase")
             opt_name="kawase"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "kawase", size = 4, passes = 2, vibrancy = 0.5, contrast = 1.0, proportional = false, ignore_opacity = true, new_optimizations = true } } })'
+            lua_code='hl.config({ decoration = { active_opacity = 0.84, inactive_opacity = 0.75, blur = { enabled = true, variant = "kawase", size = 4, passes = 2, vibrancy = 0.5, contrast = 1.0, proportional = false, ignore_opacity = true, new_optimizations = true } } })'
             snippet='		blur = {
 			enabled = true,
 			variant = "kawase", -- Active: kawase
@@ -283,9 +283,23 @@ apply_option() {
 			new_optimizations = true,
 		},'
             ;;
+        11|"solid"|"solid_color"|"solid-color"|"opaque")
+            enabled="false"
+            opt_name="solid_color"
+            active_op="1.0"
+            inactive_op="1.0"
+            lua_code='hl.config({ decoration = { active_opacity = 1.0, inactive_opacity = 1.0, blur = { enabled = false } } })'
+            snippet='		blur = {
+			enabled = false,
+			variant = "kawase", -- Active: solid_color (opaque windows as per system theme)
+			size = 2,
+			passes = 1,
+			proportional = false,
+		},'
+            ;;
         *)
-            echo "Error: Invalid option '$num'. Must be 1 to 10."
-            echo "Run 'hypr-blur list' to see all 10 options."
+            echo "Error: Invalid option '$num'. Must be 1 to 11."
+            echo "Run 'hypr-blur list' to see all 11 options."
             exit 1
             ;;
     esac
@@ -295,76 +309,88 @@ apply_option() {
 
     # Persist in appearance.lua (both active config and dotfiles)
     export BLUR_SNIPPET="$snippet"
+    export ACTIVE_OP="$active_op"
+    export INACTIVE_OP="$inactive_op"
     python3 -c "
 import os
+import re
 
 snippet = os.environ.get('BLUR_SNIPPET', '')
-if not snippet:
-    exit(0)
+active_op = os.environ.get('ACTIVE_OP', '0.84')
+inactive_op = os.environ.get('INACTIVE_OP', '0.75')
 
-def replace_blur(filepath):
+def update_appearance(filepath):
     try:
         if not os.path.exists(filepath):
             return
         with open(filepath, 'r') as f:
             text = f.read()
+
+        # Update active_opacity and inactive_opacity
+        text = re.sub(r'active_opacity\s*=\s*[0-9.]+,', f'active_opacity = {active_op},', text)
+        text = re.sub(r'inactive_opacity\s*=\s*[0-9.]+,', f'inactive_opacity = {inactive_op},', text)
+
+        # Update blur block using brace matcher
         start = text.find('blur = {')
-        if start == -1:
-            return
-        depth = 0
-        end = start
-        for i in range(start, len(text)):
-            if text[i] == '{':
-                depth += 1
-            elif text[i] == '}':
-                depth -= 1
-                if depth == 0:
-                    end = i + 1
-                    if end < len(text) and text[end] == ',':
-                        end += 1
-                    break
-        new_text = text[:start] + snippet.strip() + text[end:]
+        if start != -1:
+            depth = 0
+            end = start
+            for i in range(start, len(text)):
+                if text[i] == '{':
+                    depth += 1
+                elif text[i] == '}':
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1
+                        if end < len(text) and text[end] == ',':
+                            end += 1
+                        break
+            text = text[:start] + snippet.strip() + text[end:]
+
         with open(filepath, 'w') as f:
-            f.write(new_text)
+            f.write(text)
     except Exception:
         pass
 
-replace_blur('$CONFIG_FILE')
-replace_blur('$DOTFILES_CONFIG')
+update_appearance('$CONFIG_FILE')
+update_appearance('$DOTFILES_CONFIG')
 "
 
     # Send notification
-    if [ "$enabled" = "false" ]; then
-        notify-send -a "Hyprland Blur" -i dialog-information "Blur Disabled" "Window & layer blur turned off (Option 1)"
+    if [ "$num" = "11" ] || [ "$opt_name" = "solid_color" ]; then
+        notify-send -a "Hyprland Appearance" -i preferences-desktop-theme "Solid Color Mode" "Opaque windows (1.0) as per system theme (Option 11)"
+        echo "✓ Applied option 11: solid_color (100% opaque windows as per system theme)"
+    elif [ "$enabled" = "false" ]; then
+        notify-send -a "Hyprland Appearance" -i dialog-information "Blur Disabled" "Window & layer blur turned off (Option 1)"
         echo "✓ Disabled blur (Option 1: No blur)"
     else
-        notify-send -a "Hyprland Blur" -i preferences-desktop-theme "Blur: $opt_name" "Applied option $num ($opt_name) with boosted parameters"
+        notify-send -a "Hyprland Appearance" -i preferences-desktop-theme "Blur: $opt_name" "Applied option $num ($opt_name) with boosted parameters"
         echo "✓ Applied option $num: $opt_name"
     fi
 }
 
 cmd_status() {
-    local enabled var size passes prop
-    enabled=$(hyprctl -j getoption decoration:blur:enabled 2>/dev/null | jq -r '.bool // true')
+    local enabled var size passes prop opacity
+    enabled=$(hyprctl -j getoption decoration:blur:enabled 2>/dev/null | jq -r '.bool')
     var=$(hyprctl -j getoption decoration:blur:variant 2>/dev/null | jq -r '.int // 0')
     size=$(hyprctl -j getoption decoration:blur:size 2>/dev/null | jq -r '.int // 2')
     passes=$(hyprctl -j getoption decoration:blur:passes 2>/dev/null | jq -r '.int // 1')
     prop=$(hyprctl -j getoption decoration:blur:proportional 2>/dev/null | jq -r '.bool // false')
+    opacity=$(hyprctl -j getoption decoration:active_opacity 2>/dev/null | jq -r '.float // 0.84')
 
     local cur
     cur=$(get_current_status)
     local cur_name="Unknown"
-    if [ "$cur" -ge 1 ] && [ "$cur" -le 10 ]; then
+    if [ "$cur" -ge 1 ] && [ "$cur" -le 11 ]; then
         cur_name="${OPTIONS[$(( cur - 1 ))]}"
     fi
 
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo " Hyprland 0.57 Blur Status (0 MB Resident RAM)"
+    echo " Hyprland 0.57 Appearance & Blur Status (0 MB Resident RAM)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo " Blur Enabled: $enabled"
-    echo " Active Option: [$cur] $cur_name (Internal Variant ID: $var)"
-    echo " Size / Passes: ${size}px / ${passes} passes"
-    echo " Proportional: $prop"
+    echo " Active Option: [$cur] $cur_name"
+    echo " Window Opacity: Active=${opacity}"
+    echo " Blur Enabled: $enabled $([ "$enabled" = "true" ] && echo "(Internal Variant ID: $var, ${size}px, ${passes} passes)" || echo "")"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
@@ -374,10 +400,10 @@ cmd_list() {
 
     echo ""
     echo "  ╔════════════════════════════════════════════════════════════════════════╗"
-    echo "  ║         󰔎 Hyprland Blur & Shader Options (0 MB Resident RAM)           ║"
+    echo "  ║        󰔎 Hyprland Appearance & Blur Modes (0 MB Resident RAM)          ║"
     echo "  ╚════════════════════════════════════════════════════════════════════════╝"
     echo ""
-    for i in {1..10}; do
+    for i in {1..11}; do
         local idx=$(( i - 1 ))
         local marker="  "
         if [ "$i" -eq "$cur" ]; then
@@ -387,7 +413,7 @@ cmd_list() {
     done
     echo ""
     echo "  Usage:"
-    echo "    hypr-blur <1-10>       Switch immediately (e.g. 'hypr-blur 2' for drops)"
+    echo "    hypr-blur <1-11>       Switch immediately (e.g. 'hypr-blur 11' for solid color)"
     echo "    hypr-blur menu         Open interactive picker menu"
     echo "    hypr-blur status       Display current settings"
     echo "    hypr-blur reset        Reset to standard kawase blur"
@@ -401,7 +427,7 @@ cmd_menu() {
     # If fzf is available and interactive terminal, provide sleek fuzzy menu
     if command -v fzf >/dev/null 2>&1 && [ -t 0 ]; then
         local menu_items=()
-        for i in {1..10}; do
+        for i in {1..11}; do
             local idx=$(( i - 1 ))
             local prefix="  "
             if [ "$i" -eq "$cur" ]; then
@@ -415,8 +441,8 @@ cmd_menu() {
             --ansi \
             --height=15 \
             --reverse \
-            --prompt="Select Blur Option (1-10) > " \
-            --header="Hyprland 0.57 Blur Shaders (0 MB Resident RAM)" \
+            --prompt="Select Appearance Mode (1-11) > " \
+            --header="Hyprland 0.57 Blur & Solid Modes (0 MB Resident RAM)" \
             --header-first) || true
 
         if [ -n "$chosen" ]; then
@@ -433,9 +459,9 @@ cmd_menu() {
 
     # Fallback to fast interactive bash read
     cmd_list
-    echo -n "  Enter choice (1-10) or 'q' to quit: "
+    echo -n "  Enter choice (1-11) or 'q' to quit: "
     read -r choice
-    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le 10 ]; then
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le 11 ]; then
         apply_option "$choice"
     else
         echo "Exiting."
@@ -454,8 +480,8 @@ cmd_restore_backup() {
     echo "✓ Restored original configuration from undo point."
 }
 
-# Direct numeric argument handling: hypr-blur 1..10
-if [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge 1 ] && [ "$1" -le 10 ]; then
+# Direct numeric argument handling: hypr-blur 1..11
+if [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge 1 ] && [ "$1" -le 11 ]; then
     apply_option "$1"
     exit 0
 fi
@@ -499,6 +525,9 @@ case "${1:-menu}" in
         ;;
     kawase)
         apply_option 10
+        ;;
+    solid|solid_color|solid-color|opaque)
+        apply_option 11
         ;;
     reset)
         apply_option 10
