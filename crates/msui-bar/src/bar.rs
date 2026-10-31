@@ -114,6 +114,7 @@ pub struct Bar {
     next_reminder: Option<ReminderItem>,
     tray_items: Vec<TrayItem>,
     last_config_mtime: Option<std::time::SystemTime>,
+    metrics_tick_count: u32,
 }
 
 #[to_layer_message]
@@ -326,6 +327,7 @@ impl Bar {
             last_config_mtime: MsuiConfig::default_config_path()
                 .and_then(|p| std::fs::metadata(p).ok())
                 .and_then(|m| m.modified().ok()),
+            metrics_tick_count: 0,
         }
     }
 
@@ -399,11 +401,14 @@ impl Bar {
                     self.bluetooth_info = BluetoothManager::read();
                 }
                 self.has_removable_drive = StorageManager::has_removable_devices();
-                self.notification_count = {
-                    let mut store = msui_core::GLOBAL_NOTIFICATIONS.lock().unwrap();
-                    store.load();
-                    store.unread_count()
-                };
+                self.notification_count = msui_core::GLOBAL_NOTIFICATIONS.lock().unwrap().unread_count();
+
+                self.metrics_tick_count = self.metrics_tick_count.wrapping_add(1);
+                if self.metrics_tick_count % 15 == 0 {
+                    unsafe {
+                        libc::malloc_trim(0);
+                    }
+                }
             }
             Message::SwitchWorkspace(id) => {
                 self.hyprland_workspace = id;

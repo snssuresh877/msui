@@ -56,6 +56,16 @@ impl ReminderItem {
     }
 }
 
+struct ReminderCache {
+    last_mtime: Option<SystemTime>,
+    items: Vec<ReminderItem>,
+}
+
+static REMINDER_CACHE: Mutex<ReminderCache> = Mutex::new(ReminderCache {
+    last_mtime: None,
+    items: Vec::new(),
+});
+
 static REMINDER_LOCK: Mutex<()> = Mutex::new(());
 
 pub struct ReminderManager;
@@ -84,12 +94,27 @@ impl ReminderManager {
             return Vec::new();
         }
 
+        let mtime = fs::metadata(&path).ok().and_then(|m| m.modified().ok());
+        {
+            let cache = REMINDER_CACHE.lock().unwrap();
+            if let (Some(cur_mtime), Some(cached_mtime)) = (mtime, cache.last_mtime) {
+                if cur_mtime <= cached_mtime {
+                    return cache.items.clone();
+                }
+            }
+        }
+
         let content = match fs::read_to_string(&path) {
             Ok(c) => c,
             Err(_) => return Vec::new(),
         };
 
-        serde_json::from_str(&content).unwrap_or_default()
+        let items: Vec<ReminderItem> = serde_json::from_str(&content).unwrap_or_default();
+        if let Ok(mut cache) = REMINDER_CACHE.lock() {
+            cache.last_mtime = mtime;
+            cache.items = items.clone();
+        }
+        items
     }
 
     pub fn save(reminders: &[ReminderItem]) {
@@ -100,7 +125,12 @@ impl ReminderManager {
     fn save_unlocked(reminders: &[ReminderItem]) {
         let path = Self::storage_path();
         if let Ok(json_str) = serde_json::to_string_pretty(reminders) {
-            let _ = fs::write(path, json_str);
+            let _ = fs::write(&path, json_str);
+            let mtime = fs::metadata(&path).ok().and_then(|m| m.modified().ok());
+            if let Ok(mut cache) = REMINDER_CACHE.lock() {
+                cache.last_mtime = mtime;
+                cache.items = reminders.to_vec();
+            }
         }
     }
 

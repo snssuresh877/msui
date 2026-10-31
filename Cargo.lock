@@ -2504,6 +2504,7 @@ dependencies = [
  "iced_exwlshell",
  "iced_runtime",
  "iced_wayland_subscriber",
+ "libc",
  "msui-core",
  "tokio",
  "tracing",

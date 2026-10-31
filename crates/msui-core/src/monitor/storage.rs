@@ -395,8 +395,29 @@ impl StorageManager {
     }
 
     pub fn has_removable_devices() -> bool {
-        let partitions = Self::list_partitions();
-        partitions.iter().any(|p| p.is_removable)
+        let Ok(entries) = std::fs::read_dir("/sys/block") else {
+            return false;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            if name_str.starts_with("loop") || name_str.starts_with("ram") || name_str.starts_with("zram") {
+                continue;
+            }
+            let path = entry.path();
+            if let Ok(content) = std::fs::read_to_string(path.join("removable")) {
+                if content.trim() == "1" {
+                    if let Ok(size_str) = std::fs::read_to_string(path.join("size")) {
+                        if let Ok(sectors) = size_str.trim().parse::<u64>() {
+                            if sectors > 0 {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        false
     }
 }
 
