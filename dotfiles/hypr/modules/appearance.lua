@@ -77,10 +77,12 @@ hl.config({
 		-- Live testing: run 'hypr-blur next' or 'hypr-blur set <variant>' in terminal!
 		blur = {
 			enabled = true,
-			variant = "kawase", -- change to "acrylic", "aurora", "water", etc. to test
-			size = 2,           -- recommend 4-6 when testing shader variants
-			passes = 1,         -- recommend 2-3 when testing shader variants
-			proportional = false, -- scale blur with window size/resolution
+			variant = "acrylic", -- Active: modern acrylic glass effect with light diffusion & aberration
+			size = 5,
+			passes = 2,
+			proportional = true, -- scale blur proportionally with display resolution
+			ignore_opacity = true,
+			new_optimizations = true,
 		},
 
 		----------------------------------------------------
