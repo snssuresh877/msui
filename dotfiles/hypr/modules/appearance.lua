@@ -105,10 +105,6 @@ hl.config({
 	--------------------------------------------------------
 
 	misc = {
-		-- Battery & Display: Variable Frame Rate (only render when screen changes)
-		vfr = true,
-		render_unfocused = false,
-
 		-- Disable logos and splash screen
 		disable_hyprland_logo = true,
 		disable_splash_rendering = true,
