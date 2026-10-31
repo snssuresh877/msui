@@ -75,12 +75,12 @@ hl.config({
 		--   "aurora"       - Animated northern lights / aurora borealis ambient color glow
 		--   "haze"         - Iridescent atmospheric color haze
 		-- Live testing: run 'hypr-blur next' or 'hypr-blur set <variant>' in terminal!
-		blur = {
+						blur = {
 			enabled = true,
-			variant = "acrylic", -- Active: modern acrylic glass effect with light diffusion & aberration
+			variant = "acrylic", -- Active: acrylic
 			size = 5,
 			passes = 2,
-			proportional = true, -- scale blur proportionally with display resolution
+			proportional = true,
 			ignore_opacity = true,
 			new_optimizations = true,
 		},

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Blur & Shader Settings
+Comment=Select Hyprland 0.57 blur shaders (1-10: No blur, drops, fluid_jar, prism, frost, acrylic, aurora, water, heat_shimmer, kawase)
+Exec=foot -a hyprblur_float -T "Hyprland Blur Settings" -w 660x420 hypr-blur menu
+Icon=preferences-desktop-theme
+Terminal=false
+Type=Application
+Categories=Settings;DesktopSettings;Utility;
+Keywords=blur;shaders;hyprland;transparency;acrylic;drops;kawase;

@@ -506,6 +506,11 @@ hl.bind(MOD .. " + CTRL + B", hl.dsp.exec_cmd("msui bluetooth"), {
 	description = "Bluetooth Settings Manager (msUI)",
 })
 
+-- Super + Alt + B -> Hyprland Blur & Shader Effects Selector (0 MB Resident RAM)
+hl.bind(MOD .. " + ALT + B", hl.dsp.exec_cmd("foot -a hyprblur_float -T 'Hyprland Blur Settings' -w 660x420 hypr-blur menu"), {
+	description = "Blur & Shader Settings (1-10)",
+})
+
 -- Super + Ctrl + W -> Network & Wi-Fi Manager (msUI)
 hl.bind(MOD .. " + CTRL + W", hl.dsp.exec_cmd("msui wifi"), {
 	description = "Network & Wi-Fi Manager (msUI)",

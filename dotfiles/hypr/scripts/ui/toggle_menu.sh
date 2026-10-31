@@ -3,6 +3,7 @@ pgrep -x rofi >/dev/null && exit 0
 
 choice=$(printf \
 "󰔎 Toggle Night Light (Hyprsunset)
+󰔎 Blur & Shader Effects (1-10)
 󰂛 Toggle Do Not Disturb (DND)
 󰖔 Toggle Dark / Light Theme
 󱂬 msUI Theme Switcher
@@ -14,6 +15,7 @@ choice=$(printf \
 
 case "$choice" in
   *Night\ Light*) ~/.config/hypr/scripts/ui/toggle_nightlight.sh ;;
+  *Blur*) foot -a hyprblur_float -T "Hyprland Blur Settings" -w 660x420 hypr-blur menu ;;
   *Do\ Not\ Disturb*) ~/.config/hypr/scripts/ui/toggle_dnd.sh ;;
   *Dark\ \/\ Light*) ~/.config/hypr/scripts/ui/toggle_darkmode.sh ;;
   *msUI\ Theme*) msui theme ;;

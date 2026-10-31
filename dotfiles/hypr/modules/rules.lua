@@ -131,10 +131,10 @@ hl.window_rule({
 	opacity = "0.98 override 0.95 override 1.0 override",
 })
 
--- System Controls Floating Modals (wiremix, bluetui, transcode)
+-- System Controls Floating Modals (wiremix, bluetui, transcode, hyprblur)
 hl.window_rule({
 	match = {
-		class = "^(wiremix_float|bluetui_float|transcode_float)$",
+		class = "^(wiremix_float|bluetui_float|transcode_float|hyprblur_float)$",
 	},
 
 	float = true,
