@@ -59,6 +59,10 @@ hl.config({
 		-- Modern universal corner rounding.
 		rounding = 14,
 
+		-- Subtle translucency so blur shaders are clearly visible
+		active_opacity = 0.94,
+		inactive_opacity = 0.88,
+
 		----------------------------------------------------
 		-- BLUR (Hyprland 0.57+ Blur Shaders & Variants)
 		----------------------------------------------------
@@ -75,7 +79,7 @@ hl.config({
 		--   "aurora"       - Animated northern lights / aurora borealis ambient color glow
 		--   "haze"         - Iridescent atmospheric color haze
 		-- Live testing: run 'hypr-blur next' or 'hypr-blur set <variant>' in terminal!
-						blur = {
+										blur = {
 			enabled = true,
 			variant = "acrylic", -- Active: acrylic
 			size = 5,

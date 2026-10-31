@@ -131,10 +131,10 @@ hl.window_rule({
 	opacity = "0.98 override 0.95 override 1.0 override",
 })
 
--- System Controls Floating Modals (wiremix, bluetui, transcode, hyprblur)
+-- System Controls Floating Modals (wiremix, bluetui, transcode)
 hl.window_rule({
 	match = {
-		class = "^(wiremix_float|bluetui_float|transcode_float|hyprblur_float)$",
+		class = "^(wiremix_float|bluetui_float|transcode_float)$",
 	},
 
 	float = true,
@@ -145,6 +145,22 @@ hl.window_rule({
 	},
 	rounding = 14,
 	opacity = "0.98 override 0.95 override 1.0 override",
+})
+
+-- Hyprland Blur Settings Modal (Translucent to preview blur effects live)
+hl.window_rule({
+	match = {
+		class = "^hyprblur_float$",
+	},
+
+	float = true,
+	center = true,
+	size = {
+		700,
+		460,
+	},
+	rounding = 14,
+	opacity = "0.85 override 0.80 override 1.0 override",
 })
 
 -- LocalSend Floating Window
