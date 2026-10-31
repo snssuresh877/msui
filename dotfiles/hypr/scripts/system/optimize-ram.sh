@@ -24,14 +24,8 @@ else
     echo "✓ [1/5] Proton VPN daemon auto-start already disabled."
 fi
 
-# 2. Disable Ollama LLM service from auto-starting on boot (~58 MB savings)
-if systemctl is-enabled ollama.service >/dev/null 2>&1; then
-    echo "🛑 [2/5] Disabling Ollama 24/7 background service (~58 MB RAM)..."
-    systemctl disable --now ollama.service 2>/dev/null || true
-    echo "  -> Note: Run 'ollama run <model>' or 'systemctl start ollama' when needed."
-else
-    echo "✓ [2/5] Ollama service auto-start already disabled."
-fi
+# 2. Keep Ollama active as requested by user
+
 
 # 3. Disable TLP Python Power Daemon API (~24 MB savings)
 # TLP's core hardware power profile (tlp.service) remains 100% active at 0 MB RAM.
