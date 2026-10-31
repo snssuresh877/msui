@@ -124,19 +124,11 @@ if [[ -f /etc/default/grub ]]; then
         grub_modified=1
     fi
 
-    if ! grep -q "GRUB_DISABLE_BOOTNEXT" /etc/default/grub; then
-        echo "  -> Disabling redundant EFI BootNext entries in GRUB..."
-        echo "GRUB_DISABLE_BOOTNEXT=true" >> /etc/default/grub
-        grub_modified=1
-    fi
-
-    if ! grep -q "GRUB_TOP_LEVEL=" /etc/default/grub && [[ -f /boot/vmlinuz-linux-lts ]]; then
-        echo "  -> Setting Linux LTS as default top-level GRUB boot entry..."
-        echo 'GRUB_TOP_LEVEL="/boot/vmlinuz-linux-lts"' >> /etc/default/grub
-        grub_modified=1
-    fi
-
-    if [[ "$grub_modified" -eq 1 ]] && command -v grub-mkconfig >/dev/null 2>&1; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [[ "$grub_modified" -eq 1 ]] && [[ -f "$SCRIPT_DIR/clean-grub-menu.sh" ]]; then
+        echo "  -> Updating GRUB configuration with clean dual-boot menu..."
+        bash "$SCRIPT_DIR/clean-grub-menu.sh"
+    elif [[ "$grub_modified" -eq 1 ]] && command -v grub-mkconfig >/dev/null 2>&1; then
         echo "  -> Updating GRUB configuration (/boot/grub/grub.cfg)..."
         grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || true
     fi
