@@ -100,19 +100,34 @@ systemctl daemon-reload
 systemctl enable --now lenovo-conservation.service >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------
-# 3. GRUB USB Autosuspend Bug Fix
+# 3. Kernel USB Autosuspend & AMD P-State Configuration
 # ---------------------------------------------------------
-echo "🔌 [3/4] Checking kernel command line for usbcore.autosuspend=-1..."
-if [[ -f /etc/default/grub ]] && grep -q "usbcore\.autosuspend=-1" /etc/default/grub; then
-    echo "  -> Removing global usbcore.autosuspend=-1 from /etc/default/grub..."
-    sed -i -E 's/usbcore\.autosuspend=-1 ?//' /etc/default/grub
-    if command -v grub-mkconfig >/dev/null 2>&1; then
+echo "🔌 [3/4] Tuning kernel parameters for USB autosuspend and AMD P-State..."
+
+# Enable USB autosuspend immediately in running kernel
+if [[ -f /sys/module/usbcore/parameters/autosuspend ]]; then
+    echo 2 > /sys/module/usbcore/parameters/autosuspend 2>/dev/null || true
+    echo "  -> Applied live USB autosuspend (2 seconds idle) to running kernel."
+fi
+
+grub_modified=0
+if [[ -f /etc/default/grub ]]; then
+    if grep -q "usbcore\.autosuspend=-1" /etc/default/grub; then
+        echo "  -> Removing global usbcore.autosuspend=-1 from /etc/default/grub..."
+        sed -i -E 's/usbcore\.autosuspend=-1 ?//' /etc/default/grub
+        grub_modified=1
+    fi
+
+    if ! grep -q "amd_pstate=" /etc/default/grub; then
+        echo "  -> Adding amd_pstate=guided to GRUB for deep sub-GHz idle C-states (400 MHz floor)..."
+        sed -i -E 's/GRUB_CMDLINE_LINUX_DEFAULT="([^"]*)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 amd_pstate=guided"/' /etc/default/grub
+        grub_modified=1
+    fi
+
+    if [[ "$grub_modified" -eq 1 ]] && command -v grub-mkconfig >/dev/null 2>&1; then
         echo "  -> Updating GRUB configuration (/boot/grub/grub.cfg)..."
         grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || true
     fi
-    echo "  -> USB autosuspend unblocked! Internal devices (camera, fingerprint) can now sleep."
-else
-    echo "  -> No global usbcore.autosuspend override detected in GRUB."
 fi
 
 # ---------------------------------------------------------
