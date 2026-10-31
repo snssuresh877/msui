@@ -58,7 +58,7 @@ def prompt_ai(user_input: str) -> str:
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"}
     )
-    with urllib.request.urlopen(req, timeout=30.0) as resp:
+    with urllib.request.urlopen(req, timeout=120.0) as resp:
         result = json.loads(resp.read().decode("utf-8"))
         return result.get("message", {}).get("content", "").strip()
 
