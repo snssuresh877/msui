@@ -12,6 +12,7 @@ pub mod theme;
 pub mod tray;
 pub mod fshare;
 pub mod wallpaper;
+pub mod service;
 
 pub use clipboard::{ClipboardEntry, ClipboardStore, GLOBAL_CLIPBOARD, watcher::start_clipboard_watcher};
 pub use compositor::{HyprlandClient, HyprlandEvent, HyprlandIpc, HyprlandWorkspaceRef};
@@ -37,6 +38,7 @@ pub use notification::{
 };
 pub use power::SystemControl;
 pub use reminder::{ReminderItem, ReminderManager};
+pub use service::{SystemServiceInfo, SystemServiceManager};
 pub use theme::{ThemeDefinition, ThemeManager, BUILTIN_THEMES};
 pub use tray::{activate_tray_item, activate_tray_item_async, activate_tray_item_blocking, get_tray_items, watcher::run_tray_watcher, TrayItem};
 pub use wallpaper::{WallpaperItem, WallpaperManager};

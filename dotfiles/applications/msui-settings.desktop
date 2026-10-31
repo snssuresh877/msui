@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Settings
+GenericName=System Control Panel
+Comment=Control background daemons, RAM optimization, hardware radios, and desktop settings
+Exec=msui settings
+Icon=preferences-system
+Terminal=false
+Categories=Settings;HardwareSettings;System;Utility;
+Keywords=settings;control;panel;bluetooth;vpn;proton;ram;wifi;services;osd;blur;daemons;

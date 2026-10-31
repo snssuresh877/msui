@@ -19,6 +19,7 @@ pub mod toast;
 pub mod wallpaper_daemon;
 pub mod wallpaper_menu;
 pub mod modal_style;
+pub mod settings_panel;
 pub mod wifi_menu;
 
 pub use modal_style::{default_modal_card_style, default_subcard_style, modal_card_style, subcard_style};
@@ -38,6 +39,7 @@ pub use osd_window::{run_osd_window, OsdWindow, Message as OsdMessage};
 pub use polkit_dialog::{run_polkit_dialog, PolkitDialog, PolkitDialogArgs, Message as PolkitMessage};
 pub use power_menu::{run_power_menu, PowerMenu, Message as PowerMessage};
 pub use reminder_menu::{run_reminder_menu, ReminderMenu, Message as ReminderMessage};
+pub use settings_panel::{run_settings_panel, SettingsMessage, SettingsPanel, SettingsTab};
 pub use storage_menu::{run_storage_menu, StorageMenu, Message as StorageMessage};
 pub use theme_menu::{run_theme_menu, ThemeMenu, Message as ThemeMessage};
 pub use toast::{run_toast_window, ToastApp, Message as ToastMessage};

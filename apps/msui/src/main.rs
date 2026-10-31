@@ -33,6 +33,7 @@ impl ModalManager {
                     | "media" | "player"
                     | "storage" | "disks"
                     | "reminder" | "reminders"
+                    | "settings" | "systemcontrol" | "control-panel"
             )
         };
 
@@ -1349,6 +1350,24 @@ fn main() -> anyhow::Result<()> {
                 tracing::error!("msUI Polkit Dialog error: {:?}", e);
                 std::process::exit(1);
             }
+        }
+        "settings" | "systemcontrol" | "control-panel" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            if sub.is_none() && try_ipc_toggle("settings") {
+                return Ok(());
+            }
+            tracing::info!("Starting msUI System Control Panel...");
+            let config = MsuiConfig::load_or_default();
+            if let Err(e) = msui_launcher::run_settings_panel(config) {
+                tracing::error!("msUI Settings Panel exited with error: {:?}", e);
+            }
+        }
+        "system" => {
+            let sub_args: Vec<&str> = args.iter().skip(2).map(|s| s.as_str()).collect();
+            let mut cmd = std::process::Command::new("systemcontrol");
+            cmd.args(sub_args);
+            let status = cmd.status()?;
+            std::process::exit(status.code().unwrap_or(0));
         }
         "--help" | "-h" | "help" => {
             print_help();

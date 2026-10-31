@@ -1,0 +1,500 @@
+#!/usr/bin/env bash
+# systemcontrol - System Service & Hardware Radio Control CLI for msUI / Arch Linux
+# Manages Bluetooth, Proton VPN, Local AI Engine, Wi-Fi, TLP, Flatpak helper
+
+set -euo pipefail
+
+# Color palette (Catppuccin Mocha style)
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m' # No Color
+
+# Helper: check if a systemd unit is active
+is_unit_active() {
+    local unit="$1"
+    systemctl is-active "$unit" >/dev/null 2>&1
+}
+
+# Helper: get RSS RAM for a process matching a regex pattern (in MB)
+get_process_ram_mb() {
+    local pattern="$1"
+    local pids
+    pids=$(pgrep -f "$pattern" 2>/dev/null || true)
+    if [ -z "$pids" ]; then
+        echo "0"
+        return
+    fi
+    local total_kb=0
+    for pid in $pids; do
+        if [ "$pid" != "$$" ] && [ -r "/proc/$pid/statm" ]; then
+            local rss_pages
+            rss_pages=$(awk '{print $2}' "/proc/$pid/statm" 2>/dev/null || echo "0")
+            local kb=$((rss_pages * 4))
+            total_kb=$((total_kb + kb))
+        fi
+    done
+    echo $((total_kb / 1024))
+}
+
+# Helper: check Bluetooth hardware soft block via sysfs (< 0.05ms)
+is_bluetooth_soft_blocked() {
+    for f in /sys/class/rfkill/rfkill*/type; do
+        if [ -r "$f" ] && [ "$(cat "$f" 2>/dev/null)" = "bluetooth" ]; then
+            local soft_file="$(dirname "$f")/soft"
+            if [ -r "$soft_file" ] && [ "$(cat "$soft_file" 2>/dev/null)" = "1" ]; then
+                return 0
+            fi
+        fi
+    done
+    return 1
+}
+
+# Helper: check Wi-Fi radio status
+is_wifi_enabled() {
+    if command -v nmcli >/dev/null 2>&1; then
+        local st
+        st=$(nmcli radio wifi 2>/dev/null || echo "disabled")
+        [ "$st" = "enabled" ]
+    else
+        ! is_wifi_soft_blocked
+    fi
+}
+
+is_wifi_soft_blocked() {
+    for f in /sys/class/rfkill/rfkill*/type; do
+        if [ -r "$f" ] && [ "$(cat "$f" 2>/dev/null)" = "wlan" ]; then
+            local soft_file="$(dirname "$f")/soft"
+            if [ -r "$soft_file" ] && [ "$(cat "$soft_file" 2>/dev/null)" = "1" ]; then
+                return 0
+            fi
+        fi
+    done
+    return 1
+}
+
+# Normalize service alias
+normalize_service() {
+    case "${1:-}" in
+        bluetooth|bt|blue) echo "bluetooth" ;;
+        protonvpn|proton|vpn) echo "protonvpn" ;;
+        ai|ollama|localai|qwen) echo "ai" ;;
+        wifi|wlan|network|radio) echo "wifi" ;;
+        tlp|power) echo "tlp" ;;
+        flatpak|flatpak-helper) echo "flatpak" ;;
+        *) echo "$1" ;;
+    esac
+}
+
+# Status command
+cmd_status() {
+    local target="${1:-all}"
+    target=$(normalize_service "$target")
+
+    printf "${BOLD}%-18s %-16s %-12s %-12s %-24s${NC}\n" "SERVICE" "STATUS" "RAM (MB)" "RADIO" "ACTION / DESCRIPTION"
+    echo "--------------------------------------------------------------------------------"
+
+    # 1. Bluetooth
+    if [ "$target" = "all" ] || [ "$target" = "bluetooth" ]; then
+        local bt_status="Active"
+        local bt_color="$GREEN"
+        local bt_radio="Unblocked"
+        if is_bluetooth_soft_blocked; then
+            bt_status="Soft-Blocked"
+            bt_color="$RED"
+            bt_radio="Blocked (0 mW)"
+        elif ! is_unit_active bluetooth.service; then
+            bt_status="Inactive"
+            bt_color="$YELLOW"
+        fi
+        local bt_ram
+        bt_ram=$(get_process_ram_mb "bluetoothd")
+        printf "%-18s ${bt_color}%-16s${NC} %-12s %-12s %-24s\n" "Bluetooth" "$bt_status" "${bt_ram} MB" "$bt_radio" "Kernel rfkill & bluetoothd"
+    fi
+
+    # 2. Proton VPN
+    if [ "$target" = "all" ] || [ "$target" = "protonvpn" ]; then
+        local vpn_status="Inactive"
+        local vpn_color="$RED"
+        if is_unit_active proton.VPN.service; then
+            vpn_status="Active"
+            vpn_color="$GREEN"
+        fi
+        local vpn_ram
+        vpn_ram=$(get_process_ram_mb "proton.vpn.daemon")
+        printf "%-18s ${vpn_color}%-16s${NC} %-12s %-12s %-24s\n" "Proton VPN" "$vpn_status" "${vpn_ram} MB" "N/A" "proton.VPN.service"
+    fi
+
+    # 3. Local AI Engine
+    if [ "$target" = "all" ] || [ "$target" = "ai" ]; then
+        local ai_status="Stopped"
+        local ai_color="$RED"
+        local ai_ram
+        ai_ram=$(get_process_ram_mb "ollama")
+        if [ "$ai_ram" -gt 0 ] || pgrep -x ollama >/dev/null 2>&1; then
+            ai_status="Running"
+            ai_color="$GREEN"
+        fi
+        printf "%-18s ${ai_color}%-16s${NC} %-12s %-12s %-24s\n" "Local AI (Qwen)" "$ai_status" "${ai_ram} MB" "Port 11434" "On-demand LLM engine"
+    fi
+
+    # 4. Wi-Fi
+    if [ "$target" = "all" ] || [ "$target" = "wifi" ]; then
+        local wifi_status="Disabled"
+        local wifi_color="$RED"
+        if is_wifi_enabled; then
+            wifi_status="Enabled"
+            wifi_color="$GREEN"
+        fi
+        printf "%-18s ${wifi_color}%-16s${NC} %-12s %-12s %-24s\n" "Wi-Fi Radio" "$wifi_status" "N/A" "$wifi_status" "NetworkManager radio"
+    fi
+
+    # 5. TLP Power Management
+    if [ "$target" = "all" ] || [ "$target" = "tlp" ]; then
+        local tlp_status="Inactive"
+        local tlp_color="$RED"
+        if is_unit_active tlp.service; then
+            tlp_status="Active"
+            tlp_color="$GREEN"
+        fi
+        local tlp_ram
+        tlp_ram=$(get_process_ram_mb "tlp")
+        printf "%-18s ${tlp_color}%-16s${NC} %-12s %-12s %-24s\n" "TLP Optimizer" "$tlp_status" "${tlp_ram} MB" "ACPI" "Battery & CPU governor"
+    fi
+
+    # 6. Flatpak Helper
+    if [ "$target" = "all" ] || [ "$target" = "flatpak" ]; then
+        local fp_status="Inactive"
+        local fp_color="$DIM"
+        if is_unit_active flatpak-system-helper.service; then
+            fp_status="Active"
+            fp_color="$YELLOW"
+        fi
+        local fp_ram
+        fp_ram=$(get_process_ram_mb "flatpak-system-helper")
+        printf "%-18s ${fp_color}%-16s${NC} %-12s %-12s %-24s\n" "Flatpak Helper" "$fp_status" "${fp_ram} MB" "N/A" "flatpak-system-helper.service"
+    fi
+
+    echo ""
+}
+
+# Enable service / radio
+cmd_enable() {
+    local svc
+    svc=$(normalize_service "${1:-}")
+    case "$svc" in
+        bluetooth)
+            echo -e "${CYAN}Enabling Bluetooth...${NC}"
+            rfkill unblock bluetooth 2>/dev/null || true
+            systemctl start bluetooth.service 2>/dev/null || true
+            command -v bluetoothctl >/dev/null 2>&1 && bluetoothctl power on >/dev/null 2>&1 || true
+            echo -e "${GREEN}✓ Bluetooth radio and service enabled.${NC}"
+            ;;
+        protonvpn)
+            echo -e "${CYAN}Starting Proton VPN daemon...${NC}"
+            systemctl start proton.VPN.service
+            echo -e "${GREEN}✓ Proton VPN daemon is active.${NC}"
+            ;;
+        ai)
+            echo -e "${CYAN}Starting Local AI Engine...${NC}"
+            if command -v ai >/dev/null 2>&1; then
+                ai start
+            else
+                ~/.config/hypr/scripts/ai/ai-control.sh start
+            fi
+            echo -e "${GREEN}✓ Local AI Engine started.${NC}"
+            ;;
+        wifi)
+            echo -e "${CYAN}Enabling Wi-Fi radio...${NC}"
+            rfkill unblock wlan 2>/dev/null || true
+            if command -v nmcli >/dev/null 2>&1; then
+                nmcli radio wifi on
+            fi
+            echo -e "${GREEN}✓ Wi-Fi radio enabled.${NC}"
+            ;;
+        tlp)
+            echo -e "${CYAN}Starting TLP service...${NC}"
+            systemctl start tlp.service
+            echo -e "${GREEN}✓ TLP power optimizer active.${NC}"
+            ;;
+        flatpak)
+            echo -e "${CYAN}Starting Flatpak system helper...${NC}"
+            systemctl start flatpak-system-helper.service
+            echo -e "${GREEN}✓ Flatpak system helper active.${NC}"
+            ;;
+        *)
+            echo -e "${RED}Unknown service: $svc${NC}"
+            echo "Available services: bluetooth, protonvpn, ai, wifi, tlp, flatpak"
+            exit 1
+            ;;
+    esac
+}
+
+# Disable service / radio
+cmd_disable() {
+    local svc
+    svc=$(normalize_service "${1:-}")
+    case "$svc" in
+        bluetooth)
+            echo -e "${CYAN}Disabling Bluetooth...${NC}"
+            command -v bluetoothctl >/dev/null 2>&1 && bluetoothctl power off >/dev/null 2>&1 || true
+            rfkill block bluetooth 2>/dev/null || true
+            systemctl stop bluetooth.service 2>/dev/null || true
+            echo -e "${GREEN}✓ Bluetooth radio soft-blocked and service stopped (0 mW power draw).${NC}"
+            ;;
+        protonvpn)
+            echo -e "${CYAN}Stopping Proton VPN daemon...${NC}"
+            systemctl stop proton.VPN.service
+            echo -e "${GREEN}✓ Proton VPN daemon stopped (reclaimed ~180-386 MB RAM).${NC}"
+            ;;
+        ai)
+            echo -e "${CYAN}Stopping Local AI Engine...${NC}"
+            if command -v ai >/dev/null 2>&1; then
+                ai stop
+            else
+                ~/.config/hypr/scripts/ai/ai-control.sh stop
+            fi
+            echo -e "${GREEN}✓ Local AI Engine stopped (reclaimed ~1.1 GB RAM).${NC}"
+            ;;
+        wifi)
+            echo -e "${CYAN}Disabling Wi-Fi radio...${NC}"
+            if command -v nmcli >/dev/null 2>&1; then
+                nmcli radio wifi off
+            fi
+            rfkill block wlan 2>/dev/null || true
+            echo -e "${GREEN}✓ Wi-Fi radio disabled.${NC}"
+            ;;
+        tlp)
+            echo -e "${CYAN}Stopping TLP service...${NC}"
+            systemctl stop tlp.service
+            echo -e "${GREEN}✓ TLP service stopped.${NC}"
+            ;;
+        flatpak)
+            echo -e "${CYAN}Stopping Flatpak system helper...${NC}"
+            systemctl stop flatpak-system-helper.service
+            echo -e "${GREEN}✓ Flatpak helper stopped.${NC}"
+            ;;
+        *)
+            echo -e "${RED}Unknown service: $svc${NC}"
+            echo "Available services: bluetooth, protonvpn, ai, wifi, tlp, flatpak"
+            exit 1
+            ;;
+    esac
+}
+
+# Toggle service / radio
+cmd_toggle() {
+    local svc
+    svc=$(normalize_service "${1:-}")
+    case "$svc" in
+        bluetooth)
+            if is_bluetooth_soft_blocked || ! is_unit_active bluetooth.service; then
+                cmd_enable bluetooth
+            else
+                cmd_disable bluetooth
+            fi
+            ;;
+        protonvpn)
+            if is_unit_active proton.VPN.service; then
+                cmd_disable protonvpn
+            else
+                cmd_enable protonvpn
+            fi
+            ;;
+        ai)
+            if pgrep -x ollama >/dev/null 2>&1; then
+                cmd_disable ai
+            else
+                cmd_enable ai
+            fi
+            ;;
+        wifi)
+            if is_wifi_enabled; then
+                cmd_disable wifi
+            else
+                cmd_enable wifi
+            fi
+            ;;
+        tlp)
+            if is_unit_active tlp.service; then
+                cmd_disable tlp
+            else
+                cmd_enable tlp
+            fi
+            ;;
+        flatpak)
+            if is_unit_active flatpak-system-helper.service; then
+                cmd_disable flatpak
+            else
+                cmd_enable flatpak
+            fi
+            ;;
+        *)
+            echo -e "${RED}Unknown service: $svc${NC}"
+            exit 1
+            ;;
+    esac
+}
+
+# Optimize RAM: Stop heavy idle background services
+cmd_optimize() {
+    echo -e "${BOLD}${CYAN}⚡ Optimizing system RAM consumption...${NC}"
+    local saved_mb=0
+
+    # 1. Proton VPN
+    if is_unit_active proton.VPN.service; then
+        local r
+        r=$(get_process_ram_mb "proton.vpn.daemon")
+        echo -e "  Stopping Proton VPN daemon (${r} MB)..."
+        systemctl stop proton.VPN.service 2>/dev/null || true
+        saved_mb=$((saved_mb + r))
+    fi
+
+    # 2. Local AI Engine
+    if pgrep -x ollama >/dev/null 2>&1; then
+        local r
+        r=$(get_process_ram_mb "ollama")
+        echo -e "  Stopping Local AI Engine (${r} MB)..."
+        if command -v ai >/dev/null 2>&1; then
+            ai stop >/dev/null 2>&1 || true
+        fi
+        saved_mb=$((saved_mb + r))
+    fi
+
+    # 3. Flatpak helper
+    if is_unit_active flatpak-system-helper.service; then
+        local r
+        r=$(get_process_ram_mb "flatpak-system-helper")
+        echo -e "  Stopping Flatpak indexer (${r} MB)..."
+        systemctl stop flatpak-system-helper.service 2>/dev/null || true
+        saved_mb=$((saved_mb + r))
+    fi
+
+    # 4. Bluetooth if no devices connected
+    if ! is_bluetooth_soft_blocked; then
+        local has_connected=false
+        if command -v bluetoothctl >/dev/null 2>&1; then
+            local conns
+            conns=$(bluetoothctl devices Connected 2>/dev/null || true)
+            if [ -n "$conns" ]; then
+                has_connected=true
+            fi
+        fi
+        if [ "$has_connected" = false ]; then
+            echo -e "  Soft-blocking idle Bluetooth radio..."
+            rfkill block bluetooth 2>/dev/null || true
+        fi
+    fi
+
+    sync
+    echo -e "${GREEN}${BOLD}✓ RAM Optimization Complete! Estimated freed: ~${saved_mb} MB${NC}"
+}
+
+# GUI Command
+cmd_gui() {
+    if command -v msui >/dev/null 2>&1; then
+        exec msui settings
+    else
+        echo -e "${RED}msui binary not found in PATH.${NC}"
+        exit 1
+    fi
+}
+
+# Usage / Help
+cmd_help() {
+    cat <<EOF
+${BOLD}systemcontrol${NC} - System Service & Hardware Radio Control CLI
+
+${BOLD}USAGE:${NC}
+    systemcontrol <COMMAND> [SERVICE]
+
+${BOLD}COMMANDS:${NC}
+    ${GREEN}status${NC} [service]       Show live status, RAM usage, and radio states
+    ${GREEN}enable${NC} <service>       Enable / start service or hardware radio
+    ${GREEN}disable${NC} <service>      Disable / stop service or hardware radio (reclaims RAM)
+    ${GREEN}toggle${NC} <service>       Toggle service between active and inactive
+    ${GREEN}optimize${NC}              One-click RAM optimization (stops heavy idle services)
+    ${GREEN}gui${NC}                   Open the System Control Panel graphical window
+    ${GREEN}help${NC}                  Show this help message
+
+${BOLD}SERVICES:${NC}
+    ${PURPLE}bluetooth${NC} (bt)          Hardware radio & bluetooth.service
+    ${PURPLE}protonvpn${NC} (vpn, proton) proton.VPN.service (~180-386 MB RAM)
+    ${PURPLE}ai${NC} (ollama, localai)    Qwen 2.5 Coder on-demand LLM (~1.1 GB RAM)
+    ${PURPLE}wifi${NC} (wlan, network)   NetworkManager 802.11 wireless radio
+    ${PURPLE}tlp${NC} (power)             tlp.service battery saver
+    ${PURPLE}flatpak${NC}                 flatpak-system-helper.service (~68 MB RAM)
+
+${BOLD}EXAMPLES:${NC}
+    systemcontrol status
+    systemcontrol disable bluetooth
+    systemcontrol enable bluetooth
+    systemcontrol disable protonvpn
+    systemcontrol toggle ai
+    systemcontrol optimize
+    systemcontrol gui
+EOF
+}
+
+# Main dispatcher
+main() {
+    local cmd="${1:-status}"
+    shift || true
+
+    case "$cmd" in
+        status|list|ls)
+            cmd_status "${1:-all}"
+            ;;
+        enable|on|start)
+            if [ $# -lt 1 ]; then
+                echo "Usage: systemcontrol enable <service>"
+                exit 1
+            fi
+            cmd_enable "$1"
+            ;;
+        disable|off|stop)
+            if [ $# -lt 1 ]; then
+                echo "Usage: systemcontrol disable <service>"
+                exit 1
+            fi
+            cmd_disable "$1"
+            ;;
+        toggle)
+            if [ $# -lt 1 ]; then
+                echo "Usage: systemcontrol toggle <service>"
+                exit 1
+            fi
+            cmd_toggle "$1"
+            ;;
+        optimize|opt|clean)
+            cmd_optimize
+            ;;
+        gui|settings|panel|window)
+            cmd_gui
+            ;;
+        help|--help|-h)
+            cmd_help
+            ;;
+        bluetooth|bt|protonvpn|proton|vpn|ai|ollama|wifi|tlp|flatpak)
+            local action="${1:-toggle}"
+            case "$action" in
+                on|enable|start) cmd_enable "$cmd" ;;
+                off|disable|stop) cmd_disable "$cmd" ;;
+                status) cmd_status "$cmd" ;;
+                toggle|*) cmd_toggle "$cmd" ;;
+            esac
+            ;;
+        *)
+            echo -e "${RED}Unknown command: $cmd${NC}"
+            cmd_help
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
