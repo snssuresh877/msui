@@ -230,7 +230,6 @@ hl.window_rule({
 	},
 
 	rounding = 14,
-	opacity = "0.96 override 0.92 override 1.0 override",
 })
 
 -- File Manager Popups & Dialogs
