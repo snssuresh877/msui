@@ -31,32 +31,32 @@ image_bound = [ 0, 0 ]
 # =========================================================
 [opener]
 edit = [
-    { run = '${EDITOR:-nvim} "$@"', desc = "Edit with Neovim", block = true },
+    { run = 'nvim %s', desc = "Edit with Neovim", block = true },
 ]
 play = [
-    { run = 'mpv "$@"', desc = "Play in MPV", orphan = true },
+    { run = 'mpv %s', desc = "Play in MPV", orphan = true },
 ]
 view = [
-    { run = 'imv "$@"', desc = "View in imv", orphan = true },
+    { run = 'imv %s', desc = "View in imv", orphan = true },
 ]
 pdf = [
-    { run = 'evince "$@"', desc = "View in Evince", orphan = true },
-    { run = 'xdg-open "$@"', desc = "Open with System Default", orphan = true },
+    { run = 'evince %s', desc = "View in Evince", orphan = true },
+    { run = 'xdg-open %s', desc = "Open with System Default", orphan = true },
 ]
 open = [
-    { run = 'xdg-open "$@"', desc = "Open with System Default", orphan = true },
+    { run = 'xdg-open %s', desc = "Open with System Default", orphan = true },
 ]
 thunar = [
-    { run = 'thunar --window "$1"', desc = "Reveal in Thunar", orphan = true },
+    { run = 'thunar --window %s1', desc = "Reveal in Thunar", orphan = true },
 ]
 vector = [
-    { run = 'inkscape "$@"', desc = "Edit in Inkscape", orphan = true },
+    { run = 'inkscape %s', desc = "Edit in Inkscape", orphan = true },
 ]
 krita = [
-    { run = 'krita "$@"', desc = "Edit in Krita", orphan = true },
+    { run = 'krita %s', desc = "Edit in Krita", orphan = true },
 ]
 gimp = [
-    { run = 'gimp "$@"', desc = "Edit in GIMP", orphan = true },
+    { run = 'gimp %s', desc = "Edit in GIMP", orphan = true },
 ]
 
 # =========================================================

@@ -81,17 +81,14 @@ hl.config({
 		-- Live testing: run 'hypr-blur menu' or press Super + Alt + B
 																																																blur = {
 			enabled = true,
-			variant = "drops", -- Active: drops
-			size = 8,
-			passes = 3,
-			vibrancy = 0.6,
-			contrast = 1.1,
-			proportional = true,
+			variant = "kawase", -- Active: kawase
+			size = 4,
+			passes = 2,
+			vibrancy = 0.5,
+			contrast = 1.0,
+			proportional = false,
 			ignore_opacity = true,
 			new_optimizations = true,
-			drops = {
-				speed = 3.5,
-			},
 		},
 
 		----------------------------------------------------

@@ -12,12 +12,13 @@ prepend_keymap = [
 	{ on = [ "c", "m" ], run = "plugin chmod", desc = "Chmod on selected files" },
 
 	# Open hovered file or directory in Neovim
-	{ on = [ "e" ], run = "shell --block '${EDITOR:-nvim} \"$@\"'", desc = "Open in Neovim" },
+	{ on = [ "e" ], run = "shell --block 'nvim %s'", desc = "Open in Neovim" },
 
 	# Open current working directory in Neovim
-	{ on = [ "E" ], run = "shell --block '${EDITOR:-nvim} .'", desc = "Open cwd in Neovim" },
+	{ on = [ "E" ], run = "shell --block 'nvim .'", desc = "Open cwd in Neovim" },
 
-	# Smart Enter: Open files or enter directory on 'l' and Right Arrow
+	# Smart Enter: Open files or enter directory on Enter, 'l', and Right Arrow
+	{ on = [ "<Enter>" ], run = "plugin smart-enter", desc = "Enter directory or open file" },
 	{ on = [ "l" ], run = "plugin smart-enter", desc = "Enter directory or open file" },
 	{ on = [ "<Right>" ], run = "plugin smart-enter", desc = "Enter directory or open file" },
 ]
