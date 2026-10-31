@@ -149,5 +149,22 @@
 	<patterns>*.zip;*.tar.gz;*.tgz;*.tar.zst;*.tar.bz2;*.tar.xz;*.7z;*.rar;*.ZIP;*.TAR.GZ;*.TGZ;*.TAR.ZST;*.7Z</patterns>
 	<other-files/>
 </action>
+<action>
+	<icon>network-wireless</icon>
+	<name>Share with Phone (msUI FShare)</name>
+	<submenu></submenu>
+	<unique-id>1700000000000013-13</unique-id>
+	<command>msui fshare</command>
+	<description>Share files with phone or local network via msUI FShare QR code</description>
+	<range></range>
+	<patterns>*</patterns>
+	<directories/>
+	<audio-files/>
+	<image-files/>
+	<other-files/>
+	<text-files/>
+	<video-files/>
+</action>
 </actions>
+
 
