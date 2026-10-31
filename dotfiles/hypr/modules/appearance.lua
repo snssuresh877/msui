@@ -59,9 +59,9 @@ hl.config({
 		-- Modern universal corner rounding.
 		rounding = 14,
 
-		-- Subtle translucency so blur shaders are clearly visible
-		active_opacity = 0.94,
-		inactive_opacity = 0.88,
+		-- Translucency so blur shaders and background physics are clearly visible
+		active_opacity = 0.84,
+		inactive_opacity = 0.75,
 
 		----------------------------------------------------
 		-- BLUR (Hyprland 0.57+ Blur Shaders & Variants)
@@ -78,12 +78,14 @@ hl.config({
 		--   "acrylic"      - Modern acrylic with chromatic aberration & light diffusion
 		--   "aurora"       - Animated northern lights / aurora borealis ambient color glow
 		--   "haze"         - Iridescent atmospheric color haze
-		-- Live testing: run 'hypr-blur next' or 'hypr-blur set <variant>' in terminal!
-										blur = {
+		-- Live testing: run 'hypr-blur menu' or press Super + Alt + B
+				blur = {
 			enabled = true,
-			variant = "acrylic", -- Active: acrylic
-			size = 5,
-			passes = 2,
+			variant = "drops", -- Active: drops
+			size = 8,
+			passes = 3,
+			vibrancy = 0.6,
+			contrast = 1.1,
 			proportional = true,
 			ignore_opacity = true,
 			new_optimizations = true,

@@ -56,6 +56,19 @@ get_current_status() {
         echo "0"
         return
     fi
+    # Map variant index in Hyprland (0..10) to our 1..10 options
+    # Hyprland indices:
+    # 0: kawase -> option 10
+    # 1: frost -> option 5
+    # 2: ripple
+    # 3: drops -> option 2
+    # 4: water -> option 8
+    # 5: fluid_jar -> option 3
+    # 6: prism -> option 4
+    # 7: heat_shimmer -> option 9
+    # 8: acrylic -> option 6
+    # 9: aurora -> option 7
+    # 10: haze
     case "$var" in
         3) echo 2 ;;
         5) echo 3 ;;
@@ -76,8 +89,10 @@ apply_option() {
     local lua_code=""
     local enabled="true"
     local variant="acrylic"
-    local size=5
-    local passes=2
+    local size=8
+    local passes=3
+    local vibrancy=0.6
+    local contrast=1.1
     local prop=true
 
     case "$num" in
@@ -89,50 +104,50 @@ apply_option() {
         2|"drops")
             opt_name="drops"
             variant="drops"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "drops", size = 5, passes = 2, proportional = true } } })'
+            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "drops", size = 8, passes = 3, vibrancy = 0.6, contrast = 1.1, proportional = true } } })'
             ;;
         3|"fluid_jar")
             opt_name="fluid_jar"
             variant="fluid_jar"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "fluid_jar", size = 5, passes = 2, proportional = true } } })'
+            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "fluid_jar", size = 8, passes = 3, vibrancy = 0.6, contrast = 1.1, proportional = true } } })'
             ;;
         4|"prism")
             opt_name="prism"
             variant="prism"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "prism", size = 5, passes = 2, proportional = true } } })'
+            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "prism", size = 8, passes = 3, vibrancy = 0.6, contrast = 1.1, proportional = true } } })'
             ;;
         5|"frost")
             opt_name="frost"
             variant="frost"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "frost", size = 5, passes = 2, proportional = true } } })'
+            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "frost", size = 8, passes = 3, vibrancy = 0.6, contrast = 1.1, proportional = true } } })'
             ;;
         6|"acrylic")
             opt_name="acrylic"
             variant="acrylic"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "acrylic", size = 5, passes = 2, proportional = true } } })'
+            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "acrylic", size = 8, passes = 3, vibrancy = 0.6, contrast = 1.1, proportional = true } } })'
             ;;
         7|"aurora")
             opt_name="aurora"
             variant="aurora"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "aurora", size = 5, passes = 2, proportional = true } } })'
+            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "aurora", size = 8, passes = 3, vibrancy = 0.6, contrast = 1.1, aurora = { intensity = 0.85 }, proportional = true } } })'
             ;;
         8|"water")
             opt_name="water"
             variant="water"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "water", size = 5, passes = 2, proportional = true } } })'
+            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "water", size = 8, passes = 3, vibrancy = 0.6, contrast = 1.1, proportional = true } } })'
             ;;
         9|"heat_shimmer")
             opt_name="heat_shimmer"
             variant="heat_shimmer"
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "heat_shimmer", size = 5, passes = 2, proportional = true } } })'
+            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "heat_shimmer", size = 8, passes = 3, vibrancy = 0.6, contrast = 1.1, proportional = true } } })'
             ;;
         10|"kawase")
             opt_name="kawase"
             variant="kawase"
-            size=2
-            passes=1
+            size=4
+            passes=2
             prop=false
-            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "kawase", size = 2, passes = 1, proportional = false } } })'
+            lua_code='hl.config({ decoration = { blur = { enabled = true, variant = "kawase", size = 4, passes = 2, proportional = false } } })'
             ;;
         *)
             echo "Error: Invalid option '$num'. Must be 1 to 10."
@@ -141,8 +156,10 @@ apply_option() {
             ;;
     esac
 
+    # Apply live immediately
     hyprctl repl "$lua_code" >/dev/null 2>&1
 
+    # Persist in appearance.lua (both active config and dotfiles)
     python3 -c "
 import sys
 
@@ -165,6 +182,8 @@ def update_file(filepath):
 			variant = \"$variant\", -- Active: $opt_name
 			size = $size,
 			passes = $passes,
+			vibrancy = $vibrancy,
+			contrast = $contrast,
 			proportional = $prop,
 			ignore_opacity = true,
 			new_optimizations = true,
@@ -180,6 +199,7 @@ update_file('$CONFIG_FILE')
 update_file('$DOTFILES_CONFIG')
 "
 
+    # Send notification
     if [ "$enabled" = "false" ]; then
         notify-send -a "Hyprland Blur" -i dialog-information "Blur Disabled" "Window & layer blur turned off (Option 1)"
         echo "✓ Disabled blur (Option 1: No blur)"
@@ -237,6 +257,7 @@ cmd_menu() {
     local cur
     cur=$(get_current_status)
 
+    # If fzf is available and interactive terminal, provide sleek fuzzy menu
     if command -v fzf >/dev/null 2>&1 && [ -t 0 ]; then
         local menu_items=()
         for i in {1..10}; do
@@ -269,6 +290,7 @@ cmd_menu() {
         return
     fi
 
+    # Fallback to fast interactive bash read
     cmd_list
     echo -n "  Enter choice (1-10) or 'q' to quit: "
     read -r choice
@@ -291,6 +313,7 @@ cmd_restore_backup() {
     echo "✓ Restored original configuration from undo point."
 }
 
+# Direct numeric argument handling: hypr-blur 1..10
 if [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -ge 1 ] && [ "$1" -le 10 ]; then
     apply_option "$1"
     exit 0
