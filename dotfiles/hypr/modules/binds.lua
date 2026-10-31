@@ -78,9 +78,13 @@ hl.bind(MOD .. " + B", hl.dsp.exec_cmd(Apps.browser), {
 	description = "Browser",
 })
 
--- LOCAL AI ASSISTANT (OLLAMA)
-hl.bind(MOD .. " + O", hl.dsp.exec_cmd("foot --app-id=ai_assistant_float -T 'AI Assistant' -e $HOME/.local/bin/ai"), {
-	description = "Local AI Assistant",
+-- LOCAL AI ASSISTANT & ON-DEMAND ENGINE SWITCH
+hl.bind(MOD .. " + O", hl.dsp.exec_cmd("$HOME/.config/hypr/scripts/ai/ai-control.sh chat"), {
+	description = "Local AI Assistant Floating Window",
+})
+
+hl.bind(MOD .. " + ALT + A", hl.dsp.exec_cmd("$HOME/.config/hypr/scripts/ai/ai-control.sh toggle"), {
+	description = "Toggle Local AI Engine On/Off (0 MB RAM Free)",
 })
 
 hl.bind(MOD .. " + SHIFT + A", hl.dsp.exec_cmd("$HOME/.config/hypr/scripts/ui/ai_explain_selection.sh"), {

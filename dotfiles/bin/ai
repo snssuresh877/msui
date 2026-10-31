@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# msUI AI CLI & Interactive Launcher
+# ==============================================================================
+# Universal entrypoint for:
+#   1. Subcommands: ai start | ai stop | ai toggle | ai status | ai chat
+#   2. Piped queries: cat file | ai "Explain this"
+#   3. Direct prompts: ai "Generate SVG circle"
+#   4. Interactive terminal chat: ai
+# ==============================================================================
+
+set -uo pipefail
+
+SCRIPT_DIR="${HOME}/.config/hypr/scripts/ai"
+MODEL="qwen2.5-coder:1.5b"
+PORT=11434
+API_URL="http://127.0.0.1:${PORT}"
+
+ensure_server() {
+    if ! curl -s --connect-timeout 1 "${API_URL}/" 2>/dev/null | grep -q "Ollama is running"; then
+        "${SCRIPT_DIR}/ai-control.sh" start >/dev/null 2>&1
+    fi
+}
+
+# 1. Handle management subcommands
+case "${1:-}" in
+    start|stop|toggle|status|window|chat)
+        exec "${SCRIPT_DIR}/ai-control.sh" "$@"
+        ;;
+    --help|-h)
+        echo "Usage: ai [command|prompt]"
+        echo "Commands:"
+        echo "  start     Start the local AI engine (0 MB resident when stopped)"
+        echo "  stop      Stop the AI engine and reclaim 100% RAM"
+        echo "  toggle    Toggle AI engine on/off"
+        echo "  status    Show AI engine status and RAM consumption"
+        echo "  chat      Open interactive floating chat window"
+        echo "  <prompt>  Send one-shot query to local model"
+        exit 0
+        ;;
+esac
+
+# 2. Handle interactive terminal when no args and stdin is a TTY
+if [[ $# -eq 0 && -t 0 ]]; then
+    ensure_server
+    exec "${SCRIPT_DIR}/ai-terminal-chat.sh"
+fi
+
+# 3. Handle piped input or command-line prompt
+ensure_server
+
+prompt_prefix="${*:-}"
+input_data=""
+
+if [[ ! -t 0 ]]; then
+    input_data=$(cat)
+fi
+
+full_prompt=""
+if [[ -n "${prompt_prefix}" && -n "${input_data}" ]]; then
+    full_prompt="${prompt_prefix}:\n\n${input_data}"
+elif [[ -n "${prompt_prefix}" ]]; then
+    full_prompt="${prompt_prefix}"
+elif [[ -n "${input_data}" ]]; then
+    full_prompt="${input_data}"
+fi
+
+if [[ -z "${full_prompt}" ]]; then
+    exec "${SCRIPT_DIR}/ai-terminal-chat.sh"
+fi
+
+# Stream generation to terminal stdout
+ollama run "${MODEL}" "${full_prompt}"
