@@ -982,20 +982,11 @@ impl Bar {
 
         // Quick Settings Control Center Shortcut
         if self.config.bar.show_control_center {
-            let control_btn = button(text(" 󰅐 ").size(12))
+            let control_btn = button(text(" 󰒓 ").size(12))
                 .style(bar_btn_transparent)
                 .padding([2, 6])
                 .on_press(Message::OpenControlCenter);
             right_row = right_row.push(control_btn);
-        }
-
-        // System Settings Panel Shortcut
-        if self.config.bar.show_settings {
-            let settings_btn = button(text(" ⚙ ").size(13))
-                .style(bar_btn_transparent)
-                .padding([2, 6])
-                .on_press(Message::OpenSettings);
-            right_row = right_row.push(settings_btn);
         }
 
         // Terminal Shortcut

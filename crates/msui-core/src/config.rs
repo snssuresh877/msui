@@ -80,7 +80,7 @@ pub struct BarConfig {
     pub show_notifications: bool,
     #[serde(default = "default_true")]
     pub show_control_center: bool,
-    #[serde(default = "default_true")]
+    #[serde(default = "default_false")]
     pub show_settings: bool,
     #[serde(default = "default_true")]
     pub show_terminal: bool,
@@ -137,6 +137,7 @@ fn default_battery_refresh() -> u64 { 5 }
 fn default_sysinfo_refresh() -> u64 { 2 }
 fn default_workspace_count() -> usize { 3 }
 fn default_true() -> bool { true }
+fn default_false() -> bool { false }
 
 fn default_launcher_width() -> u32 { 680 }
 fn default_launcher_height() -> u32 { 420 }
@@ -200,7 +201,7 @@ impl Default for BarConfig {
             show_clipboard: true,
             show_notifications: true,
             show_control_center: true,
-            show_settings: true,
+            show_settings: false,
             show_terminal: true,
             show_power: true,
         }

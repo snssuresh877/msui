@@ -33,7 +33,7 @@ show_screenshot = false
 show_clipboard = false
 show_notifications = true
 show_control_center = true
-show_settings = true
+show_settings = false
 show_terminal = false
 show_power = true
 

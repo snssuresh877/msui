@@ -478,7 +478,7 @@ impl UnifiedShell {
                     self.config.bar.height as i32 + 8
                 };
                 let (mid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
-                    size: LayerSize::px(400, 765),
+                    size: LayerSize::px(400, 810),
                     layer: Layer::Overlay,
                     anchor: Anchor::Top | Anchor::Right,
                     margin: Some(Margin {
