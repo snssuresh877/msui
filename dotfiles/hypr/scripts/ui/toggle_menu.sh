@@ -15,7 +15,7 @@ choice=$(printf \
 
 case "$choice" in
   *Night\ Light*) ~/.config/hypr/scripts/ui/toggle_nightlight.sh ;;
-  *Blur*) foot -a hyprblur_float -T "Hyprland Blur Settings" -w 660x420 hypr-blur menu ;;
+  *Blur*) msui settings ;;
   *Do\ Not\ Disturb*) ~/.config/hypr/scripts/ui/toggle_dnd.sh ;;
   *Dark\ \/\ Light*) ~/.config/hypr/scripts/ui/toggle_darkmode.sh ;;
   *msUI\ Theme*) msui theme ;;

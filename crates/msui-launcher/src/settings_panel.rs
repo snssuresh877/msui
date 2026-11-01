@@ -48,6 +48,7 @@ pub struct SettingsPanel {
     osd_caps: bool,
     osd_power: bool,
     blur_enabled: bool,
+    pub active_blur_preset: u8,
     animations_enabled: bool,
     frosted_enabled: bool,
     dnd_enabled: bool,
@@ -73,6 +74,7 @@ pub enum SettingsMessage {
     ToggleOsdCaps,
     ToggleOsdPower,
     ToggleBlur,
+    SetBlurPreset(u8),
     ToggleAnimations,
     ToggleFrosted,
     ToggleDnd,
@@ -137,6 +139,60 @@ pub fn run_settings_panel(config: MsuiConfig) -> Result<(), iced_exwlshell::Erro
     .run()
 }
 
+fn detect_current_blur_preset() -> u8 {
+    let enabled = StdCommand::new("hyprctl")
+        .args(["getoption", "decoration:blur:enabled", "-j"])
+        .output()
+        .map(|o| {
+            let s = String::from_utf8_lossy(&o.stdout);
+            s.contains("\"bool\": true") || s.contains("true")
+        })
+        .unwrap_or(true);
+
+    if !enabled {
+        let op_output = StdCommand::new("hyprctl")
+            .args(["getoption", "decoration:active_opacity", "-j"])
+            .output();
+        let is_solid = op_output
+            .map(|o| {
+                let s = String::from_utf8_lossy(&o.stdout);
+                s.contains("1.0") || s.contains("1")
+            })
+            .unwrap_or(false);
+        if is_solid {
+            11
+        } else {
+            1
+        }
+    } else {
+        let var_output = StdCommand::new("hyprctl")
+            .args(["getoption", "decoration:blur:variant", "-j"])
+            .output();
+        let variant_str = var_output
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+            .unwrap_or_default();
+        if variant_str.contains("\"int\": 1") || variant_str.contains("\"str\": \"drops\"") {
+            2
+        } else if variant_str.contains("\"int\": 2") || variant_str.contains("\"str\": \"fluid_jar\"") {
+            3
+        } else if variant_str.contains("\"int\": 3") || variant_str.contains("\"str\": \"prism\"") {
+            4
+        } else if variant_str.contains("\"int\": 4") || variant_str.contains("\"str\": \"frost\"") {
+            5
+        } else if variant_str.contains("\"int\": 5") || variant_str.contains("\"str\": \"acrylic\"") {
+            6
+        } else if variant_str.contains("\"int\": 6") || variant_str.contains("\"str\": \"aurora\"") {
+            7
+        } else if variant_str.contains("\"int\": 7") || variant_str.contains("\"str\": \"water\"") {
+            8
+        } else if variant_str.contains("\"int\": 8") || variant_str.contains("\"str\": \"heat_shimmer\"") {
+            9
+        } else {
+            10 // default kawase
+        }
+    }
+}
+
 impl SettingsPanel {
     pub fn new() -> (Self, Command<SettingsMessage>) {
         Self::new_internal(MsuiConfig::load_or_default(), true)
@@ -151,6 +207,7 @@ impl SettingsPanel {
         let dnd_enabled = DndManager::is_dnd_enabled();
         let audio_info = AudioMonitor::read();
         let current_power_profile = PowerProfileManager::get_profile();
+        let active_blur_preset = detect_current_blur_preset();
 
         // Check blur status from hyprctl
         let blur_enabled = StdCommand::new("hyprctl")
@@ -177,7 +234,7 @@ impl SettingsPanel {
         (
             Self {
                 config,
-                active_tab: SettingsTab::Bar,
+                active_tab: SettingsTab::Interface,
                 search_query: String::new(),
                 services,
                 is_standalone,
@@ -190,6 +247,7 @@ impl SettingsPanel {
                 osd_caps: true,
                 osd_power: true,
                 blur_enabled,
+                active_blur_preset,
                 animations_enabled,
                 frosted_enabled,
                 dnd_enabled,
@@ -210,6 +268,7 @@ impl SettingsPanel {
         self.dnd_enabled = DndManager::is_dnd_enabled();
         self.audio_info = AudioMonitor::read();
         self.current_power_profile = PowerProfileManager::get_profile();
+        self.active_blur_preset = detect_current_blur_preset();
         self.should_close = false;
         self.last_toggle_time = None;
         Command::none()
@@ -295,13 +354,28 @@ impl SettingsPanel {
             }
             SettingsMessage::ToggleBlur => {
                 self.blur_enabled = !self.blur_enabled;
-                let _ = StdCommand::new("hyprctl")
-                    .args([
-                        "keyword",
-                        "decoration:blur:enabled",
-                        if self.blur_enabled { "true" } else { "false" },
-                    ])
-                    .spawn();
+                let preset = if self.blur_enabled { 10 } else { 1 };
+                self.active_blur_preset = preset;
+                self.status_feedback = Some(if self.blur_enabled {
+                    "Enabled Dual-Kawase GPU Blur".to_string()
+                } else {
+                    "Disabled Blur (Translucent Windows)".to_string()
+                });
+                std::thread::spawn(move || {
+                    let _ = StdCommand::new("hypr-blur")
+                        .arg(preset.to_string())
+                        .status();
+                });
+            }
+            SettingsMessage::SetBlurPreset(preset) => {
+                self.active_blur_preset = preset;
+                self.blur_enabled = preset != 1 && preset != 11;
+                self.status_feedback = Some(format!("Applied blur preset #{}", preset));
+                std::thread::spawn(move || {
+                    let _ = StdCommand::new("hypr-blur")
+                        .arg(preset.to_string())
+                        .status();
+                });
             }
             SettingsMessage::ToggleAnimations => {
                 self.animations_enabled = !self.animations_enabled;
@@ -1055,8 +1129,8 @@ impl SettingsPanel {
     /// Interface Style Tab
     fn view_interface_tab(&self) -> Element<'_, SettingsMessage> {
         let header = column![
-            text("Interface style").size(19).color(Color::WHITE),
-            text("Hyprland compositor blur, shadows, corners, window gaps, and active border color")
+            text("Interface & Blur Style").size(19).color(Color::WHITE),
+            text("Hyprland 0.57+ hardware shaders, blur refraction modes, window gaps, and borders")
                 .size(11)
                 .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
         ]
@@ -1064,7 +1138,7 @@ impl SettingsPanel {
 
         let toggles = column![
             self.setting_toggle_row(
-                "Hyprland GPU Blur (Kawase)",
+                "Hyprland GPU Blur (Kawase & Shaders)",
                 self.blur_enabled,
                 SettingsMessage::ToggleBlur,
             ),
@@ -1081,6 +1155,68 @@ impl SettingsPanel {
         ]
         .spacing(6);
 
+        // 11 Blur Presets (matching hypr-blur 0.57 controller)
+        let blur_presets: [(u8, &'static str, &'static str, &'static str); 11] = [
+            (1, "🚫", "No Blur", "Disable blur while preserving translucency (Lightweight)"),
+            (10, "🌫️", "Dual-Kawase", "Standard dual-kawase pyramid blur (clean & lightweight)"),
+            (6, "🪟", "Acrylic Glass", "Modern acrylic glass with max light diffusion & chromatic aberration"),
+            (5, "❄️", "Winter Frost", "Micro-textured winter frosted crystal surface"),
+            (2, "💧", "Rain Drops", "Rain droplets trickling & condensing on glass"),
+            (3, "🧪", "Fluid Jar", "Viscous fluid container with turbulence & liquid physics"),
+            (4, "💎", "Prism Refract", "Crystalline prism refraction with rainbow light dispersion"),
+            (7, "🌌", "Aurora Neon", "Undulating Northern Lights / Aurora Borealis ambient glow"),
+            (8, "🌊", "Water Ripples", "Fluid wave displacement equations rippling across windows"),
+            (9, "♨️", "Heat Shimmer", "Atmospheric heat haze mirage distortion waves"),
+            (11, "⬛", "Solid Opaque", "100% solid opaque windows matching system theme (zero blur)"),
+        ];
+
+        let mut row_1 = row![].spacing(8);
+        let mut row_2 = row![].spacing(8);
+        let mut row_3 = row![].spacing(8);
+
+        for (i, (id, icon, name, _)) in blur_presets.iter().enumerate() {
+            let is_sel = self.active_blur_preset == *id;
+            let label = format!("{} {}", icon, name);
+            let chip = self.chip_button(label, is_sel, SettingsMessage::SetBlurPreset(*id));
+            if i < 4 {
+                row_1 = row_1.push(chip);
+            } else if i < 8 {
+                row_2 = row_2.push(chip);
+            } else {
+                row_3 = row_3.push(chip);
+            }
+        }
+
+        let active_desc = blur_presets
+            .iter()
+            .find(|(id, ..)| *id == self.active_blur_preset)
+            .map(|(_, icon, name, desc)| format!("Active Preset: {} {} — {}", icon, name, desc))
+            .unwrap_or_else(|| "Custom shader configuration active".to_string());
+
+        let active_desc_text = container(
+            text(active_desc)
+                .size(11)
+                .color(Color::from_rgb8(196, 181, 253))
+        )
+        .padding([6, 10])
+        .style(|_t| container::Style {
+            background: Some(Color::from_rgba(139.0 / 255.0, 92.0 / 255.0, 246.0 / 255.0, 0.12).into()),
+            border: Border {
+                color: Color::from_rgba(139.0 / 255.0, 92.0 / 255.0, 246.0 / 255.0, 0.25),
+                width: 1.0,
+                radius: 8.0.into(),
+            },
+            ..Default::default()
+        });
+
+        let blur_shaders_card = column![
+            row_1,
+            row_2,
+            row_3,
+            active_desc_text,
+        ]
+        .spacing(8);
+
         // Window Gaps Presets
         let gaps_chips = row![
             self.chip_button("Compact (3px / 6px)", self.active_gaps == (3, 6), SettingsMessage::SetGaps(3, 6)),
@@ -1095,12 +1231,14 @@ impl SettingsPanel {
             self.chip_button("🔵 Cyan Electric", self.active_border_color == "rgba(06b6d4ff)", SettingsMessage::SetBorderColor("rgba(06b6d4ff)".into())),
             self.chip_button("🟢 Emerald Green", self.active_border_color == "rgba(10b981ff)", SettingsMessage::SetBorderColor("rgba(10b981ff)".into())),
             self.chip_button("🟠 Amber Orange", self.active_border_color == "rgba(f97316ff)", SettingsMessage::SetBorderColor("rgba(f97316ff)".into())),
+            self.chip_button("🔴 Rose Pink", self.active_border_color == "rgba(f43f5eff)", SettingsMessage::SetBorderColor("rgba(f43f5eff)".into())),
         ]
         .spacing(8);
 
         let content = column![
             header,
-            self.settings_card("Visual Effects & Compositing", "Hardware-accelerated window aesthetics", toggles),
+            self.settings_card("Compositor Effects & Glass", "Hardware-accelerated window aesthetics", toggles),
+            self.settings_card("Hyprland 0.57+ Blur Shaders & Appearance Presets", "Select dual-kawase, acrylic, frost, rain drops, or liquid physics shaders", blur_shaders_card),
             self.settings_card("Window Inner & Outer Gaps", "Hyprland tiling workspace padding", gaps_chips),
             self.settings_card("Active Window Border Accent", "Accent highlight around the focused window", border_chips),
         ]
