@@ -9,23 +9,31 @@ use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
 use msui_core::{
-    DndManager, MsuiConfig, SystemServiceInfo, SystemServiceManager, ThemeManager,
-    WallpaperManager,
+    AudioInfo, AudioMonitor, DndManager, MsuiConfig, PowerProfile, PowerProfileManager,
+    SystemServiceInfo, SystemServiceManager, ThemeManager, WallpaperManager,
 };
 use std::process::Command as StdCommand;
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsTab {
-    Services,
-    Osd,
-    Interface,
     Wallpaper,
+    Interface,
+    Fonts,
+    Bar,
+    BarWidgets,
+    Dock,
+    Launcher,
+    Dashboard,
     Notifications,
+    Osd,
+    Services,
     Power,
+    Audio,
 }
 
 pub struct SettingsPanel {
+    pub config: MsuiConfig,
     active_tab: SettingsTab,
     search_query: String,
     services: Vec<SystemServiceInfo>,
@@ -43,6 +51,10 @@ pub struct SettingsPanel {
     animations_enabled: bool,
     frosted_enabled: bool,
     dnd_enabled: bool,
+    current_power_profile: PowerProfile,
+    audio_info: AudioInfo,
+    active_gaps: (u32, u32),
+    active_border_color: String,
     status_feedback: Option<String>,
     last_toggle_time: Option<Instant>,
 }
@@ -67,6 +79,26 @@ pub enum SettingsMessage {
     SetTheme(String),
     WallpaperNext,
     WallpaperRandom,
+    SetBarPosition(String),
+    SetBarStyle(String),
+    SetBarHeight(u32),
+    SetBarTransparency(String),
+    SetTimeFormat(String),
+    SetWorkspaceCount(usize),
+    ToggleBarWidget(&'static str),
+    SetLauncherDimensions(u32, u32),
+    SetTerminal(String),
+    SetMaxResults(usize),
+    SetGaps(u32, u32),
+    SetBorderColor(String),
+    SetPowerProfile(PowerProfile),
+    StepVolume(i8),
+    ToggleAudioMute,
+    LaunchPavucontrol,
+    SetAnimationSpeed(&'static str),
+    SetDockPosition(String),
+    SetDockSize(u32),
+    SetWeatherUnit(String),
     Tick,
     Close,
     Ignored,
@@ -79,12 +111,12 @@ impl TryInto<ExwlShellCustomActionWithId> for SettingsMessage {
     }
 }
 
-pub fn run_settings_panel(_config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
+pub fn run_settings_panel(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
     let width = 960;
     let height = 660;
 
     application(
-        SettingsPanel::new,
+        move || SettingsPanel::new_internal(config.clone(), true),
         SettingsPanel::namespace,
         SettingsPanel::update,
         SettingsPanel::view,
@@ -107,16 +139,18 @@ pub fn run_settings_panel(_config: MsuiConfig) -> Result<(), iced_exwlshell::Err
 
 impl SettingsPanel {
     pub fn new() -> (Self, Command<SettingsMessage>) {
-        Self::new_internal(true)
+        Self::new_internal(MsuiConfig::load_or_default(), true)
     }
 
-    pub fn new_embedded() -> (Self, Command<SettingsMessage>) {
-        Self::new_internal(false)
+    pub fn new_embedded(config: MsuiConfig) -> (Self, Command<SettingsMessage>) {
+        Self::new_internal(config, false)
     }
 
-    fn new_internal(is_standalone: bool) -> (Self, Command<SettingsMessage>) {
+    fn new_internal(config: MsuiConfig, is_standalone: bool) -> (Self, Command<SettingsMessage>) {
         let services = SystemServiceManager::list_services();
         let dnd_enabled = DndManager::is_dnd_enabled();
+        let audio_info = AudioMonitor::read();
+        let current_power_profile = PowerProfileManager::get_profile();
 
         // Check blur status from hyprctl
         let blur_enabled = StdCommand::new("hyprctl")
@@ -138,12 +172,12 @@ impl SettingsPanel {
             })
             .unwrap_or(true);
 
-        let cfg = MsuiConfig::load_or_default();
-        let frosted_enabled = cfg.bar.is_frosted();
+        let frosted_enabled = config.bar.is_frosted();
 
         (
             Self {
-                active_tab: SettingsTab::Services,
+                config,
+                active_tab: SettingsTab::Bar,
                 search_query: String::new(),
                 services,
                 is_standalone,
@@ -159,6 +193,10 @@ impl SettingsPanel {
                 animations_enabled,
                 frosted_enabled,
                 dnd_enabled,
+                current_power_profile,
+                audio_info,
+                active_gaps: (5, 12),
+                active_border_color: "rgba(9333eaff)".to_string(),
                 status_feedback: None,
                 last_toggle_time: None,
             },
@@ -167,8 +205,11 @@ impl SettingsPanel {
     }
 
     pub fn reset(&mut self) -> Command<SettingsMessage> {
+        self.config = MsuiConfig::load_or_default();
         self.services = SystemServiceManager::list_services();
         self.dnd_enabled = DndManager::is_dnd_enabled();
+        self.audio_info = AudioMonitor::read();
+        self.current_power_profile = PowerProfileManager::get_profile();
         self.should_close = false;
         self.last_toggle_time = None;
         Command::none()
@@ -274,13 +315,12 @@ impl SettingsPanel {
             }
             SettingsMessage::ToggleFrosted => {
                 self.frosted_enabled = !self.frosted_enabled;
-                let mut cfg = MsuiConfig::load_or_default();
-                cfg.bar.transparency = if self.frosted_enabled {
+                self.config.bar.transparency = if self.frosted_enabled {
                     "frosted".to_string()
                 } else {
                     "solid".to_string()
                 };
-                let _ = cfg.save_to_default_path();
+                let _ = self.config.save_to_default_path();
             }
             SettingsMessage::ToggleDnd => {
                 self.dnd_enabled = DndManager::toggle_dnd();
@@ -294,6 +334,120 @@ impl SettingsPanel {
             SettingsMessage::WallpaperRandom => {
                 WallpaperManager::random();
             }
+            SettingsMessage::SetBarPosition(pos) => {
+                self.config.bar.anchor = pos;
+                let _ = self.config.save_to_default_path();
+            }
+            SettingsMessage::SetBarStyle(style) => {
+                self.config.bar.style = style;
+                let _ = self.config.save_to_default_path();
+            }
+            SettingsMessage::SetBarHeight(height) => {
+                self.config.bar.height = height;
+                let _ = self.config.save_to_default_path();
+            }
+            SettingsMessage::SetBarTransparency(trans) => {
+                self.config.bar.transparency = trans.clone();
+                self.frosted_enabled = trans == "frosted";
+                let _ = self.config.save_to_default_path();
+            }
+            SettingsMessage::SetTimeFormat(fmt) => {
+                self.config.bar.time_format = fmt;
+                let _ = self.config.save_to_default_path();
+            }
+            SettingsMessage::SetWorkspaceCount(count) => {
+                self.config.bar.workspace_count = count;
+                let _ = self.config.save_to_default_path();
+            }
+            SettingsMessage::ToggleBarWidget(widget_name) => {
+                match widget_name {
+                    "show_brand" => self.config.bar.show_brand = !self.config.bar.show_brand,
+                    "show_workspaces" => self.config.bar.show_workspaces = !self.config.bar.show_workspaces,
+                    "show_active_window" => self.config.bar.show_active_window = !self.config.bar.show_active_window,
+                    "show_media" => self.config.bar.show_media = !self.config.bar.show_media,
+                    "show_clock" => self.config.bar.show_clock = !self.config.bar.show_clock,
+                    "show_network" => self.config.bar.show_network = !self.config.bar.show_network,
+                    "show_audio" => self.config.bar.show_audio = !self.config.bar.show_audio,
+                    "show_brightness" => self.config.bar.show_brightness = !self.config.bar.show_brightness,
+                    "show_battery" => self.config.bar.show_battery = !self.config.bar.show_battery,
+                    "show_cpu" => self.config.bar.show_cpu = !self.config.bar.show_cpu,
+                    "show_memory" => self.config.bar.show_memory = !self.config.bar.show_memory,
+                    "show_storage" => self.config.bar.show_storage = !self.config.bar.show_storage,
+                    "show_clipboard" => self.config.bar.show_clipboard = !self.config.bar.show_clipboard,
+                    "show_notifications" => self.config.bar.show_notifications = !self.config.bar.show_notifications,
+                    "show_control_center" => self.config.bar.show_control_center = !self.config.bar.show_control_center,
+                    "show_terminal" => self.config.bar.show_terminal = !self.config.bar.show_terminal,
+                    "show_power" => self.config.bar.show_power = !self.config.bar.show_power,
+                    _ => {}
+                }
+                let _ = self.config.save_to_default_path();
+            }
+            SettingsMessage::SetLauncherDimensions(w, h) => {
+                self.config.launcher.width = w;
+                self.config.launcher.height = h;
+                let _ = self.config.save_to_default_path();
+            }
+            SettingsMessage::SetTerminal(term) => {
+                self.config.launcher.terminal = term;
+                let _ = self.config.save_to_default_path();
+            }
+            SettingsMessage::SetMaxResults(res) => {
+                self.config.launcher.max_results = res;
+                let _ = self.config.save_to_default_path();
+            }
+            SettingsMessage::SetGaps(gin, gout) => {
+                self.active_gaps = (gin, gout);
+                let _ = StdCommand::new("hyprctl")
+                    .args(["keyword", "general:gaps_in", &gin.to_string()])
+                    .spawn();
+                let _ = StdCommand::new("hyprctl")
+                    .args(["keyword", "general:gaps_out", &gout.to_string()])
+                    .spawn();
+            }
+            SettingsMessage::SetBorderColor(color_str) => {
+                self.active_border_color = color_str.clone();
+                let _ = StdCommand::new("hyprctl")
+                    .args(["keyword", "general:col.active_border", &color_str])
+                    .spawn();
+            }
+            SettingsMessage::SetPowerProfile(prof) => {
+                self.current_power_profile = prof;
+                PowerProfileManager::set_profile(prof);
+            }
+            SettingsMessage::StepVolume(delta) => {
+                if delta > 0 {
+                    AudioMonitor::increase_volume(delta as u8);
+                } else if delta < 0 {
+                    AudioMonitor::decrease_volume((-delta) as u8);
+                }
+                self.audio_info = AudioMonitor::read();
+            }
+            SettingsMessage::ToggleAudioMute => {
+                AudioMonitor::toggle_mute();
+                self.audio_info = AudioMonitor::read();
+            }
+            SettingsMessage::LaunchPavucontrol => {
+                let _ = StdCommand::new("pavucontrol").spawn();
+            }
+            SettingsMessage::SetAnimationSpeed(speed) => {
+                let speed_val = match speed {
+                    "fast" => "windows, 1, 3, default",
+                    "smooth" => "windows, 1, 7, default",
+                    _ => "windows, 1, 5, default",
+                };
+                let _ = StdCommand::new("hyprctl")
+                    .args(["keyword", "animation", speed_val])
+                    .spawn();
+            }
+            SettingsMessage::SetDockPosition(pos) => {
+                self.status_feedback = Some(format!("Dock position set to {}", pos));
+            }
+            SettingsMessage::SetDockSize(size) => {
+                self.status_feedback = Some(format!("Dock size set to {} px", size));
+            }
+            SettingsMessage::SetWeatherUnit(unit) => {
+                self.status_feedback = Some(format!("Weather unit set to {}", unit));
+            }
             SettingsMessage::Tick => {
                 let should_refresh = self
                     .last_toggle_time
@@ -303,6 +457,7 @@ impl SettingsPanel {
                 if should_refresh {
                     self.services = SystemServiceManager::list_services();
                     self.dnd_enabled = DndManager::is_dnd_enabled();
+                    self.audio_info = AudioMonitor::read();
                 }
             }
             SettingsMessage::Close => {
@@ -361,9 +516,9 @@ impl SettingsPanel {
         .width(Length::Fill)
         .height(Length::Fill)
         .style(|_theme: &Theme| container::Style {
-            background: Some(Color::from_rgba(18.0 / 255.0, 18.0 / 255.0, 24.0 / 255.0, 0.92).into()),
+            background: Some(Color::from_rgba(18.0 / 255.0, 18.0 / 255.0, 24.0 / 255.0, 0.94).into()),
             border: Border {
-                color: Color::from_rgba(147.0 / 255.0, 51.0 / 255.0, 234.0 / 255.0, 0.40),
+                color: Color::from_rgba(147.0 / 255.0, 51.0 / 255.0, 234.0 / 255.0, 0.45),
                 width: 1.5,
                 radius: 18.0.into(),
             },
@@ -414,45 +569,130 @@ impl SettingsPanel {
             ..Default::default()
         });
 
-        let nav_items = column![
-            self.nav_button(
-                SettingsTab::Services,
-                "󰂯",
-                "System Services",
-                "Services, RAM & radios",
-            ),
-            self.nav_button(
-                SettingsTab::Osd,
-                "󰔎",
-                "On-screen displays",
-                "Volume, brightness, caps lock",
-            ),
-            self.nav_button(
-                SettingsTab::Interface,
-                "󰔄",
-                "Interface style",
-                "Blur, shadows, corners",
-            ),
-            self.nav_button(
+        // Full list of settings categories matching reference design
+        let categories: [(SettingsTab, &'static str, &'static str, &'static str, &'static str); 13] = [
+            (
                 SettingsTab::Wallpaper,
                 "󰏘",
                 "Wallpaper & colors",
                 "Theme, palette, dark mode",
+                "wallpaper theme colors palette background dark",
             ),
-            self.nav_button(
+            (
+                SettingsTab::Interface,
+                "󰔄",
+                "Interface style",
+                "Blur, shadows, corners, gaps",
+                "interface style blur shadows corners gaps border kawase",
+            ),
+            (
+                SettingsTab::Fonts,
+                "󰛖",
+                "Fonts & motion",
+                "Fonts, scale, animations",
+                "font fonts motion scale size typography text animation",
+            ),
+            (
+                SettingsTab::Bar,
+                "󰘵",
+                "Bar",
+                "Layout, position, appearance",
+                "bar topbar bottom height layout style modern island floating docked transparent frosted acrylic solid clock time",
+            ),
+            (
+                SettingsTab::BarWidgets,
+                "󱓞",
+                "Bar widgets",
+                "Add, reorder, configure",
+                "widgets modules workspace clock network audio battery brightness cpu ram storage disk clipboard notifications control power",
+            ),
+            (
+                SettingsTab::Dock,
+                "󰖮",
+                "Dock",
+                "Position, pinned apps, sizing",
+                "dock taskbar apps bottom icons autohide sizing",
+            ),
+            (
+                SettingsTab::Launcher,
+                "󰀻",
+                "Launcher",
+                "Style, search, terminal",
+                "launcher app search dimension size height width terminal foot kitty alacritty ghostty",
+            ),
+            (
+                SettingsTab::Dashboard,
+                "󰕮",
+                "Dashboard",
+                "Widgets, weather, system info",
+                "dashboard weather temperature celsius fahrenheit widgets overview",
+            ),
+            (
                 SettingsTab::Notifications,
                 "󰂚",
                 "Notifications",
                 "Popups, do not disturb, rules",
+                "notifications dnd do not disturb alerts popups sounds",
             ),
-            self.nav_button(
+            (
+                SettingsTab::Osd,
+                "󰔎",
+                "On-screen displays",
+                "Volume, brightness, caps lock",
+                "osd on screen display volume brightness caps lock power overlay position",
+            ),
+            (
+                SettingsTab::Services,
+                "󰂯",
+                "System Services",
+                "Services, RAM & radios",
+                "services ram bluetooth vpn protonvpn wifi radio daemons kill optimize",
+            ),
+            (
                 SettingsTab::Power,
                 "󰌪",
                 "Power & Battery",
                 "Profiles, TLP, suspend",
+                "power battery tlp profile performance balanced power saver suspend energy acpi",
             ),
-        ]
-        .spacing(6);
+            (
+                SettingsTab::Audio,
+                "󰕾",
+                "Audio & Sound",
+                "Volume, outputs, microphones",
+                "audio sound volume pactl speaker microphone mute sink pavucontrol mixer",
+            ),
+        ];
+
+        let q = self.search_query.trim().to_lowercase();
+        let mut nav_items = column![].spacing(6);
+        let mut matched_count = 0;
+
+        for (tab, icon, title, subtitle, keywords) in categories {
+            if q.is_empty()
+                || title.to_lowercase().contains(&q)
+                || subtitle.to_lowercase().contains(&q)
+                || keywords.contains(&q)
+            {
+                nav_items = nav_items.push(self.nav_button(tab, icon, title, subtitle));
+                matched_count += 1;
+            }
+        }
+
+        if matched_count == 0 {
+            nav_items = nav_items.push(
+                container(
+                    column![
+                        text("No settings found").size(12).color(Color::from_rgba(1.0, 1.0, 1.0, 0.60)),
+                        text("Try searching for 'bar', 'wifi', or 'blur'")
+                            .size(10)
+                            .color(Color::from_rgba(1.0, 1.0, 1.0, 0.40)),
+                    ]
+                    .spacing(4),
+                )
+                .padding([16, 8]),
+            );
+        }
 
         let sidebar = column![search_box, scrollable(nav_items).height(Length::Fill)]
             .spacing(12)
@@ -545,12 +785,19 @@ impl SettingsPanel {
 
     fn view_content(&self) -> Element<'_, SettingsMessage> {
         let content_view: Element<'_, SettingsMessage> = match self.active_tab {
-            SettingsTab::Services => self.view_services_tab(),
-            SettingsTab::Osd => self.view_osd_tab(),
-            SettingsTab::Interface => self.view_interface_tab(),
             SettingsTab::Wallpaper => self.view_wallpaper_tab(),
+            SettingsTab::Interface => self.view_interface_tab(),
+            SettingsTab::Fonts => self.view_fonts_tab(),
+            SettingsTab::Bar => self.view_bar_tab(),
+            SettingsTab::BarWidgets => self.view_bar_widgets_tab(),
+            SettingsTab::Dock => self.view_dock_tab(),
+            SettingsTab::Launcher => self.view_launcher_tab(),
+            SettingsTab::Dashboard => self.view_dashboard_tab(),
             SettingsTab::Notifications => self.view_notifications_tab(),
+            SettingsTab::Osd => self.view_osd_tab(),
+            SettingsTab::Services => self.view_services_tab(),
             SettingsTab::Power => self.view_power_tab(),
+            SettingsTab::Audio => self.view_audio_tab(),
         };
 
         let container_style = |_t: &Theme| container::Style {
@@ -569,6 +816,740 @@ impl SettingsPanel {
             .padding(16)
             .style(container_style)
             .into()
+    }
+
+    /// Top Bar Layout Tab
+    fn view_bar_tab(&self) -> Element<'_, SettingsMessage> {
+        let header = column![
+            text("Top Bar Layout & Styling").size(19).color(Color::WHITE),
+            text("Configure anchor position, floating island margins, height, and visual transparency")
+                .size(11)
+                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+        ]
+        .spacing(4);
+
+        // Position: Top or Bottom
+        let is_top = self.config.bar.anchor.to_lowercase() != "bottom";
+        let pos_chips = row![
+            self.chip_button("Top (Default)", is_top, SettingsMessage::SetBarPosition("top".into())),
+            self.chip_button("Bottom", !is_top, SettingsMessage::SetBarPosition("bottom".into())),
+        ]
+        .spacing(8);
+
+        // Style: Modern Floating Island or Docked Edge-to-Edge
+        let is_modern = self.config.bar.is_modern();
+        let style_chips = row![
+            self.chip_button("Floating Island (Modern)", is_modern, SettingsMessage::SetBarStyle("modern".into())),
+            self.chip_button("Edge-to-Edge Docked", !is_modern, SettingsMessage::SetBarStyle("docked".into())),
+        ]
+        .spacing(8);
+
+        // Height: 28, 32, 36, 40 px
+        let h = self.config.bar.height;
+        let height_chips = row![
+            self.chip_button("28 px (Compact)", h == 28, SettingsMessage::SetBarHeight(28)),
+            self.chip_button("32 px (Default)", h == 32, SettingsMessage::SetBarHeight(32)),
+            self.chip_button("36 px (Comfortable)", h == 36, SettingsMessage::SetBarHeight(36)),
+            self.chip_button("40 px (Spacious)", h == 40, SettingsMessage::SetBarHeight(40)),
+        ]
+        .spacing(8);
+
+        // Transparency: Frosted, Transparent, Solid
+        let is_clear = self.config.bar.is_transparent();
+        let is_solid = self.config.bar.is_solid();
+        let is_frost = self.config.bar.is_frosted();
+        let trans_chips = row![
+            self.chip_button("Frosted Acrylic (Blur)", is_frost, SettingsMessage::SetBarTransparency("frosted".into())),
+            self.chip_button("Transparent (Clear)", is_clear, SettingsMessage::SetBarTransparency("transparent".into())),
+            self.chip_button("Solid Opaque", is_solid, SettingsMessage::SetBarTransparency("solid".into())),
+        ]
+        .spacing(8);
+
+        // Time Format
+        let tf = &self.config.bar.time_format;
+        let is_12h = tf.contains("%I") || tf.contains("%p");
+        let is_compact = tf == "%H:%M";
+        let is_24h = !is_12h && !is_compact;
+
+        let time_chips = row![
+            self.chip_button("12-Hour (11:55 AM)", is_12h, SettingsMessage::SetTimeFormat("%a %b %d  %I:%M %p".into())),
+            self.chip_button("24-Hour (23:55)", is_24h, SettingsMessage::SetTimeFormat("%a %b %d  %H:%M".into())),
+            self.chip_button("Compact Time (%H:%M)", is_compact, SettingsMessage::SetTimeFormat("%H:%M".into())),
+        ]
+        .spacing(8);
+
+        let content = column![
+            header,
+            self.settings_card("Bar Position", "Placement of the status bar on your primary display", pos_chips),
+            self.settings_card("Island Geometry", "Floating island with rounded corners and margins or edge docked", style_chips),
+            self.settings_card("Bar Thickness / Height", "Vertical size of the bar surface in pixels", height_chips),
+            self.settings_card("Background & Transparency", "Layer shell blur effect and backdrop opacity", trans_chips),
+            self.settings_card("Clock & Date Format", "Choose how timestamp information is rendered in the top bar", time_chips),
+        ]
+        .spacing(12);
+
+        scrollable(content).height(Length::Fill).into()
+    }
+
+    /// Bar Widgets Tab
+    fn view_bar_widgets_tab(&self) -> Element<'_, SettingsMessage> {
+        let header = column![
+            text("Bar Widgets & Modules").size(19).color(Color::WHITE),
+            text("Select active modules in the status bar and configure workspace indicator counts")
+                .size(11)
+                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+        ]
+        .spacing(4);
+
+        let cur_count = self.config.bar.workspace_count;
+        let ws_chips = row![
+            self.chip_button("3 Workspaces", cur_count == 3, SettingsMessage::SetWorkspaceCount(3)),
+            self.chip_button("4 Workspaces", cur_count == 4, SettingsMessage::SetWorkspaceCount(4)),
+            self.chip_button("5 Workspaces", cur_count == 5, SettingsMessage::SetWorkspaceCount(5)),
+            self.chip_button("7 Workspaces", cur_count == 7, SettingsMessage::SetWorkspaceCount(7)),
+            self.chip_button("10 Workspaces", cur_count == 10, SettingsMessage::SetWorkspaceCount(10)),
+        ]
+        .spacing(8);
+
+        let modules = column![
+            self.setting_toggle_row("Workspace Pager Dots", self.config.bar.show_workspaces, SettingsMessage::ToggleBarWidget("show_workspaces")),
+            self.setting_toggle_row("Active Focused Window Title", self.config.bar.show_active_window, SettingsMessage::ToggleBarWidget("show_active_window")),
+            self.setting_toggle_row("Now Playing Media Widget", self.config.bar.show_media, SettingsMessage::ToggleBarWidget("show_media")),
+            self.setting_toggle_row("Clock & Calendar Widget", self.config.bar.show_clock, SettingsMessage::ToggleBarWidget("show_clock")),
+            self.setting_toggle_row("Network & Wi-Fi Indicator", self.config.bar.show_network, SettingsMessage::ToggleBarWidget("show_network")),
+            self.setting_toggle_row("Volume & Audio Indicator", self.config.bar.show_audio, SettingsMessage::ToggleBarWidget("show_audio")),
+            self.setting_toggle_row("Display Brightness Indicator", self.config.bar.show_brightness, SettingsMessage::ToggleBarWidget("show_brightness")),
+            self.setting_toggle_row("Battery & Power Status", self.config.bar.show_battery, SettingsMessage::ToggleBarWidget("show_battery")),
+            self.setting_toggle_row("CPU Load Percentage (%)", self.config.bar.show_cpu, SettingsMessage::ToggleBarWidget("show_cpu")),
+            self.setting_toggle_row("RAM Utilization Monitor", self.config.bar.show_memory, SettingsMessage::ToggleBarWidget("show_memory")),
+            self.setting_toggle_row("Disk Storage Monitor", self.config.bar.show_storage, SettingsMessage::ToggleBarWidget("show_storage")),
+            self.setting_toggle_row("Clipboard History Quick-Button", self.config.bar.show_clipboard, SettingsMessage::ToggleBarWidget("show_clipboard")),
+            self.setting_toggle_row("Notification Center Bell", self.config.bar.show_notifications, SettingsMessage::ToggleBarWidget("show_notifications")),
+            self.setting_toggle_row("Control Center Quick Toggle", self.config.bar.show_control_center, SettingsMessage::ToggleBarWidget("show_control_center")),
+            self.setting_toggle_row("Terminal Quick-Launch Icon", self.config.bar.show_terminal, SettingsMessage::ToggleBarWidget("show_terminal")),
+            self.setting_toggle_row("Power & Session Menu Button", self.config.bar.show_power, SettingsMessage::ToggleBarWidget("show_power")),
+        ]
+        .spacing(6);
+
+        let content = column![
+            header,
+            self.settings_card("Workspace Pager Density", "Number of virtual desktop indicator chips shown", ws_chips),
+            self.settings_card("Enabled Bar Modules", "Toggle visibility of individual widgets on the bar", modules),
+        ]
+        .spacing(12);
+
+        scrollable(content).height(Length::Fill).into()
+    }
+
+    /// Application Launcher Tab
+    fn view_launcher_tab(&self) -> Element<'_, SettingsMessage> {
+        let header = column![
+            text("Application Launcher").size(19).color(Color::WHITE),
+            text("Window dimensions, search density, and default terminal emulator")
+                .size(11)
+                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+        ]
+        .spacing(4);
+
+        let (w, h) = (self.config.launcher.width, self.config.launcher.height);
+        let dim_chips = row![
+            self.chip_button("Compact (640 × 380)", w == 640 && h == 380, SettingsMessage::SetLauncherDimensions(640, 380)),
+            self.chip_button("Standard (680 × 420)", w == 680 && h == 420, SettingsMessage::SetLauncherDimensions(680, 420)),
+            self.chip_button("Spacious (760 × 480)", w == 760 && h == 480, SettingsMessage::SetLauncherDimensions(760, 480)),
+        ]
+        .spacing(8);
+
+        let cur_term = self.config.launcher.terminal.to_lowercase();
+        let term_chips = row![
+            self.chip_button("kitty", cur_term.contains("kitty"), SettingsMessage::SetTerminal("kitty".into())),
+            self.chip_button("foot", cur_term.contains("foot"), SettingsMessage::SetTerminal("foot".into())),
+            self.chip_button("alacritty", cur_term.contains("alacritty"), SettingsMessage::SetTerminal("alacritty".into())),
+            self.chip_button("ghostty", cur_term.contains("ghostty"), SettingsMessage::SetTerminal("ghostty".into())),
+        ]
+        .spacing(8);
+
+        let max_res = self.config.launcher.max_results;
+        let res_chips = row![
+            self.chip_button("6 items", max_res == 6, SettingsMessage::SetMaxResults(6)),
+            self.chip_button("8 items (Default)", max_res == 8, SettingsMessage::SetMaxResults(8)),
+            self.chip_button("10 items", max_res == 10, SettingsMessage::SetMaxResults(10)),
+            self.chip_button("12 items", max_res == 12, SettingsMessage::SetMaxResults(12)),
+        ]
+        .spacing(8);
+
+        let content = column![
+            header,
+            self.settings_card("Launcher Window Size", "Resolution of the application search overlay", dim_chips),
+            self.settings_card("Default Terminal Emulator", "Terminal program executed for command-line entries", term_chips),
+            self.settings_card("Max Search Results", "Number of matching applications shown per query", res_chips),
+        ]
+        .spacing(12);
+
+        scrollable(content).height(Length::Fill).into()
+    }
+
+    /// Audio & Sound Tab
+    fn view_audio_tab(&self) -> Element<'_, SettingsMessage> {
+        let header = column![
+            text("Audio & Sound").size(19).color(Color::WHITE),
+            text("Master volume, mute controls, and audio device management")
+                .size(11)
+                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+        ]
+        .spacing(4);
+
+        let vol = self.audio_info.volume_percent;
+        let is_muted = self.audio_info.is_muted;
+
+        let vol_display = row![
+            text(format!("{}%", vol)).size(24).color(Color::WHITE),
+            space().width(Length::Fixed(16.0)),
+            button(text("− 5%").size(12).color(Color::WHITE))
+                .padding([6, 12])
+                .style(|_t: &Theme, _s| iced::widget::button::Style {
+                    background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()),
+                    border: Border { radius: 8.0.into(), ..Default::default() },
+                    ..Default::default()
+                })
+                .on_press(SettingsMessage::StepVolume(-5)),
+            button(text("+ 5%").size(12).color(Color::WHITE))
+                .padding([6, 12])
+                .style(|_t: &Theme, _s| iced::widget::button::Style {
+                    background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()),
+                    border: Border { radius: 8.0.into(), ..Default::default() },
+                    ..Default::default()
+                })
+                .on_press(SettingsMessage::StepVolume(5)),
+        ]
+        .align_y(Alignment::Center);
+
+        let mute_toggle = self.setting_toggle_row("Mute Master Speaker Output", is_muted, SettingsMessage::ToggleAudioMute);
+
+        let mixer_btn = button(
+            row![
+                text("🎚").size(14),
+                text("Open PulseAudio Mixer (Pavucontrol)").size(12).color(Color::WHITE),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center),
+        )
+        .padding([8, 14])
+        .style(|_t: &Theme, _s| iced::widget::button::Style {
+            background: Some(Color::from_rgb8(139, 92, 246).into()),
+            border: Border { radius: 10.0.into(), ..Default::default() },
+            ..Default::default()
+        })
+        .on_press(SettingsMessage::LaunchPavucontrol);
+
+        let content = column![
+            header,
+            self.settings_card("Master Volume Level", "Adjust system output amplification", vol_display),
+            self.settings_card("Speaker Mute", "Instantly silence or unmute the default sink", mute_toggle),
+            self.settings_card("Advanced Audio Routing", "Launch external device configuration panel", mixer_btn),
+        ]
+        .spacing(12);
+
+        scrollable(content).height(Length::Fill).into()
+    }
+
+    /// Interface Style Tab
+    fn view_interface_tab(&self) -> Element<'_, SettingsMessage> {
+        let header = column![
+            text("Interface style").size(19).color(Color::WHITE),
+            text("Hyprland compositor blur, shadows, corners, window gaps, and active border color")
+                .size(11)
+                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+        ]
+        .spacing(4);
+
+        let toggles = column![
+            self.setting_toggle_row(
+                "Hyprland GPU Blur (Kawase)",
+                self.blur_enabled,
+                SettingsMessage::ToggleBlur,
+            ),
+            self.setting_toggle_row(
+                "Desktop Smooth Animations",
+                self.animations_enabled,
+                SettingsMessage::ToggleAnimations,
+            ),
+            self.setting_toggle_row(
+                "Frosted Acrylic Glass (msUI Shell)",
+                self.frosted_enabled,
+                SettingsMessage::ToggleFrosted,
+            ),
+        ]
+        .spacing(6);
+
+        // Window Gaps Presets
+        let gaps_chips = row![
+            self.chip_button("Compact (3px / 6px)", self.active_gaps == (3, 6), SettingsMessage::SetGaps(3, 6)),
+            self.chip_button("Balanced (5px / 12px)", self.active_gaps == (5, 12), SettingsMessage::SetGaps(5, 12)),
+            self.chip_button("Spacious (8px / 20px)", self.active_gaps == (8, 20), SettingsMessage::SetGaps(8, 20)),
+        ]
+        .spacing(8);
+
+        // Border Colors
+        let border_chips = row![
+            self.chip_button("🟣 Purple Neon", self.active_border_color == "rgba(9333eaff)", SettingsMessage::SetBorderColor("rgba(9333eaff)".into())),
+            self.chip_button("🔵 Cyan Electric", self.active_border_color == "rgba(06b6d4ff)", SettingsMessage::SetBorderColor("rgba(06b6d4ff)".into())),
+            self.chip_button("🟢 Emerald Green", self.active_border_color == "rgba(10b981ff)", SettingsMessage::SetBorderColor("rgba(10b981ff)".into())),
+            self.chip_button("🟠 Amber Orange", self.active_border_color == "rgba(f97316ff)", SettingsMessage::SetBorderColor("rgba(f97316ff)".into())),
+        ]
+        .spacing(8);
+
+        let content = column![
+            header,
+            self.settings_card("Visual Effects & Compositing", "Hardware-accelerated window aesthetics", toggles),
+            self.settings_card("Window Inner & Outer Gaps", "Hyprland tiling workspace padding", gaps_chips),
+            self.settings_card("Active Window Border Accent", "Accent highlight around the focused window", border_chips),
+        ]
+        .spacing(12);
+
+        scrollable(content).height(Length::Fill).into()
+    }
+
+    /// Fonts & Motion Tab
+    fn view_fonts_tab(&self) -> Element<'_, SettingsMessage> {
+        let header = column![
+            text("Fonts & motion").size(19).color(Color::WHITE),
+            text("System typography, UI scale factor, and window animation timing")
+                .size(11)
+                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+        ]
+        .spacing(4);
+
+        let anim_chips = row![
+            self.chip_button("Snappy (0.15s)", false, SettingsMessage::SetAnimationSpeed("fast")),
+            self.chip_button("Balanced (0.25s)", true, SettingsMessage::SetAnimationSpeed("default")),
+            self.chip_button("Gentle & Smooth (0.40s)", false, SettingsMessage::SetAnimationSpeed("smooth")),
+        ]
+        .spacing(8);
+
+        let font_chips = row![
+            self.chip_button("JetBrainsMono Nerd Font (Default)", true, SettingsMessage::Ignored),
+            self.chip_button("FiraCode Nerd Font", false, SettingsMessage::Ignored),
+            self.chip_button("Inter Display", false, SettingsMessage::Ignored),
+        ]
+        .spacing(8);
+
+        let content = column![
+            header,
+            self.settings_card("System Typography", "Primary UI interface and monospace font family", font_chips),
+            self.settings_card("Window Transition Speed", "Bezier curve animation timing for tiling and floating windows", anim_chips),
+        ]
+        .spacing(12);
+
+        scrollable(content).height(Length::Fill).into()
+    }
+
+    /// Dock Tab
+    fn view_dock_tab(&self) -> Element<'_, SettingsMessage> {
+        let header = column![
+            text("Dock & Quick Launch").size(19).color(Color::WHITE),
+            text("Position, pinned application icons, and auto-hide behaviors")
+                .size(11)
+                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+        ]
+        .spacing(4);
+
+        let pos_chips = row![
+            self.chip_button("Bottom (Default)", true, SettingsMessage::SetDockPosition("bottom".into())),
+            self.chip_button("Left Edge", false, SettingsMessage::SetDockPosition("left".into())),
+            self.chip_button("Right Edge", false, SettingsMessage::SetDockPosition("right".into())),
+        ]
+        .spacing(8);
+
+        let size_chips = row![
+            self.chip_button("36 px (Compact)", false, SettingsMessage::SetDockSize(36)),
+            self.chip_button("48 px (Standard)", true, SettingsMessage::SetDockSize(48)),
+            self.chip_button("64 px (Large)", false, SettingsMessage::SetDockSize(64)),
+        ]
+        .spacing(8);
+
+        let content = column![
+            header,
+            self.settings_card("Dock Screen Edge", "Screen anchor position for pinned applications", pos_chips),
+            self.settings_card("Icon Dimension", "Size of app launcher tiles in pixels", size_chips),
+        ]
+        .spacing(12);
+
+        scrollable(content).height(Length::Fill).into()
+    }
+
+    /// Dashboard Tab
+    fn view_dashboard_tab(&self) -> Element<'_, SettingsMessage> {
+        let header = column![
+            text("Dashboard & Widgets").size(19).color(Color::WHITE),
+            text("System overview cards, weather forecast, and desktop utilities")
+                .size(11)
+                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+        ]
+        .spacing(4);
+
+        let unit_chips = row![
+            self.chip_button("Celsius (°C)", true, SettingsMessage::SetWeatherUnit("celsius".into())),
+            self.chip_button("Fahrenheit (°F)", false, SettingsMessage::SetWeatherUnit("fahrenheit".into())),
+        ]
+        .spacing(8);
+
+        let content = column![
+            header,
+            self.settings_card("Weather Temperature Unit", "Display units used for weather forecasts and alerts", unit_chips),
+        ]
+        .spacing(12);
+
+        scrollable(content).height(Length::Fill).into()
+    }
+
+    /// Wallpaper & Colors Tab
+    fn view_wallpaper_tab(&self) -> Element<'_, SettingsMessage> {
+        let header = column![
+            text("Wallpaper & colors").size(19).color(Color::WHITE),
+            text("Theme palettes, wallpaper cycling, and desktop styling")
+                .size(11)
+                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+        ]
+        .spacing(4);
+
+        let themes = [
+            ("Catppuccin Mocha", "catppuccin-mocha"),
+            ("Tokyo Night", "tokyo-night"),
+            ("Nord Frost", "nord"),
+            ("Rosé Pine", "rose-pine"),
+            ("Dracula Dark", "dracula"),
+        ];
+
+        let mut theme_buttons: Vec<Element<'_, SettingsMessage>> = Vec::new();
+        for (name, id) in themes {
+            let id_str = id.to_string();
+            let chip = button(text(name).size(11).color(Color::WHITE))
+                .padding([8, 12])
+                .style(|_t, status| {
+                    let bg = match status {
+                        iced::widget::button::Status::Hovered => {
+                            Color::from_rgba(139.0 / 255.0, 92.0 / 255.0, 246.0 / 255.0, 0.50)
+                        }
+                        _ => Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                    };
+                    iced::widget::button::Style {
+                        background: Some(bg.into()),
+                        border: Border {
+                            radius: 10.0.into(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    }
+                })
+                .on_press(SettingsMessage::SetTheme(id_str))
+                .into();
+            theme_buttons.push(chip);
+        }
+
+        let mut theme_row = row![].spacing(8);
+        for chip in theme_buttons {
+            theme_row = theme_row.push(chip);
+        }
+        let theme_chips = theme_row;
+
+        let wall_controls = row![
+            button(text("Next Wallpaper").size(12).color(Color::WHITE))
+                .padding([8, 14])
+                .style(|_t: &Theme, _s| iced::widget::button::Style {
+                    background: Some(Color::from_rgb8(139, 92, 246).into()),
+                    border: Border { radius: 10.0.into(), ..Default::default() },
+                    ..Default::default()
+                })
+                .on_press(SettingsMessage::WallpaperNext),
+            button(text("Random Wallpaper").size(12).color(Color::WHITE))
+                .padding([8, 14])
+                .style(|_t: &Theme, _s| iced::widget::button::Style {
+                    background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.10).into()),
+                    border: Border { radius: 10.0.into(), ..Default::default() },
+                    ..Default::default()
+                })
+                .on_press(SettingsMessage::WallpaperRandom),
+        ]
+        .spacing(10);
+
+        column![
+            header,
+            self.settings_card("Theme Presets", "Color palettes for the shell, modals, and bar widgets", theme_chips),
+            self.settings_card("Wallpaper Switcher", "Cycle backgrounds from ~/.config/hypr/wallpapers", wall_controls),
+        ]
+        .spacing(12)
+        .into()
+    }
+
+    /// Notifications Tab
+    fn view_notifications_tab(&self) -> Element<'_, SettingsMessage> {
+        let header = column![
+            text("Notifications & Focus").size(19).color(Color::WHITE),
+            text("Do Not Disturb, popup previews, and notification rules")
+                .size(11)
+                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+        ]
+        .spacing(4);
+
+        let dnd_row = self.setting_toggle_row(
+            "Do Not Disturb (Silence All Popups)",
+            self.dnd_enabled,
+            SettingsMessage::ToggleDnd,
+        );
+
+        let timeout_chips = row![
+            self.chip_button("3 Seconds", false, SettingsMessage::Ignored),
+            self.chip_button("5 Seconds (Default)", true, SettingsMessage::Ignored),
+            self.chip_button("8 Seconds", false, SettingsMessage::Ignored),
+        ]
+        .spacing(8);
+
+        column![
+            header,
+            self.settings_card("Focus Mode", "Suppress toasts and banner notifications", dnd_row),
+            self.settings_card("Notification Banner Timeout", "Duration before toast automatically closes", timeout_chips),
+        ]
+        .spacing(12)
+        .into()
+    }
+
+    /// Power & Battery Tab
+    fn view_power_tab(&self) -> Element<'_, SettingsMessage> {
+        let header = column![
+            text("Power & Battery").size(19).color(Color::WHITE),
+            text("ACPI energy profiles, TLP background optimizer, and battery life tuning")
+                .size(11)
+                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+        ]
+        .spacing(4);
+
+        let cur_prof = self.current_power_profile;
+        let prof_chips = row![
+            self.chip_button("⚡ Performance", cur_prof == PowerProfile::Performance, SettingsMessage::SetPowerProfile(PowerProfile::Performance)),
+            self.chip_button("⚖ Balanced", cur_prof == PowerProfile::Balanced, SettingsMessage::SetPowerProfile(PowerProfile::Balanced)),
+            self.chip_button("🍃 Power Saver", cur_prof == PowerProfile::PowerSaver, SettingsMessage::SetPowerProfile(PowerProfile::PowerSaver)),
+        ]
+        .spacing(8);
+
+        let prof_info = match cur_prof {
+            PowerProfile::Performance => "Performance mode: Unlocks maximum CPU frequencies and turbo responsiveness.",
+            PowerProfile::Balanced => "Balanced mode: Dynamic power scaling for balanced daily performance and battery life.",
+            PowerProfile::PowerSaver => "Power Saver mode: Limits CPU clock and throttles power draw to maximize battery runtime.",
+        };
+
+        let prof_details = column![
+            prof_chips,
+            text(prof_info).size(11).color(Color::from_rgba(1.0, 1.0, 1.0, 0.55)),
+        ]
+        .spacing(8);
+
+        let tlp_active = self
+            .services
+            .iter()
+            .find(|s| s.id == "tlp")
+            .map(|s| s.is_active)
+            .unwrap_or(false);
+
+        let tlp_row = self.setting_toggle_row(
+            "TLP Background Power Optimizer",
+            tlp_active,
+            SettingsMessage::ToggleService("tlp".to_string()),
+        );
+
+        column![
+            header,
+            self.settings_card("ACPI Platform Power Profile", "Hardware energy management mode", prof_details),
+            self.settings_card("Automated Battery Optimization", "Kernel power daemon management", tlp_row),
+        ]
+        .spacing(12)
+        .into()
+    }
+
+    /// On-screen displays Tab (Replicating user's screenshot exactly!)
+    fn view_osd_tab(&self) -> Element<'_, SettingsMessage> {
+        let header = column![
+            text("On-screen displays").size(19).color(Color::WHITE),
+            text("Position and visibility of overlays and popups")
+                .size(11)
+                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+        ]
+        .spacing(4);
+
+        let pos_tags = [
+            "Default",
+            "Volume",
+            "Media volume",
+            "Media playback",
+            "Brightness",
+            "Idle inhibitor",
+            "Microphone",
+            "Caps lock",
+            "Touchpad",
+            "Power profile",
+            "Audio output switch",
+        ];
+
+        let mut chip_buttons: Vec<Element<'_, SettingsMessage>> = Vec::new();
+        for (i, tag) in pos_tags.iter().enumerate() {
+            let is_sel = self.osd_pos_selected == i;
+            let chip = button(
+                row![
+                    if is_sel { text("✓ ").size(10).color(Color::WHITE) } else { text("").size(0) },
+                    text(*tag).size(11).color(if is_sel {
+                        Color::WHITE
+                    } else {
+                        Color::from_rgba(1.0, 1.0, 1.0, 0.80)
+                    })
+                ]
+                .align_y(Alignment::Center),
+            )
+            .padding([5, 10])
+            .style(move |_t, status| {
+                if is_sel {
+                    iced::widget::button::Style {
+                        background: Some(Color::from_rgb8(139, 92, 246).into()),
+                        border: Border {
+                            radius: 8.0.into(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    }
+                } else {
+                    let bg = match status {
+                        iced::widget::button::Status::Hovered => {
+                            Color::from_rgba(1.0, 1.0, 1.0, 0.10)
+                        }
+                        _ => Color::from_rgba(1.0, 1.0, 1.0, 0.05),
+                    };
+                    iced::widget::button::Style {
+                        background: Some(bg.into()),
+                        border: Border {
+                            color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                            width: 1.0,
+                            radius: 8.0.into(),
+                        },
+                        ..Default::default()
+                    }
+                }
+            })
+            .on_press(SettingsMessage::SelectOsdPos(i))
+            .into();
+            chip_buttons.push(chip);
+        }
+
+        let mut row1 = row![].spacing(6);
+        let mut row2 = row![].spacing(6);
+        for (i, chip) in chip_buttons.into_iter().enumerate() {
+            if i < 5 {
+                row1 = row1.push(chip);
+            } else {
+                row2 = row2.push(chip);
+            }
+        }
+        let pos_chips = column![row1, row2].spacing(6);
+
+        // Screen mockup preview (matching image)
+        let screen_mockup = container(
+            column![
+                // Top slots
+                row![
+                    container(space().width(Length::Fixed(40.0)).height(Length::Fixed(12.0)))
+                        .style(|_t| container::Style {
+                            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.15).into()),
+                            border: Border { radius: 4.0.into(), ..Default::default() },
+                            ..Default::default()
+                        }),
+                    space().width(Length::Fill),
+                    container(space().width(Length::Fixed(40.0)).height(Length::Fixed(12.0)))
+                        .style(|_t| container::Style {
+                            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.15).into()),
+                            border: Border { radius: 4.0.into(), ..Default::default() },
+                            ..Default::default()
+                        }),
+                    space().width(Length::Fill),
+                    container(space().width(Length::Fixed(40.0)).height(Length::Fixed(12.0)))
+                        .style(|_t| container::Style {
+                            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.15).into()),
+                            border: Border { radius: 4.0.into(), ..Default::default() },
+                            ..Default::default()
+                        }),
+                ]
+                .align_y(Alignment::Center),
+                space().height(Length::Fill),
+                // Bottom slots with Purple Highlight Pill in center!
+                row![
+                    container(space().width(Length::Fixed(40.0)).height(Length::Fixed(12.0)))
+                        .style(|_t| container::Style {
+                            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.15).into()),
+                            border: Border { radius: 4.0.into(), ..Default::default() },
+                            ..Default::default()
+                        }),
+                    space().width(Length::Fill),
+                    // Active Bottom-Center OSD Highlight
+                    container(space().width(Length::Fixed(60.0)).height(Length::Fixed(14.0)))
+                        .style(|_t| container::Style {
+                            background: Some(Color::from_rgb8(167, 139, 250).into()), // Purple highlight!
+                            border: Border { radius: 5.0.into(), ..Default::default() },
+                            ..Default::default()
+                        }),
+                    space().width(Length::Fill),
+                    container(space().width(Length::Fixed(40.0)).height(Length::Fixed(12.0)))
+                        .style(|_t| container::Style {
+                            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.15).into()),
+                            border: Border { radius: 4.0.into(), ..Default::default() },
+                            ..Default::default()
+                        }),
+                ]
+                .align_y(Alignment::Center),
+            ]
+            .padding(14),
+        )
+        .width(Length::Fixed(240.0))
+        .height(Length::Fixed(110.0))
+        .style(|_t| container::Style {
+            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.04).into()),
+            border: Border {
+                color: Color::from_rgba(1.0, 1.0, 1.0, 0.10),
+                width: 1.5,
+                radius: 12.0.into(),
+            },
+            ..Default::default()
+        });
+
+        let percentage_toggle = self.setting_toggle_row(
+            "Always show percentage",
+            self.osd_always_percentage,
+            SettingsMessage::ToggleOsdPercentage,
+        );
+
+        let show_for_section = column![
+            text("Show for").size(13).color(Color::WHITE),
+            self.setting_toggle_row("Volume", self.osd_volume, SettingsMessage::ToggleOsdVolume),
+            self.setting_toggle_row("Media volume", self.osd_media_vol, SettingsMessage::ToggleOsdMediaVol),
+            self.setting_toggle_row("Brightness", self.osd_brightness, SettingsMessage::ToggleOsdBrightness),
+            self.setting_toggle_row("Caps lock", self.osd_caps, SettingsMessage::ToggleOsdCaps),
+            self.setting_toggle_row("Power profile", self.osd_power, SettingsMessage::ToggleOsdPower),
+        ]
+        .spacing(6);
+
+        let main_col = column![
+            header,
+            column![
+                text("Position").size(12).color(Color::from_rgba(1.0, 1.0, 1.0, 0.80)),
+                text("Bottom Center").size(10).color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+                pos_chips,
+            ]
+            .spacing(4),
+            row![
+                screen_mockup,
+                space().width(16),
+                column![percentage_toggle, show_for_section].width(Length::Fill),
+            ]
+            .spacing(12),
+        ]
+        .spacing(12);
+
+        scrollable(main_col).height(Length::Fill).into()
     }
 
     /// System Services Tab
@@ -766,347 +1747,84 @@ impl SettingsPanel {
         main_col.into()
     }
 
-    /// On-screen displays Tab (Replicating user's screenshot exactly!)
-    fn view_osd_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("On-screen displays").size(19).color(Color::WHITE),
-            text("Position and visibility of overlays and popups")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
-
-        let pos_tags = [
-            "Default",
-            "Volume",
-            "Media volume",
-            "Media playback",
-            "Brightness",
-            "Idle inhibitor",
-            "Microphone",
-            "Caps lock",
-            "Touchpad",
-            "Power profile",
-            "Audio output switch",
-        ];
-
-        let mut chip_buttons: Vec<Element<'_, SettingsMessage>> = Vec::new();
-        for (i, tag) in pos_tags.iter().enumerate() {
-            let is_sel = self.osd_pos_selected == i;
-            let chip = button(
-                row![
-                    if is_sel { text("✓ ").size(10).color(Color::WHITE) } else { text("").size(0) },
-                    text(*tag).size(11).color(if is_sel {
-                        Color::WHITE
-                    } else {
-                        Color::from_rgba(1.0, 1.0, 1.0, 0.80)
-                    })
-                ]
-                .align_y(Alignment::Center),
-            )
-            .padding([5, 10])
-            .style(move |_t, status| {
-                if is_sel {
-                    iced::widget::button::Style {
-                        background: Some(Color::from_rgb8(139, 92, 246).into()),
-                        border: Border {
-                            radius: 8.0.into(),
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    }
-                } else {
-                    let bg = match status {
-                        iced::widget::button::Status::Hovered => {
-                            Color::from_rgba(1.0, 1.0, 1.0, 0.10)
-                        }
-                        _ => Color::from_rgba(1.0, 1.0, 1.0, 0.05),
-                    };
-                    iced::widget::button::Style {
-                        background: Some(bg.into()),
-                        border: Border {
-                            color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
-                            width: 1.0,
-                            radius: 8.0.into(),
-                        },
-                        ..Default::default()
-                    }
-                }
-            })
-            .on_press(SettingsMessage::SelectOsdPos(i))
-            .into();
-            chip_buttons.push(chip);
-        }
-
-        let mut row1 = row![].spacing(6);
-        let mut row2 = row![].spacing(6);
-        for (i, chip) in chip_buttons.into_iter().enumerate() {
-            if i < 5 {
-                row1 = row1.push(chip);
-            } else {
-                row2 = row2.push(chip);
-            }
-        }
-        let pos_chips = column![row1, row2].spacing(6);
-
-        // Screen mockup preview (matching image)
-        let screen_mockup = container(
+    /// Reusable settings card container
+    fn settings_card<'a>(
+        &self,
+        title: &'static str,
+        subtitle: &'static str,
+        content: impl Into<Element<'a, SettingsMessage>>,
+    ) -> Element<'a, SettingsMessage> {
+        container(
             column![
-                // Top slots
-                row![
-                    container(space().width(Length::Fixed(40.0)).height(Length::Fixed(12.0)))
-                        .style(|_t| container::Style {
-                            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.15).into()),
-                            border: Border { radius: 4.0.into(), ..Default::default() },
-                            ..Default::default()
-                        }),
-                    space().width(Length::Fill),
-                    container(space().width(Length::Fixed(40.0)).height(Length::Fixed(12.0)))
-                        .style(|_t| container::Style {
-                            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.15).into()),
-                            border: Border { radius: 4.0.into(), ..Default::default() },
-                            ..Default::default()
-                        }),
-                    space().width(Length::Fill),
-                    container(space().width(Length::Fixed(40.0)).height(Length::Fixed(12.0)))
-                        .style(|_t| container::Style {
-                            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.15).into()),
-                            border: Border { radius: 4.0.into(), ..Default::default() },
-                            ..Default::default()
-                        }),
+                column![
+                    text(title).size(13).color(Color::WHITE),
+                    text(subtitle).size(10).color(Color::from_rgba(1.0, 1.0, 1.0, 0.45)),
                 ]
-                .align_y(Alignment::Center),
-                space().height(Length::Fill),
-                // Bottom slots with Purple Highlight Pill in center!
-                row![
-                    container(space().width(Length::Fixed(40.0)).height(Length::Fixed(12.0)))
-                        .style(|_t| container::Style {
-                            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.15).into()),
-                            border: Border { radius: 4.0.into(), ..Default::default() },
-                            ..Default::default()
-                        }),
-                    space().width(Length::Fill),
-                    // Active Bottom-Center OSD Highlight
-                    container(space().width(Length::Fixed(60.0)).height(Length::Fixed(14.0)))
-                        .style(|_t| container::Style {
-                            background: Some(Color::from_rgb8(167, 139, 250).into()), // Purple highlight!
-                            border: Border { radius: 5.0.into(), ..Default::default() },
-                            ..Default::default()
-                        }),
-                    space().width(Length::Fill),
-                    container(space().width(Length::Fixed(40.0)).height(Length::Fixed(12.0)))
-                        .style(|_t| container::Style {
-                            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.15).into()),
-                            border: Border { radius: 4.0.into(), ..Default::default() },
-                            ..Default::default()
-                        }),
-                ]
-                .align_y(Alignment::Center),
+                .spacing(2),
+                content.into(),
             ]
-            .padding(14),
+            .spacing(10),
         )
-        .width(Length::Fixed(240.0))
-        .height(Length::Fixed(110.0))
+        .padding(14)
+        .width(Length::Fill)
         .style(|_t| container::Style {
-            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.04).into()),
+            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.03).into()),
             border: Border {
-                color: Color::from_rgba(1.0, 1.0, 1.0, 0.10),
-                width: 1.5,
+                color: Color::from_rgba(1.0, 1.0, 1.0, 0.06),
+                width: 1.0,
                 radius: 12.0.into(),
             },
             ..Default::default()
-        });
-
-        let percentage_toggle = self.setting_toggle_row(
-            "Always show percentage",
-            self.osd_always_percentage,
-            SettingsMessage::ToggleOsdPercentage,
-        );
-
-        let show_for_section = column![
-            text("Show for").size(13).color(Color::WHITE),
-            self.setting_toggle_row("Volume", self.osd_volume, SettingsMessage::ToggleOsdVolume),
-            self.setting_toggle_row("Media volume", self.osd_media_vol, SettingsMessage::ToggleOsdMediaVol),
-            self.setting_toggle_row("Brightness", self.osd_brightness, SettingsMessage::ToggleOsdBrightness),
-            self.setting_toggle_row("Caps lock", self.osd_caps, SettingsMessage::ToggleOsdCaps),
-            self.setting_toggle_row("Power profile", self.osd_power, SettingsMessage::ToggleOsdPower),
-        ]
-        .spacing(6);
-
-        let main_col = column![
-            header,
-            column![
-                text("Position").size(12).color(Color::from_rgba(1.0, 1.0, 1.0, 0.80)),
-                text("Bottom Center").size(10).color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-                pos_chips,
-            ]
-            .spacing(4),
-            row![
-                screen_mockup,
-                space().width(16),
-                column![percentage_toggle, show_for_section].width(Length::Fill),
-            ]
-            .spacing(12),
-        ]
-        .spacing(12);
-
-        scrollable(main_col).height(Length::Fill).into()
-    }
-
-    /// Interface Style Tab
-    fn view_interface_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("Interface style").size(19).color(Color::WHITE),
-            text("Hyprland compositor blur, shadows, corners, and window animations")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
-
-        let rows = column![
-            self.setting_toggle_row(
-                "Hyprland GPU Blur (Kawase)",
-                self.blur_enabled,
-                SettingsMessage::ToggleBlur,
-            ),
-            self.setting_toggle_row(
-                "Desktop Smooth Animations",
-                self.animations_enabled,
-                SettingsMessage::ToggleAnimations,
-            ),
-            self.setting_toggle_row(
-                "Frosted Acrylic Glass (msUI Shell)",
-                self.frosted_enabled,
-                SettingsMessage::ToggleFrosted,
-            ),
-        ]
-        .spacing(8);
-
-        column![header, rows].spacing(16).into()
-    }
-
-    /// Wallpaper & Colors Tab
-    fn view_wallpaper_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("Wallpaper & colors").size(19).color(Color::WHITE),
-            text("Theme palettes, wallpaper cycling, and desktop styling")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
-
-        let themes = [
-            ("Catppuccin Mocha", "catppuccin-mocha"),
-            ("Tokyo Night", "tokyo-night"),
-            ("Nord Frost", "nord"),
-            ("Rosé Pine", "rose-pine"),
-            ("Dracula Dark", "dracula"),
-        ];
-
-        let mut theme_buttons: Vec<Element<'_, SettingsMessage>> = Vec::new();
-        for (name, id) in themes {
-            let id_str = id.to_string();
-            let chip = button(text(name).size(11).color(Color::WHITE))
-                .padding([8, 12])
-                .style(|_t, status| {
-                    let bg = match status {
-                        iced::widget::button::Status::Hovered => {
-                            Color::from_rgba(139.0 / 255.0, 92.0 / 255.0, 246.0 / 255.0, 0.50)
-                        }
-                        _ => Color::from_rgba(1.0, 1.0, 1.0, 0.08),
-                    };
-                    iced::widget::button::Style {
-                        background: Some(bg.into()),
-                        border: Border {
-                            radius: 10.0.into(),
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    }
-                })
-                .on_press(SettingsMessage::SetTheme(id_str))
-                .into();
-            theme_buttons.push(chip);
-        }
-
-        let mut theme_row = row![].spacing(8);
-        for chip in theme_buttons {
-            theme_row = theme_row.push(chip);
-        }
-        let theme_chips = theme_row;
-
-        let wall_controls = row![
-            button(text("Next Wallpaper").size(12).color(Color::WHITE))
-                .padding([8, 14])
-                .style(|_t, _s| iced::widget::button::Style {
-                    background: Some(Color::from_rgb8(139, 92, 246).into()),
-                    border: Border { radius: 10.0.into(), ..Default::default() },
-                    ..Default::default()
-                })
-                .on_press(SettingsMessage::WallpaperNext),
-            button(text("Random Wallpaper").size(12).color(Color::WHITE))
-                .padding([8, 14])
-                .style(|_t, _s| iced::widget::button::Style {
-                    background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.10).into()),
-                    border: Border { radius: 10.0.into(), ..Default::default() },
-                    ..Default::default()
-                })
-                .on_press(SettingsMessage::WallpaperRandom),
-        ]
-        .spacing(10);
-
-        column![
-            header,
-            column![text("Theme Presets").size(13).color(Color::WHITE), theme_chips].spacing(8),
-            column![text("Wallpaper Switcher").size(13).color(Color::WHITE), wall_controls].spacing(8),
-        ]
-        .spacing(16)
+        })
         .into()
     }
 
-    /// Notifications Tab
-    fn view_notifications_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("Notifications & Focus").size(19).color(Color::WHITE),
-            text("Do Not Disturb, popup previews, and notification rules")
+    /// Chip button with active lavender highlight
+    fn chip_button(
+        &self,
+        label: impl Into<String>,
+        is_selected: bool,
+        msg: SettingsMessage,
+    ) -> Element<'_, SettingsMessage> {
+        let label_str = label.into();
+        button(
+            text(label_str)
                 .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
-
-        let dnd_row = self.setting_toggle_row(
-            "Do Not Disturb (Silence All Popups)",
-            self.dnd_enabled,
-            SettingsMessage::ToggleDnd,
-        );
-
-        column![header, dnd_row].spacing(16).into()
-    }
-
-    /// Power & Battery Tab
-    fn view_power_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("Power & Battery").size(19).color(Color::WHITE),
-            text("Energy modes, TLP daemon, and suspend timeout")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
-
-        let tlp_active = self
-            .services
-            .iter()
-            .find(|s| s.id == "tlp")
-            .map(|s| s.is_active)
-            .unwrap_or(false);
-
-        let tlp_row = self.setting_toggle_row(
-            "TLP Background Power Optimizer",
-            tlp_active,
-            SettingsMessage::ToggleService("tlp".to_string()),
-        );
-
-        column![header, tlp_row].spacing(16).into()
+                .color(if is_selected {
+                    Color::WHITE
+                } else {
+                    Color::from_rgba(1.0, 1.0, 1.0, 0.70)
+                }),
+        )
+        .padding([7, 13])
+        .style(move |_t, status| {
+            if is_selected {
+                iced::widget::button::Style {
+                    background: Some(Color::from_rgb8(139, 92, 246).into()),
+                    border: Border {
+                        radius: 9.0.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }
+            } else {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered => Color::from_rgba(1.0, 1.0, 1.0, 0.09),
+                    _ => Color::from_rgba(1.0, 1.0, 1.0, 0.04),
+                };
+                iced::widget::button::Style {
+                    background: Some(bg.into()),
+                    border: Border {
+                        color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                        width: 1.0,
+                        radius: 9.0.into(),
+                    },
+                    ..Default::default()
+                }
+            }
+        })
+        .on_press(msg)
+        .into()
     }
 
     /// Helper for setting toggle rows (Entire row is a clickable button with hover state)

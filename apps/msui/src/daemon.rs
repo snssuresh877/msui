@@ -765,7 +765,7 @@ impl UnifiedShell {
                     blur_option,
                     ..Default::default()
                 });
-                let (mut panel, init_cmd) = SettingsPanel::new_embedded();
+                let (mut panel, init_cmd) = SettingsPanel::new_embedded(self.config.clone());
                 let reset_cmd = panel.reset().map(|m| DaemonMessage::Modal(ModalMessage::Settings(m)));
                 self.modal_id = Some(mid);
                 self.active_modal = Some(ActiveModal::Settings(panel));
@@ -993,7 +993,64 @@ impl UnifiedShell {
                         inst.update(m).map(|x| DaemonMessage::Modal(ModalMessage::Polkit(x)))
                     }
                     (ModalMessage::Settings(m), Some(ActiveModal::Settings(inst))) => {
-                        inst.update(m).map(|x| DaemonMessage::Modal(ModalMessage::Settings(x)))
+                        let cmd = inst.update(m).map(|x| DaemonMessage::Modal(ModalMessage::Settings(x)));
+                        if self.config != inst.config {
+                            tracing::info!("SettingsPanel updated config live! Synchronizing bar...");
+                            self.config = inst.config.clone();
+                            self.bar.reload_config(self.config.clone());
+
+                            let mut tasks = vec![cmd];
+                            tasks.push(self.bar.update(BarMessage::ConfigReloaded).map(DaemonMessage::Bar));
+
+                            if let Some(bid) = self.bar_id {
+                                let is_modern = self.config.bar.is_modern();
+                                let height = self.config.bar.height;
+                                let (bar_margin, exclusive_zone) = if is_modern {
+                                    (
+                                        Margin {
+                                            top: self.config.bar.margin_top as i32,
+                                            right: self.config.bar.margin_horizontal as i32,
+                                            bottom: 0,
+                                            left: self.config.bar.margin_horizontal as i32,
+                                        },
+                                        (height + self.config.bar.margin_top + 4) as i32,
+                                    )
+                                } else {
+                                    (
+                                        Margin { top: 0, right: 0, bottom: 0, left: 0 },
+                                        height as i32,
+                                    )
+                                };
+
+                                let blur_opt = if self.config.bar.is_frosted() {
+                                    BlurOption::FullRegion
+                                } else {
+                                    BlurOption::None
+                                };
+
+                                tasks.push(Task::done(DaemonMessage::MarginChange {
+                                    id: bid,
+                                    margin: bar_margin,
+                                }));
+                                tasks.push(Task::done(DaemonMessage::ExclusiveZoneChange {
+                                    id: bid,
+                                    zone_size: exclusive_zone,
+                                }));
+                                tasks.push(Task::done(DaemonMessage::BlurOptionChange {
+                                    id: bid,
+                                    option: blur_opt.clone(),
+                                }));
+                                if let Some(mid) = self.modal_id {
+                                    tasks.push(Task::done(DaemonMessage::BlurOptionChange {
+                                        id: mid,
+                                        option: blur_opt,
+                                    }));
+                                }
+                            }
+
+                            return Task::batch(tasks);
+                        }
+                        cmd
                     }
                     _ => Task::none(),
                 };
