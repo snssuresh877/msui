@@ -13,7 +13,7 @@ use msui_core::{
     WallpaperManager,
 };
 use std::process::Command as StdCommand;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SettingsTab {
@@ -44,6 +44,7 @@ pub struct SettingsPanel {
     frosted_enabled: bool,
     dnd_enabled: bool,
     status_feedback: Option<String>,
+    last_toggle_time: Option<Instant>,
 }
 
 #[derive(Debug, Clone)]
@@ -121,14 +122,20 @@ impl SettingsPanel {
         let blur_enabled = StdCommand::new("hyprctl")
             .args(["getoption", "decoration:blur:enabled", "-j"])
             .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).contains("\"int\": 1"))
+            .map(|o| {
+                let s = String::from_utf8_lossy(&o.stdout);
+                s.contains("\"bool\": true") || s.contains("true")
+            })
             .unwrap_or(true);
 
         // Check animations status from hyprctl
         let animations_enabled = StdCommand::new("hyprctl")
             .args(["getoption", "animations:enabled", "-j"])
             .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).contains("\"int\": 1"))
+            .map(|o| {
+                let s = String::from_utf8_lossy(&o.stdout);
+                s.contains("\"bool\": true") || s.contains("true")
+            })
             .unwrap_or(true);
 
         let cfg = MsuiConfig::load_or_default();
@@ -153,6 +160,7 @@ impl SettingsPanel {
                 frosted_enabled,
                 dnd_enabled,
                 status_feedback: None,
+                last_toggle_time: None,
             },
             Command::none(),
         )
@@ -162,6 +170,7 @@ impl SettingsPanel {
         self.services = SystemServiceManager::list_services();
         self.dnd_enabled = DndManager::is_dnd_enabled();
         self.should_close = false;
+        self.last_toggle_time = None;
         Command::none()
     }
 
@@ -199,9 +208,23 @@ impl SettingsPanel {
                 self.search_query = q;
             }
             SettingsMessage::ToggleService(id) => {
-                SystemServiceManager::toggle_service(&id);
-                self.services = SystemServiceManager::list_services();
+                if let Some(svc) = self.services.iter_mut().find(|s| s.id == id) {
+                    svc.is_active = !svc.is_active;
+                    if svc.is_radio {
+                        svc.radio_state = Some(if svc.is_active {
+                            "Powered On".to_string()
+                        } else {
+                            "Soft-Blocked (0 mW)".to_string()
+                        });
+                    }
+                }
+                self.last_toggle_time = Some(Instant::now());
                 self.status_feedback = Some(format!("Toggled service {}", id));
+
+                let id_clone = id.clone();
+                std::thread::spawn(move || {
+                    SystemServiceManager::toggle_service(&id_clone);
+                });
             }
             SettingsMessage::OptimizeRam => {
                 SystemServiceManager::optimize_ram();
@@ -272,7 +295,15 @@ impl SettingsPanel {
                 WallpaperManager::random();
             }
             SettingsMessage::Tick => {
-                self.services = SystemServiceManager::list_services();
+                let should_refresh = self
+                    .last_toggle_time
+                    .map(|t| t.elapsed() >= Duration::from_secs(4))
+                    .unwrap_or(true);
+
+                if should_refresh {
+                    self.services = SystemServiceManager::list_services();
+                    self.dnd_enabled = DndManager::is_dnd_enabled();
+                }
             }
             SettingsMessage::Close => {
                 self.should_close = true;
@@ -687,23 +718,40 @@ impl SettingsPanel {
             ]
             .spacing(3);
 
-            let toggle = self.toggle_switch(is_on, SettingsMessage::ToggleService(id_clone));
+            let toggle = self.toggle_indicator(is_on);
 
-            let card = container(
+            let card = button(
                 row![icon_view, details, space().width(Length::Fill), toggle]
                     .spacing(12)
                     .align_y(Alignment::Center)
                     .padding(10),
             )
-            .style(|_t| container::Style {
-                background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.03).into()),
-                border: Border {
-                    color: Color::from_rgba(1.0, 1.0, 1.0, 0.06),
-                    width: 1.0,
-                    radius: 12.0.into(),
-                },
-                ..Default::default()
-            });
+            .width(Length::Fill)
+            .style(move |_t, status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered => {
+                        Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+                    }
+                    iced::widget::button::Status::Pressed => {
+                        Color::from_rgba(1.0, 1.0, 1.0, 0.09)
+                    }
+                    _ => Color::from_rgba(1.0, 1.0, 1.0, 0.03),
+                };
+                iced::widget::button::Style {
+                    background: Some(bg.into()),
+                    border: Border {
+                        color: if is_on {
+                            Color::from_rgba(139.0 / 255.0, 92.0 / 255.0, 246.0 / 255.0, 0.35)
+                        } else {
+                            Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+                        },
+                        width: 1.0,
+                        radius: 12.0.into(),
+                    },
+                    ..Default::default()
+                }
+            })
+            .on_press(SettingsMessage::ToggleService(id_clone));
 
             service_rows = service_rows.push(card);
         }
@@ -869,14 +917,10 @@ impl SettingsPanel {
             ..Default::default()
         });
 
-        let percentage_toggle = container(
-            row![
-                text("Always show percentage").size(12).color(Color::WHITE),
-                space().width(Length::Fill),
-                self.toggle_switch(self.osd_always_percentage, SettingsMessage::ToggleOsdPercentage),
-            ]
-            .align_y(Alignment::Center)
-            .padding([8, 12]),
+        let percentage_toggle = self.setting_toggle_row(
+            "Always show percentage",
+            self.osd_always_percentage,
+            SettingsMessage::ToggleOsdPercentage,
         );
 
         let show_for_section = column![
@@ -1049,7 +1093,13 @@ impl SettingsPanel {
         ]
         .spacing(4);
 
-        let tlp_active = SystemServiceManager::is_unit_active("tlp.service");
+        let tlp_active = self
+            .services
+            .iter()
+            .find(|s| s.id == "tlp")
+            .map(|s| s.is_active)
+            .unwrap_or(false);
+
         let tlp_row = self.setting_toggle_row(
             "TLP Background Power Optimizer",
             tlp_active,
@@ -1059,36 +1109,55 @@ impl SettingsPanel {
         column![header, tlp_row].spacing(16).into()
     }
 
-    /// Helper for setting toggle rows
+    /// Helper for setting toggle rows (Entire row is a clickable button with hover state)
     fn setting_toggle_row(
         &self,
         label: &'static str,
         is_on: bool,
         msg: SettingsMessage,
     ) -> Element<'_, SettingsMessage> {
-        container(
+        let toggle = self.toggle_indicator(is_on);
+
+        button(
             row![
                 text(label).size(12).color(Color::WHITE),
                 space().width(Length::Fill),
-                self.toggle_switch(is_on, msg),
+                toggle,
             ]
             .align_y(Alignment::Center)
-            .padding([8, 12]),
+            .padding([10, 14]),
         )
-        .style(|_t| container::Style {
-            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.03).into()),
-            border: Border {
-                color: Color::from_rgba(1.0, 1.0, 1.0, 0.06),
-                width: 1.0,
-                radius: 10.0.into(),
-            },
-            ..Default::default()
+        .width(Length::Fill)
+        .style(move |_t, status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered => {
+                    Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+                }
+                iced::widget::button::Status::Pressed => {
+                    Color::from_rgba(1.0, 1.0, 1.0, 0.09)
+                }
+                _ => Color::from_rgba(1.0, 1.0, 1.0, 0.03),
+            };
+            iced::widget::button::Style {
+                background: Some(bg.into()),
+                border: Border {
+                    color: if is_on {
+                        Color::from_rgba(139.0 / 255.0, 92.0 / 255.0, 246.0 / 255.0, 0.35)
+                    } else {
+                        Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+                    },
+                    width: 1.0,
+                    radius: 10.0.into(),
+                },
+                ..Default::default()
+            }
         })
+        .on_press(msg)
         .into()
     }
 
-    /// Custom Switch Toggle Widget matching screenshot (Purple pill with white checkmark when ON)
-    fn toggle_switch(&self, is_on: bool, msg: SettingsMessage) -> Element<'_, SettingsMessage> {
+    /// Custom Switch Toggle Indicator matching screenshot (Purple pill with white checkmark when ON)
+    fn toggle_indicator(&self, is_on: bool) -> Element<'_, SettingsMessage> {
         let content = if is_on {
             row![
                 space().width(Length::Fill),
@@ -1105,12 +1174,12 @@ impl SettingsPanel {
             .align_y(Alignment::Center)
         };
 
-        button(content)
+        container(content)
             .width(Length::Fixed(46.0))
             .height(Length::Fixed(24.0))
-            .style(move |_t, _s| {
+            .style(move |_t| {
                 if is_on {
-                    iced::widget::button::Style {
+                    container::Style {
                         background: Some(Color::from_rgb8(139, 92, 246).into()), // Purple
                         border: Border {
                             radius: 12.0.into(),
@@ -1119,7 +1188,7 @@ impl SettingsPanel {
                         ..Default::default()
                     }
                 } else {
-                    iced::widget::button::Style {
+                    container::Style {
                         background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.15).into()),
                         border: Border {
                             radius: 12.0.into(),
@@ -1129,7 +1198,6 @@ impl SettingsPanel {
                     }
                 }
             })
-            .on_press(msg)
             .into()
     }
 }

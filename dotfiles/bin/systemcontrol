@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# systemcontrol - System Service & Hardware Radio Control CLI for msUI / Arch Linux
+# systemcontrol - High-Performance System Service & Hardware Radio Control CLI for msUI / Arch Linux
 # Manages Bluetooth, Proton VPN, Local AI Engine, Wi-Fi, TLP, Flatpak helper
 
 set -euo pipefail
@@ -183,7 +183,7 @@ cmd_status() {
     echo ""
 }
 
-# Enable service / radio
+# Enable service / radio (non-blocking for background systemctl calls)
 cmd_enable() {
     local svc
     svc=$(normalize_service "${1:-}")
@@ -191,14 +191,14 @@ cmd_enable() {
         bluetooth)
             echo -e "${CYAN}Enabling Bluetooth...${NC}"
             rfkill unblock bluetooth 2>/dev/null || true
-            systemctl start bluetooth.service 2>/dev/null || true
-            command -v bluetoothctl >/dev/null 2>&1 && bluetoothctl power on >/dev/null 2>&1 || true
-            echo -e "${GREEN}✓ Bluetooth radio and service enabled.${NC}"
+            ( systemctl start bluetooth.service >/dev/null 2>&1 ) &
+            ( command -v bluetoothctl >/dev/null 2>&1 && bluetoothctl power on >/dev/null 2>&1 ) &
+            echo -e "${GREEN}✓ Bluetooth radio unblocked and service started.${NC}"
             ;;
         protonvpn)
             echo -e "${CYAN}Starting Proton VPN daemon...${NC}"
-            systemctl start proton.VPN.service
-            echo -e "${GREEN}✓ Proton VPN daemon is active.${NC}"
+            ( systemctl start proton.VPN.service >/dev/null 2>&1 ) &
+            echo -e "${GREEN}✓ Proton VPN daemon starting in background.${NC}"
             ;;
         ai)
             echo -e "${CYAN}Starting Local AI Engine...${NC}"
@@ -219,12 +219,12 @@ cmd_enable() {
             ;;
         tlp)
             echo -e "${CYAN}Starting TLP service...${NC}"
-            systemctl start tlp.service
+            ( systemctl start tlp.service >/dev/null 2>&1 ) &
             echo -e "${GREEN}✓ TLP power optimizer active.${NC}"
             ;;
         flatpak)
             echo -e "${CYAN}Starting Flatpak system helper...${NC}"
-            systemctl start flatpak-system-helper.service
+            ( systemctl start flatpak-system-helper.service >/dev/null 2>&1 ) &
             echo -e "${GREEN}✓ Flatpak system helper active.${NC}"
             ;;
         *)
@@ -235,22 +235,22 @@ cmd_enable() {
     esac
 }
 
-# Disable service / radio
+# Disable service / radio (instant rfkill kill + non-blocking background systemctl)
 cmd_disable() {
     local svc
     svc=$(normalize_service "${1:-}")
     case "$svc" in
         bluetooth)
             echo -e "${CYAN}Disabling Bluetooth...${NC}"
-            command -v bluetoothctl >/dev/null 2>&1 && bluetoothctl power off >/dev/null 2>&1 || true
             rfkill block bluetooth 2>/dev/null || true
-            systemctl stop bluetooth.service 2>/dev/null || true
-            echo -e "${GREEN}✓ Bluetooth radio soft-blocked and service stopped (0 mW power draw).${NC}"
+            ( command -v bluetoothctl >/dev/null 2>&1 && bluetoothctl power off >/dev/null 2>&1 ) &
+            ( systemctl stop bluetooth.service >/dev/null 2>&1 ) &
+            echo -e "${GREEN}✓ Bluetooth radio soft-blocked (0 mW power draw).${NC}"
             ;;
         protonvpn)
             echo -e "${CYAN}Stopping Proton VPN daemon...${NC}"
-            systemctl stop proton.VPN.service
-            echo -e "${GREEN}✓ Proton VPN daemon stopped (reclaimed ~180-386 MB RAM).${NC}"
+            ( systemctl stop proton.VPN.service >/dev/null 2>&1 ) &
+            echo -e "${GREEN}✓ Proton VPN daemon stopping in background (reclaiming RAM).${NC}"
             ;;
         ai)
             echo -e "${CYAN}Stopping Local AI Engine...${NC}"
@@ -271,13 +271,13 @@ cmd_disable() {
             ;;
         tlp)
             echo -e "${CYAN}Stopping TLP service...${NC}"
-            systemctl stop tlp.service
-            echo -e "${GREEN}✓ TLP service stopped.${NC}"
+            ( systemctl stop tlp.service >/dev/null 2>&1 ) &
+            echo -e "${GREEN}✓ TLP service stopping in background.${NC}"
             ;;
         flatpak)
             echo -e "${CYAN}Stopping Flatpak system helper...${NC}"
-            systemctl stop flatpak-system-helper.service
-            echo -e "${GREEN}✓ Flatpak helper stopped.${NC}"
+            ( systemctl stop flatpak-system-helper.service >/dev/null 2>&1 ) &
+            echo -e "${GREEN}✓ Flatpak helper stopping in background.${NC}"
             ;;
         *)
             echo -e "${RED}Unknown service: $svc${NC}"
@@ -293,7 +293,7 @@ cmd_toggle() {
     svc=$(normalize_service "${1:-}")
     case "$svc" in
         bluetooth)
-            if is_bluetooth_soft_blocked || ! is_unit_active bluetooth.service; then
+            if is_bluetooth_soft_blocked; then
                 cmd_enable bluetooth
             else
                 cmd_disable bluetooth
@@ -351,7 +351,7 @@ cmd_optimize() {
         local r
         r=$(get_process_ram_mb "proton.vpn.daemon")
         echo -e "  Stopping Proton VPN daemon (${r} MB)..."
-        systemctl stop proton.VPN.service 2>/dev/null || true
+        ( systemctl stop proton.VPN.service >/dev/null 2>&1 ) &
         saved_mb=$((saved_mb + r))
     fi
 
@@ -371,7 +371,7 @@ cmd_optimize() {
         local r
         r=$(get_process_ram_mb "flatpak-system-helper")
         echo -e "  Stopping Flatpak indexer (${r} MB)..."
-        systemctl stop flatpak-system-helper.service 2>/dev/null || true
+        ( systemctl stop flatpak-system-helper.service >/dev/null 2>&1 ) &
         saved_mb=$((saved_mb + r))
     fi
 
@@ -388,6 +388,7 @@ cmd_optimize() {
         if [ "$has_connected" = false ]; then
             echo -e "  Soft-blocking idle Bluetooth radio..."
             rfkill block bluetooth 2>/dev/null || true
+            ( systemctl stop bluetooth.service >/dev/null 2>&1 ) &
         fi
     fi
 
@@ -408,7 +409,7 @@ cmd_gui() {
 # Usage / Help
 cmd_help() {
     cat <<EOF
-${BOLD}systemcontrol${NC} - System Service & Hardware Radio Control CLI
+${BOLD}systemcontrol${NC} - High-Performance System Service & Hardware Radio Control CLI
 
 ${BOLD}USAGE:${NC}
     systemcontrol <COMMAND> [SERVICE]

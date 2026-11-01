@@ -93,8 +93,7 @@ impl SystemServiceManager {
     /// Bluetooth service info
     pub fn bluetooth_info() -> SystemServiceInfo {
         let soft_blocked = Self::is_bluetooth_soft_blocked();
-        let service_active = Self::is_unit_active("bluetooth.service");
-        let is_active = !soft_blocked && service_active;
+        let is_active = !soft_blocked;
         let ram_mb = if is_active {
             Self::get_process_ram_mb("bluetoothd")
         } else {
@@ -104,7 +103,7 @@ impl SystemServiceManager {
         SystemServiceInfo {
             id: "bluetooth".to_string(),
             name: "Bluetooth Radio".to_string(),
-            description: "Kernel rfkill hardware radio & bluetooth.service".to_string(),
+            description: "Kernel rfkill hardware radio & bluetoothd".to_string(),
             is_active,
             is_radio: true,
             radio_state: Some(if soft_blocked {

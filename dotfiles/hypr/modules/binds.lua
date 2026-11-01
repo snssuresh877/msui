@@ -43,8 +43,16 @@ hl.bind(MOD .. " + K", hl.dsp.exec_cmd("msui drawer"), {
 	description = "App Drawer & Task Switcher",
 })
 
-hl.bind(MOD .. " + I", hl.dsp.exec_cmd("msui settings"), {
-	description = "msUI System Control Panel & Settings",
+hl.bind(MOD .. " + I", hl.dsp.exec_cmd("msui wifi"), {
+	description = "msUI Wi-Fi & Internet Network Manager",
+})
+
+hl.bind("CTRL + SPACE", hl.dsp.exec_cmd("msui settings"), {
+	description = "msUI System Control Panel GUI",
+})
+
+hl.bind(MOD .. " + CTRL + SPACE", hl.dsp.exec_cmd("msui settings"), {
+	description = "msUI System Control Panel GUI (Super+Ctrl+Space fallback)",
 })
 
 hl.bind(MOD .. " + S", hl.dsp.exec_cmd("msui fshare"), {
