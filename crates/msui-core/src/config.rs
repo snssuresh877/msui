@@ -81,6 +81,8 @@ pub struct BarConfig {
     #[serde(default = "default_true")]
     pub show_control_center: bool,
     #[serde(default = "default_true")]
+    pub show_settings: bool,
+    #[serde(default = "default_true")]
     pub show_terminal: bool,
     #[serde(default = "default_true")]
     pub show_power: bool,
@@ -198,6 +200,7 @@ impl Default for BarConfig {
             show_clipboard: true,
             show_notifications: true,
             show_control_center: true,
+            show_settings: true,
             show_terminal: true,
             show_power: true,
         }

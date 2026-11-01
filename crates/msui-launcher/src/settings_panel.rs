@@ -450,6 +450,7 @@ impl SettingsPanel {
                     "show_clipboard" => self.config.bar.show_clipboard = !self.config.bar.show_clipboard,
                     "show_notifications" => self.config.bar.show_notifications = !self.config.bar.show_notifications,
                     "show_control_center" => self.config.bar.show_control_center = !self.config.bar.show_control_center,
+                    "show_settings" => self.config.bar.show_settings = !self.config.bar.show_settings,
                     "show_terminal" => self.config.bar.show_terminal = !self.config.bar.show_terminal,
                     "show_power" => self.config.bar.show_power = !self.config.bar.show_power,
                     _ => {}
@@ -1000,6 +1001,7 @@ impl SettingsPanel {
             self.setting_toggle_row("Clipboard History Quick-Button", self.config.bar.show_clipboard, SettingsMessage::ToggleBarWidget("show_clipboard")),
             self.setting_toggle_row("Notification Center Bell", self.config.bar.show_notifications, SettingsMessage::ToggleBarWidget("show_notifications")),
             self.setting_toggle_row("Control Center Quick Toggle", self.config.bar.show_control_center, SettingsMessage::ToggleBarWidget("show_control_center")),
+            self.setting_toggle_row("System Settings Panel (⚙)", self.config.bar.show_settings, SettingsMessage::ToggleBarWidget("show_settings")),
             self.setting_toggle_row("Terminal Quick-Launch Icon", self.config.bar.show_terminal, SettingsMessage::ToggleBarWidget("show_terminal")),
             self.setting_toggle_row("Power & Session Menu Button", self.config.bar.show_power, SettingsMessage::ToggleBarWidget("show_power")),
         ]

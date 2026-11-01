@@ -144,6 +144,7 @@ pub enum BarModule {
     Clipboard,
     Notifications,
     ControlCenter,
+    Settings,
     Terminal,
     Power,
 }
@@ -170,7 +171,8 @@ impl BarModule {
             BarModule::Screenshot => ("Screenshot Tool", "󰄀", "One-click screen capture button"),
             BarModule::Clipboard => ("Clipboard History", "󰅍", "Clipboard manager with search"),
             BarModule::Notifications => ("Notification Bell", "󰂚", "Notification center and unread counter"),
-            BarModule::ControlCenter => ("Quick Settings Trigger", "󰒓", "Status bar shortcut to open Control Center"),
+            BarModule::ControlCenter => ("Quick Settings Trigger", "󰅐", "Status bar shortcut to open Quick Settings"),
+            BarModule::Settings => ("System Settings Panel", "⚙", "Status bar shortcut to open System Settings"),
             BarModule::Terminal => ("Terminal Launcher", "󰞷", "Quick terminal emulator shortcut"),
             BarModule::Power => ("Session / Power Menu", "󰐥", "System lock, sleep, reboot, and poweroff"),
         }
@@ -198,6 +200,7 @@ impl BarModule {
             BarModule::Clipboard => cfg.show_clipboard,
             BarModule::Notifications => cfg.show_notifications,
             BarModule::ControlCenter => cfg.show_control_center,
+            BarModule::Settings => cfg.show_settings,
             BarModule::Terminal => cfg.show_terminal,
             BarModule::Power => cfg.show_power,
         }
@@ -225,6 +228,7 @@ impl BarModule {
             BarModule::Clipboard => cfg.show_clipboard = !cfg.show_clipboard,
             BarModule::Notifications => cfg.show_notifications = !cfg.show_notifications,
             BarModule::ControlCenter => cfg.show_control_center = !cfg.show_control_center,
+            BarModule::Settings => cfg.show_settings = !cfg.show_settings,
             BarModule::Terminal => cfg.show_terminal = !cfg.show_terminal,
             BarModule::Power => cfg.show_power = !cfg.show_power,
         }
@@ -270,6 +274,7 @@ pub enum Message {
     OpenAppDrawer,
     OpenClipboardManager,
     OpenFShare,
+    OpenSettingsPanel,
     ToggleDnd,
     ToggleMute,
     VolumeChanged(u8),
@@ -412,6 +417,7 @@ impl ControlCenter {
                 b.show_clipboard = true;
                 b.show_notifications = true;
                 b.show_control_center = true;
+                b.show_settings = true;
                 b.show_terminal = true;
                 b.show_power = true;
                 let _ = self.config.save_to_default_path();
@@ -438,6 +444,7 @@ impl ControlCenter {
                 b.show_clipboard = false;
                 b.show_notifications = true;
                 b.show_control_center = true;
+                b.show_settings = true;
                 b.show_terminal = false;
                 b.show_power = true;
                 let _ = self.config.save_to_default_path();
@@ -525,6 +532,14 @@ impl ControlCenter {
             }
             Message::OpenFShare => {
                 spawn_detached("fshare");
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
+            }
+            Message::OpenSettingsPanel => {
+                spawn_detached("settings");
                 if self.is_standalone {
                     std::process::exit(0);
                 } else {
@@ -635,12 +650,22 @@ impl ControlCenter {
         let title_label = text(if self.active_tab == ControlCenterTab::QuickSettings { "Quick Settings" } else { "Top Bar Settings" }).size(15);
         let header_left = row![title_icon, title_label].spacing(8).align_y(Alignment::Center);
 
+        let settings_btn = button(
+            row![text("⚙").size(12), text("Settings").size(11)]
+                .spacing(4)
+                .align_y(Alignment::Center),
+        )
+        .style(button::secondary)
+        .padding([3, 8])
+        .on_press(Message::OpenSettingsPanel);
+
         let close_btn = button(text("✕").size(12))
             .style(button::danger)
             .padding([3, 8])
             .on_press(Message::Close);
 
-        let header = row![header_left, space().width(Length::Fill), close_btn]
+        let header = row![header_left, space().width(Length::Fill), settings_btn, close_btn]
+            .spacing(6)
             .align_y(Alignment::Center);
 
         // --- Tab Navigation Switcher ---
@@ -893,6 +918,7 @@ impl ControlCenter {
                 BarModule::Clipboard,
                 BarModule::Notifications,
                 BarModule::ControlCenter,
+                BarModule::Settings,
                 BarModule::Terminal,
                 BarModule::Power,
             ] {

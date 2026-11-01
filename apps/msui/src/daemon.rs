@@ -851,6 +851,7 @@ impl UnifiedShell {
                     BarMessage::OpenLauncher => return self.toggle_modal("launcher"),
                     BarMessage::OpenPowerMenu => return self.toggle_modal("power"),
                     BarMessage::OpenControlCenter => return self.toggle_modal("control"),
+                    BarMessage::OpenSettings => return self.toggle_modal("settings"),
                     BarMessage::OpenClipboard => return self.toggle_modal("clipboard"),
                     BarMessage::OpenNotifications => return self.toggle_modal("notifications"),
                     BarMessage::OpenDrawer => return self.toggle_modal("drawer"),
