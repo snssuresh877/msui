@@ -49,6 +49,8 @@ pub struct SettingsPanel {
     osd_power: bool,
     blur_enabled: bool,
     pub active_blur_preset: u8,
+    transparency_enabled: bool,
+    last_active_preset: u8,
     animations_enabled: bool,
     frosted_enabled: bool,
     dnd_enabled: bool,
@@ -74,6 +76,7 @@ pub enum SettingsMessage {
     ToggleOsdCaps,
     ToggleOsdPower,
     ToggleBlur,
+    ToggleTransparency,
     SetBlurPreset(u8),
     ToggleAnimations,
     ToggleFrosted,
@@ -208,6 +211,8 @@ impl SettingsPanel {
         let audio_info = AudioMonitor::read();
         let current_power_profile = PowerProfileManager::get_profile();
         let active_blur_preset = detect_current_blur_preset();
+        let transparency_enabled = active_blur_preset != 11;
+        let last_active_preset = if active_blur_preset != 11 { active_blur_preset } else { 10 };
 
         // Check blur status from hyprctl
         let blur_enabled = StdCommand::new("hyprctl")
@@ -248,6 +253,8 @@ impl SettingsPanel {
                 osd_power: true,
                 blur_enabled,
                 active_blur_preset,
+                transparency_enabled,
+                last_active_preset,
                 animations_enabled,
                 frosted_enabled,
                 dnd_enabled,
@@ -269,6 +276,10 @@ impl SettingsPanel {
         self.audio_info = AudioMonitor::read();
         self.current_power_profile = PowerProfileManager::get_profile();
         self.active_blur_preset = detect_current_blur_preset();
+        self.transparency_enabled = self.active_blur_preset != 11;
+        if self.active_blur_preset != 11 {
+            self.last_active_preset = self.active_blur_preset;
+        }
         self.should_close = false;
         self.last_toggle_time = None;
         Command::none()
@@ -354,10 +365,22 @@ impl SettingsPanel {
             }
             SettingsMessage::ToggleBlur => {
                 self.blur_enabled = !self.blur_enabled;
-                let preset = if self.blur_enabled { 10 } else { 1 };
+                let preset = if self.blur_enabled {
+                    if self.last_active_preset != 1 && self.last_active_preset != 11 {
+                        self.last_active_preset
+                    } else {
+                        10
+                    }
+                } else {
+                    1
+                };
                 self.active_blur_preset = preset;
+                self.transparency_enabled = true;
+                if preset != 11 {
+                    self.last_active_preset = preset;
+                }
                 self.status_feedback = Some(if self.blur_enabled {
-                    "Enabled Dual-Kawase GPU Blur".to_string()
+                    "Enabled GPU Blur".to_string()
                 } else {
                     "Disabled Blur (Translucent Windows)".to_string()
                 });
@@ -367,9 +390,48 @@ impl SettingsPanel {
                         .status();
                 });
             }
+            SettingsMessage::ToggleTransparency => {
+                self.transparency_enabled = !self.transparency_enabled;
+                let active = self.transparency_enabled;
+                let preset = if active {
+                    if self.last_active_preset != 11 {
+                        self.last_active_preset
+                    } else {
+                        10
+                    }
+                } else {
+                    11
+                };
+
+                self.active_blur_preset = preset;
+                self.blur_enabled = preset != 1 && preset != 11;
+
+                self.config.bar.transparency = if active {
+                    if self.frosted_enabled { "frosted".to_string() } else { "transparent".to_string() }
+                } else {
+                    "solid".to_string()
+                };
+                let _ = self.config.save_to_default_path();
+
+                self.status_feedback = Some(if active {
+                    "Enabled Window Transparency (0.84 Translucency)".to_string()
+                } else {
+                    "Disabled Transparency (100% Solid Opaque Windows)".to_string()
+                });
+
+                std::thread::spawn(move || {
+                    let _ = StdCommand::new("hypr-blur")
+                        .arg(preset.to_string())
+                        .status();
+                });
+            }
             SettingsMessage::SetBlurPreset(preset) => {
                 self.active_blur_preset = preset;
                 self.blur_enabled = preset != 1 && preset != 11;
+                self.transparency_enabled = preset != 11;
+                if preset != 11 {
+                    self.last_active_preset = preset;
+                }
                 self.status_feedback = Some(format!("Applied blur preset #{}", preset));
                 std::thread::spawn(move || {
                     let _ = StdCommand::new("hypr-blur")
@@ -658,7 +720,7 @@ impl SettingsPanel {
                 "󰔄",
                 "Interface style",
                 "Blur, shadows, corners, gaps",
-                "interface style blur shadows corners gaps border kawase",
+                "interface style blur shadows corners gaps border kawase transparency transparent opaque translucency",
             ),
             (
                 SettingsTab::Fonts,
@@ -1139,6 +1201,11 @@ impl SettingsPanel {
         .spacing(4);
 
         let toggles = column![
+            self.setting_toggle_row(
+                "Window & Interface Transparency",
+                self.transparency_enabled,
+                SettingsMessage::ToggleTransparency,
+            ),
             self.setting_toggle_row(
                 "Hyprland GPU Blur (Kawase & Shaders)",
                 self.blur_enabled,
