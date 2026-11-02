@@ -86,7 +86,7 @@ pub fn run_control_center_topbar(config: MsuiConfig) -> Result<(), iced_exwlshel
 
 fn run_control_center_internal(_config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
     let width = 400;
-    let height = 810;
+    let height = 765;
 
     application(
         ControlCenter::new,
@@ -671,36 +671,26 @@ impl ControlCenter {
         // --- Tab Navigation Switcher ---
         let is_quick = self.active_tab == ControlCenterTab::QuickSettings;
         let tab_quick = button(
-            row![text("󰒓").size(13), text("Quick").size(11)]
-                .spacing(5)
+            row![text("󰒓").size(14), text("Quick Settings").size(12)]
+                .spacing(6)
                 .align_y(Alignment::Center),
         )
         .width(Length::FillPortion(1))
         .style(if is_quick { button::primary } else { button::secondary })
-        .padding([6, 8])
+        .padding([6, 10])
         .on_press(Message::SwitchTab(ControlCenterTab::QuickSettings));
 
         let tab_bar = button(
-            row![text("󰍹").size(13), text("Top Bar").size(11)]
-                .spacing(5)
+            row![text("󰍹").size(14), text("Top Bar").size(12)]
+                .spacing(6)
                 .align_y(Alignment::Center),
         )
         .width(Length::FillPortion(1))
         .style(if !is_quick { button::primary } else { button::secondary })
-        .padding([6, 8])
+        .padding([6, 10])
         .on_press(Message::SwitchTab(ControlCenterTab::TopBarSettings));
 
-        let tab_settings = button(
-            row![text("⚙").size(13), text("System Settings").size(11)]
-                .spacing(5)
-                .align_y(Alignment::Center),
-        )
-        .width(Length::FillPortion(1))
-        .style(button::secondary)
-        .padding([6, 8])
-        .on_press(Message::OpenSettingsPanel);
-
-        let tab_row = row![tab_quick, tab_bar, tab_settings].spacing(6);
+        let tab_row = row![tab_quick, tab_bar].spacing(8);
 
         // --- Top Bar Settings View ---
         let is_frosted = self.config.bar.is_frosted();
@@ -1278,13 +1268,13 @@ impl ControlCenter {
         let (bat_icon, bat_label) = if let Some(bat) = &self.battery_info {
             let icon = if bat.is_charging { "󰂄" } else { "󰁹" };
             let time_str = if let Some(m) = bat.time_remaining_mins {
-                format!(" (~{}h {}m remaining)", m / 60, m % 60)
+                format!(" ({}h {}m)", m / 60, m % 60)
             } else {
                 "".to_string()
             };
-            (icon, format!("{}% {}{}", bat.percentage, if bat.is_charging { "Charging" } else { "Discharging" }, time_str))
+            (icon, format!("{}% {}{}", bat.percentage, if bat.is_charging { "Charging" } else { "" }, time_str))
         } else {
-            ("󰚥", "AC Power Connected".to_string())
+            ("󰚥", "AC Connected".to_string())
         };
 
         let cpu_str = format!(" CPU: {:.0}%", self.system_metrics.cpu_usage_percent);
@@ -1332,25 +1322,6 @@ impl ControlCenter {
 
         let session_row = row![btn_lock, btn_suspend, btn_reboot, btn_power].spacing(6);
 
-        // --- System Settings Shortcut Banner ---
-        let settings_banner = button(
-            row![
-                text("⚙").size(15),
-                column![
-                    text("System Settings Control Panel").size(11),
-                    text("All hardware toggles, blur, vpn, display & appearance").size(9),
-                ].spacing(1),
-                space().width(Length::Fill),
-                text("󰅂").size(12),
-            ]
-            .spacing(8)
-            .align_y(Alignment::Center)
-        )
-        .width(Length::Fill)
-        .style(toggle_tile_style(false, is_frosted))
-        .padding([7, 10])
-        .on_press(Message::OpenSettingsPanel);
-
         let content = column![
             header,
             tab_row,
@@ -1358,10 +1329,9 @@ impl ControlCenter {
             sliders_card,
             profiles_card,
             telemetry_card,
-            settings_banner,
             session_row,
         ]
-        .spacing(9)
+        .spacing(10)
         .padding(14);
 
         container(content)
