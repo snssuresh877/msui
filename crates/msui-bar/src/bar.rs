@@ -144,6 +144,7 @@ pub enum Message {
     OpenDisplay,
     OpenMedia,
     OpenStorage,
+    OpenBtop,
     OpenReminders,
     TakeScreenshot,
     ToggleMute,
@@ -501,6 +502,10 @@ impl Bar {
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
                 spawn_detached(std::process::Command::new(bin).arg("storage"));
             }
+            Message::OpenBtop => {
+                let term = &self.config.launcher.terminal;
+                SystemControl::launch_btop(term);
+            }
             Message::OpenReminders => {
                 let bin = std::env::current_exe()
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
@@ -796,7 +801,7 @@ impl Bar {
             let cpu_btn = button(text(cpu_str).size(13))
                 .style(bar_btn_transparent)
                 .padding([2, 4])
-                .on_press(Message::OpenStorage);
+                .on_press(Message::OpenBtop);
             right_row = right_row.push(cpu_btn);
         }
 
@@ -809,7 +814,7 @@ impl Bar {
             let ram_btn = button(text(ram_str).size(13))
                 .style(bar_btn_transparent)
                 .padding([2, 4])
-                .on_press(Message::OpenStorage);
+                .on_press(Message::OpenBtop);
             right_row = right_row.push(ram_btn);
         }
 

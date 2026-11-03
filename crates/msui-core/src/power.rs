@@ -95,6 +95,78 @@ fi
             .spawn();
     }
 
+    pub fn launch_btop(preferred: &str) {
+        let preferred = preferred.trim();
+        if !preferred.is_empty() {
+            if Self::spawn_btop_cmd(preferred) {
+                return;
+            }
+        }
+
+        const FALLBACK_TERMINALS: &[&str] = &[
+            "foot",
+            "kitty",
+            "ghostty",
+            "alacritty",
+            "wezterm",
+            "xterm",
+            "gnome-terminal",
+            "konsole",
+            "xfce4-terminal",
+        ];
+
+        for term in FALLBACK_TERMINALS {
+            if *term != preferred && Self::spawn_btop_cmd(term) {
+                tracing::info!("Launched btop in fallback terminal: {}", term);
+                return;
+            }
+        }
+
+        let _ = Command::new("notify-send")
+            .args([
+                "-a",
+                "msUI",
+                "-i",
+                "utilities-system-monitor",
+                "System Monitor Launch Error",
+                "Could not launch btop. Please ensure btop and a terminal (foot/kitty) are installed.",
+            ])
+            .spawn();
+    }
+
+    fn spawn_btop_cmd(term: &str) -> bool {
+        let mut cmd = Command::new(term);
+        match term {
+            "foot" => {
+                cmd.args(["--app-id=btop_float", "-T", "System Activity", "-e", "btop"]);
+            }
+            "kitty" => {
+                cmd.args(["--class", "btop_float", "-T", "System Activity", "btop"]);
+            }
+            "ghostty" => {
+                cmd.args(["--class=btop_float", "--title=System Activity", "-e", "btop"]);
+            }
+            "alacritty" => {
+                cmd.args(["--class", "btop_float,btop_float", "-t", "System Activity", "-e", "btop"]);
+            }
+            "wezterm" => {
+                cmd.args(["start", "--class", "btop_float", "btop"]);
+            }
+            _ => {
+                cmd.args(["-e", "btop"]);
+            }
+        }
+        match cmd.spawn() {
+            Ok(mut child) => {
+                std::thread::spawn(move || {
+                    let _ = child.wait();
+                });
+                true
+            }
+            Err(_) => false,
+        }
+    }
+
     fn spawn_terminal_cmd(cmd_name: &str) -> bool {
         match Command::new(cmd_name).spawn() {
             Ok(mut child) => {

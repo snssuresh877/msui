@@ -274,6 +274,7 @@ pub enum Message {
     OpenAppDrawer,
     OpenClipboardManager,
     OpenFShare,
+    OpenBtop,
     OpenSettingsPanel,
     ToggleDnd,
     ToggleMute,
@@ -532,6 +533,15 @@ impl ControlCenter {
             }
             Message::OpenFShare => {
                 spawn_detached("fshare");
+                if self.is_standalone {
+                    std::process::exit(0);
+                } else {
+                    self.should_close = true;
+                }
+            }
+            Message::OpenBtop => {
+                let term = &self.config.launcher.terminal;
+                SystemControl::launch_btop(term);
                 if self.is_standalone {
                     std::process::exit(0);
                 } else {
@@ -1280,16 +1290,26 @@ impl ControlCenter {
         let cpu_str = format!(" CPU: {:.0}%", self.system_metrics.cpu_usage_percent);
         let ram_str = format!("󰍛 RAM: {:.1}G", self.system_metrics.ram_used_mb as f32 / 1024.0);
 
+        let cpu_btn = button(text(cpu_str).size(11))
+            .style(button::text)
+            .padding([0, 2])
+            .on_press(Message::OpenBtop);
+
+        let ram_btn = button(text(ram_str).size(11))
+            .style(button::text)
+            .padding([0, 2])
+            .on_press(Message::OpenBtop);
+
         let telemetry_card = container(
             row![
                 text(bat_icon).size(16),
                 text(bat_label).size(11),
                 space().width(Length::Fill),
-                text(cpu_str).size(11),
+                cpu_btn,
                 text("•").size(11),
-                text(ram_str).size(11),
+                ram_btn,
             ]
-            .spacing(8)
+            .spacing(6)
             .align_y(Alignment::Center)
         )
         .padding([8, 12])
