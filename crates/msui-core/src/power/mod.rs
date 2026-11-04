@@ -1,28 +1,46 @@
+pub mod policy;
+
+pub use policy::{PolicyAction, PowerPolicyEngine};
+
 use std::process::Command;
 
 pub struct SystemControl;
 
 impl SystemControl {
+    fn spawn_reaped(mut cmd: Command) {
+        if let Ok(mut child) = cmd.spawn() {
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+        }
+    }
+
     pub fn lock() {
-        let _ = Command::new("hyprlock").spawn();
+        Self::spawn_reaped(Command::new("hyprlock"));
     }
 
     pub fn suspend() {
-        let _ = Command::new("systemctl").arg("suspend").spawn();
+        let mut cmd = Command::new("systemctl");
+        cmd.arg("suspend");
+        Self::spawn_reaped(cmd);
     }
 
     pub fn reboot() {
-        let _ = Command::new("systemctl").arg("reboot").spawn();
+        let mut cmd = Command::new("systemctl");
+        cmd.arg("reboot");
+        Self::spawn_reaped(cmd);
     }
 
     pub fn poweroff() {
-        let _ = Command::new("systemctl").arg("poweroff").spawn();
+        let mut cmd = Command::new("systemctl");
+        cmd.arg("poweroff");
+        Self::spawn_reaped(cmd);
     }
 
     pub fn logout() {
-        let _ = Command::new("hyprctl")
-            .args(["dispatch", "exit"])
-            .spawn();
+        let mut cmd = Command::new("hyprctl");
+        cmd.args(["dispatch", "exit"]);
+        Self::spawn_reaped(cmd);
     }
 
     pub fn screenshot() {

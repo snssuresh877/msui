@@ -36,7 +36,7 @@ pub use notification::{
     NotificationStore,
     service::{emit_action_invoked, emit_notification_closed, run_notification_service},
 };
-pub use power::SystemControl;
+pub use power::{PolicyAction, PowerPolicyEngine, SystemControl};
 pub use reminder::{ReminderItem, ReminderManager};
 pub use service::{SystemServiceInfo, SystemServiceManager};
 pub use theme::{ThemeDefinition, ThemeManager, BUILTIN_THEMES};

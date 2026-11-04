@@ -26,15 +26,14 @@ is_ac_online() {
 }
 
 apply_battery_profile() {
-    # 1. Switch Power Profiles / TLP via D-Bus
-    if command -v gdbus >/dev/null 2>&1; then
-        gdbus call --system --dest net.hadess.PowerProfiles \
-            --object-path /net/hadess/PowerProfiles \
-            --method org.freedesktop.DBus.Properties.Set \
-            'net.hadess.PowerProfiles' 'ActiveProfile' "<'power-saver'>" >/dev/null 2>&1 || true
+    # 1. Switch Power Profiles via authoritative tlpctl / powerprofilesctl
+    if command -v tlpctl >/dev/null 2>&1; then
+        tlpctl set power-saver >/dev/null 2>&1 || true
+    elif command -v powerprofilesctl >/dev/null 2>&1; then
+        powerprofilesctl set power-saver >/dev/null 2>&1 || true
     fi
 
-    # 2. Check Bluetooth: if 0 connected devices, soft-block to save 0.4W
+    # 2. Check Bluetooth: if 0 connected devices, soft-block to save power
     if command -v bluetoothctl >/dev/null 2>&1 && command -v rfkill >/dev/null 2>&1; then
         local connected
         connected=$(bluetoothctl devices Connected 2>/dev/null || true)
@@ -43,20 +42,21 @@ apply_battery_profile() {
         fi
     fi
 
-    # 3. Notification (if in interactive graphical session)
-    if command -v notify-send >/dev/null 2>&1 && [[ -n "${WAYLAND_DISPLAY:-}" || -n "${DISPLAY:-}" ]]; then
-        notify-send -a "Power Manager" -u low -i "battery-good-symbolic" \
-            "Battery Saver Active" "Switched to Low-Power profile (ABM level 3, display optimized)."
+    # 3. Notification
+    export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+    export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -a "msUI Power" -u low -i "battery-good-symbolic" \
+            "Battery Saver Active" "Switched to Power Saver profile." >/dev/null 2>&1 || true
     fi
 }
 
 apply_ac_profile() {
-    # 1. Switch Power Profiles / TLP to balanced
-    if command -v gdbus >/dev/null 2>&1; then
-        gdbus call --system --dest net.hadess.PowerProfiles \
-            --object-path /net/hadess/PowerProfiles \
-            --method org.freedesktop.DBus.Properties.Set \
-            'net.hadess.PowerProfiles' 'ActiveProfile' "<'balanced'>" >/dev/null 2>&1 || true
+    # 1. Switch Power Profiles to balanced
+    if command -v tlpctl >/dev/null 2>&1; then
+        tlpctl set balanced >/dev/null 2>&1 || true
+    elif command -v powerprofilesctl >/dev/null 2>&1; then
+        powerprofilesctl set balanced >/dev/null 2>&1 || true
     fi
 
     # 2. Unblock Bluetooth radio
@@ -64,10 +64,12 @@ apply_ac_profile() {
         rfkill unblock bluetooth 2>/dev/null || true
     fi
 
-    # 3. Notification (if in interactive graphical session)
-    if command -v notify-send >/dev/null 2>&1 && [[ -n "${WAYLAND_DISPLAY:-}" || -n "${DISPLAY:-}" ]]; then
-        notify-send -a "Power Manager" -u low -i "ac-adapter-symbolic" \
-            "AC Power Connected" "Switched to Balanced performance profile."
+    # 3. Notification
+    export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-1}"
+    export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$(id -u)/bus}"
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -a "msUI Power" -u low -i "ac-adapter-symbolic" \
+            "AC Power Connected" "Switched to Balanced performance profile." >/dev/null 2>&1 || true
     fi
 }
 

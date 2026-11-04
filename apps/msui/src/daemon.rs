@@ -10,10 +10,12 @@ use iced_exwlshell::reexport::{
 use iced_exwlshell::settings::{ExWlSettings, LayerShellSettings, StartMode};
 use iced_exwlshell::to_layer_message;
 use iced_wayland_subscriber::shell::{self, ShellReceiver};
+use std::time::Duration;
 use msui_bar::{Bar, BarMessage};
 use msui_core::ipc::{IpcCommand, IpcServer};
 use msui_core::{
-    AudioMonitor, BrightnessMonitor, MsuiConfig, OsdKind, PolkitRequest, ThemeManager,
+    AudioMonitor, BatteryMonitor, BrightnessMonitor, MsuiConfig, OsdKind, PolicyAction,
+    PolkitRequest, PowerPolicyEngine, PowerProfileManager, SystemMonitor, ThemeManager,
     WallpaperManager,
 };
 use msui_launcher::{
@@ -162,6 +164,7 @@ pub enum DaemonMessage {
     PolkitRequest(PolkitRequest),
     PolkitCancel(String),
     WindowClosed(iced::window::Id),
+    PowerTick,
     Ignored,
 }
 
@@ -215,6 +218,9 @@ pub struct UnifiedShell {
     osd: OsdWindow,
     active_modal: Option<ActiveModal>,
     polkit_request: Option<PolkitRequest>,
+    battery_monitor: BatteryMonitor,
+    system_monitor: SystemMonitor,
+    power_policy_engine: PowerPolicyEngine,
 }
 
 impl UnifiedShell {
@@ -285,6 +291,9 @@ impl UnifiedShell {
         let bar = Bar::new(config.clone(), shell_events);
         let (toast, toast_cmd) = ToastApp::new_embedded();
         let (osd, osd_cmd) = OsdWindow::new_embedded();
+        let battery_monitor = BatteryMonitor::new();
+        let system_monitor = SystemMonitor::new();
+        let power_policy_engine = PowerPolicyEngine::new();
 
         let shell = Self {
             config,
@@ -299,6 +308,9 @@ impl UnifiedShell {
             osd,
             active_modal: None,
             polkit_request: None,
+            battery_monitor,
+            system_monitor,
+            power_policy_engine,
         };
 
         (
@@ -831,6 +843,7 @@ impl UnifiedShell {
 
         let ipc_sub = iced::Subscription::run(ipc_stream);
         let polkit_sub = iced::Subscription::run(polkit_stream);
+        let power_sub = iced::time::every(Duration::from_secs(2)).map(|_| DaemonMessage::PowerTick);
 
         iced::Subscription::batch([
             bar_sub,
@@ -841,6 +854,7 @@ impl UnifiedShell {
             close_sub,
             ipc_sub,
             polkit_sub,
+            power_sub,
         ])
     }
 
@@ -1419,6 +1433,58 @@ impl UnifiedShell {
                 #[cfg(target_os = "linux")]
                 unsafe {
                     libc::malloc_trim(0);
+                }
+                Task::none()
+            }
+            DaemonMessage::PowerTick => {
+                let bat = self.battery_monitor.read();
+                let metrics = self.system_monitor.sample();
+                let actions = self.power_policy_engine.evaluate(bat.as_ref(), metrics.cpu_usage_percent);
+
+                for action in actions {
+                    match action {
+                        PolicyAction::SetProfile(prof) => {
+                            tracing::info!("msUI Power Policy: switched profile to {:?}", prof);
+                            PowerProfileManager::set_profile(prof);
+                        }
+                        PolicyAction::NotifyLowBattery { percent, is_critical } => {
+                            let summary = if is_critical {
+                                "󰁺 Battery Critically Low!"
+                            } else {
+                                "󰁻 Battery Low"
+                            };
+                            let body = if is_critical {
+                                format!("Battery is at {percent}%. Connect your charger immediately to avoid shutdown!")
+                            } else {
+                                format!("Battery is at {percent}%. Extreme Energy Saver mode has been activated.")
+                            };
+                            let timeout_ms = if is_critical { 15000 } else { 8000 };
+
+                            let mut store = msui_core::GLOBAL_NOTIFICATIONS.lock().unwrap();
+                            store.add(
+                                "msui-power".into(),
+                                None,
+                                summary.into(),
+                                body.clone(),
+                                vec![],
+                                timeout_ms,
+                            );
+
+                            let icon = if is_critical { "battery-caution" } else { "battery-low" };
+                            let urgency = if is_critical { "critical" } else { "normal" };
+                            let _ = std::process::Command::new("notify-send")
+                                .args(["-a", "msUI Power", "-u", urgency, "-i", icon, summary, &body])
+                                .spawn();
+                        }
+                        PolicyAction::EmergencySuspend => {
+                            tracing::warn!("Battery is <= 3%! Triggering emergency suspend to prevent data loss...");
+                            let _ = std::process::Command::new("notify-send")
+                                .args(["-a", "msUI Power", "-u", "critical", "-i", "battery-empty", "Emergency Battery Suspend", "Battery is at 3% or below. Suspending system now to prevent data loss."])
+                                .spawn();
+                            msui_core::SystemControl::suspend();
+                        }
+                        PolicyAction::None => {}
+                    }
                 }
                 Task::none()
             }

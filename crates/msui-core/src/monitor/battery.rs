@@ -80,13 +80,7 @@ pub struct PowerProfileManager;
 
 impl PowerProfileManager {
     pub fn get_profile() -> PowerProfile {
-        // Fast ACPI platform_profile sysfs check (< 0.05ms)
-        if let Ok(text) = std::fs::read_to_string("/sys/firmware/acpi/platform_profile") {
-            if let Some(prof) = PowerProfile::from_str_loose(&text) {
-                return prof;
-            }
-        }
-
+        // 1. TLP is the single primary authority
         if let Ok(output) = std::process::Command::new("tlpctl").arg("get").output() {
             if output.status.success() {
                 let text = String::from_utf8_lossy(&output.stdout);
@@ -96,6 +90,7 @@ impl PowerProfileManager {
             }
         }
 
+        // 2. Secondary authority: powerprofilesctl
         if let Ok(output) = std::process::Command::new("powerprofilesctl").arg("get").output() {
             if output.status.success() {
                 let text = String::from_utf8_lossy(&output.stdout);
@@ -105,6 +100,14 @@ impl PowerProfileManager {
             }
         }
 
+        // 3. Fallback: direct ACPI platform_profile sysfs check
+        if let Ok(text) = std::fs::read_to_string("/sys/firmware/acpi/platform_profile") {
+            if let Some(prof) = PowerProfile::from_str_loose(&text) {
+                return prof;
+            }
+        }
+
+        // 4. Fallback: D-Bus query
         if let Ok(output) = std::process::Command::new("busctl")
             .args([
                 "get-property",
@@ -129,34 +132,34 @@ impl PowerProfileManager {
     pub fn set_profile(profile: PowerProfile) -> bool {
         let slug = profile.as_str();
 
-        if let Ok(status) = std::process::Command::new("tlpctl")
-            .arg(slug)
-            .status()
-        {
-            if status.success() {
-                std::thread::sleep(std::time::Duration::from_millis(300));
-                return true;
-            }
-        }
-
+        // 1. TLP set (authoritative backend)
         if let Ok(status) = std::process::Command::new("tlpctl")
             .args(["set", slug])
             .status()
         {
             if status.success() {
-                std::thread::sleep(std::time::Duration::from_millis(300));
                 return true;
             }
         }
 
+        // 2. Fallback to powerprofilesctl
         if let Ok(status) = std::process::Command::new("powerprofilesctl")
             .args(["set", slug])
             .status()
         {
             if status.success() {
-                std::thread::sleep(std::time::Duration::from_millis(300));
                 return true;
             }
+        }
+
+        // 3. Fallback: direct ACPI platform_profile sysfs (if root/writable)
+        let acpi_slug = match profile {
+            PowerProfile::PowerSaver => "low-power",
+            PowerProfile::Balanced => "balanced",
+            PowerProfile::Performance => "performance",
+        };
+        if std::fs::write("/sys/firmware/acpi/platform_profile", acpi_slug).is_ok() {
+            return true;
         }
 
         false
@@ -225,9 +228,22 @@ impl BatteryMonitor {
 
         if let Ok(entries) = fs::read_dir(base) {
             for entry in entries.flatten() {
+                let path = entry.path();
+                // Check kernel power_supply type (official standard)
+                if let Ok(content) = fs::read_to_string(path.join("type")) {
+                    let kind = content.trim();
+                    if kind == "Mains" || kind == "USB" {
+                        return Some(path);
+                    }
+                }
                 let name = entry.file_name().to_string_lossy().to_string();
-                if name.starts_with("AC") || name.starts_with("ADP") || name.starts_with("Mains") {
-                    return Some(entry.path());
+                if name.starts_with("AC")
+                    || name.starts_with("ADP")
+                    || name.starts_with("Mains")
+                    || name.starts_with("ucsi")
+                    || name.starts_with("typec")
+                {
+                    return Some(path);
                 }
             }
         }

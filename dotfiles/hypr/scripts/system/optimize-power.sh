@@ -62,13 +62,6 @@ SOUND_POWER_SAVE_CONTROLLER=Y
 # Exempt Logitech Wireless Nano Receiver (046d:c534) to avoid any mouse cursor wake lag
 USB_AUTOSUSPEND=1
 USB_DENYLIST="046d:c534"
-
-# Lenovo Battery Conservation Mode (Prolongs lifespan by capping AC charging at 60-80%)
-RESTORE_THRESHOLDS_ON_BAT=1
-START_CHARGE_THRESH_BAT0=60
-STOP_CHARGE_THRESH_BAT0=80
-START_CHARGE_THRESH_BAT1=60
-STOP_CHARGE_THRESH_BAT1=80
 TLP_EOF
 
 # ---------------------------------------------------------
