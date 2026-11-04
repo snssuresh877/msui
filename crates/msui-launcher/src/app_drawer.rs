@@ -162,6 +162,7 @@ impl AppDrawer {
         self.query.clear();
         self.clients = HyprlandIpc::get_clients();
         self.tray_items = msui_core::get_tray_items();
+        msui_core::invalidate_desktop_cache();
         self.all_apps = scan_desktop_apps();
         self.rebuild_filtered();
         self.selected_idx = None;

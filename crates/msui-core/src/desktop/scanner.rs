@@ -4,8 +4,17 @@ use std::sync::LazyLock;
 
 static LOCALE: LazyLock<Vec<String>> = LazyLock::new(fde::get_languages_from_env);
 
-static ICONS_SIZE: &[&str] = &["256x256", "128x128", "64x64", "48x48", "32x32", "16x16"];
-static THEMES_LIST: &[&str] = &["breeze", "Adwaita", "hicolor"];
+static ICONS_SIZE: &[&str] = &["256x256", "128x128", "64x64", "48x48", "32x32", "24x24", "16x16"];
+static THEMES_LIST: &[&str] = &[
+    "Papirus-Dark",
+    "Papirus",
+    "Papirus-Light",
+    "breeze",
+    "breeze-dark",
+    "Adwaita",
+    "hicolor",
+    "Yaru",
+];
 
 #[derive(Debug, Clone)]
 pub struct DesktopApp {
@@ -170,47 +179,123 @@ impl DesktopApp {
 }
 
 fn get_icon_path_from_xdgicon(iconname: &str) -> Option<PathBuf> {
+    if iconname.is_empty() {
+        return None;
+    }
+
+    // 1. Direct path check (e.g. /home/m/... or ~/...)
+    let p = std::path::Path::new(iconname);
+    if p.is_absolute() && p.exists() {
+        return Some(p.to_path_buf());
+    }
+    if let Some(rest) = iconname.strip_prefix("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            let expanded = PathBuf::from(home).join(rest);
+            if expanded.exists() {
+                return Some(expanded);
+            }
+        }
+    }
+
+    // Strip extension if already present (e.g. "app.png" -> "app")
+    let clean = iconname
+        .strip_suffix(".png")
+        .or_else(|| iconname.strip_suffix(".svg"))
+        .or_else(|| iconname.strip_suffix(".xpm"))
+        .unwrap_or(iconname);
+
+    // 2. Direct Flatpak exports & installed app directories check
+    let flatpak_roots = [
+        "/var/lib/flatpak/exports/share",
+        "/home/m/.local/share/flatpak/exports/share",
+    ];
+    for root in flatpak_roots {
+        let base = PathBuf::from(root);
+        for sz in ICONS_SIZE {
+            let p_png = base.join(format!("icons/hicolor/{sz}/apps/{clean}.png"));
+            if p_png.exists() {
+                return Some(p_png);
+            }
+            let p_svg = base.join(format!("icons/hicolor/{sz}/apps/{clean}.svg"));
+            if p_svg.exists() {
+                return Some(p_svg);
+            }
+        }
+        let p_scal = base.join(format!("icons/hicolor/scalable/apps/{clean}.svg"));
+        if p_scal.exists() {
+            return Some(p_scal);
+        }
+    }
+
+    // 3. User local icons directory (~/.local/share/icons)
+    if let Ok(home) = std::env::var("HOME") {
+        let user_icons = PathBuf::from(home).join(".local/share/icons");
+        for sz in ICONS_SIZE {
+            let p_png = user_icons.join(format!("hicolor/{sz}/apps/{clean}.png"));
+            if p_png.exists() {
+                return Some(p_png);
+            }
+            let p_svg = user_icons.join(format!("hicolor/{sz}/apps/{clean}.svg"));
+            if p_svg.exists() {
+                return Some(p_svg);
+            }
+        }
+        let p_scal = user_icons.join(format!("hicolor/scalable/apps/{clean}.svg"));
+        if p_scal.exists() {
+            return Some(p_scal);
+        }
+    }
+
+    // 4. XDG standard theme directories (checking active theme + Papirus + hicolor)
+    for theme in THEMES_LIST {
+        for sz in ICONS_SIZE {
+            let t = xdg::BaseDirectories::with_prefix(format!("icons/{theme}/{sz}/apps"));
+            if let Some(p) = t.find_data_file(format!("{clean}.svg")) {
+                return Some(p);
+            }
+            if let Some(p) = t.find_data_file(format!("{clean}.png")) {
+                return Some(p);
+            }
+        }
+        let t_scal = xdg::BaseDirectories::with_prefix(format!("icons/{theme}/scalable/apps"));
+        if let Some(p) = t_scal.find_data_file(format!("{clean}.svg")) {
+            return Some(p);
+        }
+        if let Some(p) = t_scal.find_data_file(format!("{clean}.png")) {
+            return Some(p);
+        }
+    }
+
+    // 5. Standard hicolor & top-level icons
     let top = xdg::BaseDirectories::with_prefix("icons");
-    if let Some(p) = top.find_data_file(format!("{iconname}.svg")) {
+    if let Some(p) = top.find_data_file(format!("{clean}.svg")) {
         return Some(p);
     }
-    if let Some(p) = top.find_data_file(format!("{iconname}.png")) {
+    if let Some(p) = top.find_data_file(format!("{clean}.png")) {
         return Some(p);
     }
 
     let scalable = xdg::BaseDirectories::with_prefix("icons/hicolor/scalable/apps");
-    if let Some(p) = scalable.find_data_file(format!("{iconname}.svg")) {
+    if let Some(p) = scalable.find_data_file(format!("{clean}.svg")) {
         return Some(p);
     }
 
     for prefix in ICONS_SIZE {
         let sized = xdg::BaseDirectories::with_prefix(format!("icons/hicolor/{prefix}/apps"));
-        if let Some(p) = sized.find_data_file(format!("{iconname}.png")) {
+        if let Some(p) = sized.find_data_file(format!("{clean}.png")) {
             return Some(p);
         }
-        if let Some(p) = sized.find_data_file(format!("{iconname}.svg")) {
+        if let Some(p) = sized.find_data_file(format!("{clean}.svg")) {
             return Some(p);
         }
     }
 
     let pix = xdg::BaseDirectories::with_prefix("pixmaps");
-    if let Some(p) = pix.find_data_file(format!("{iconname}.svg")) {
+    if let Some(p) = pix.find_data_file(format!("{clean}.svg")) {
         return Some(p);
     }
-    if let Some(p) = pix.find_data_file(format!("{iconname}.png")) {
+    if let Some(p) = pix.find_data_file(format!("{clean}.png")) {
         return Some(p);
-    }
-
-    for theme in THEMES_LIST {
-        for sz in &["48", "64", "scalable"] {
-            let t = xdg::BaseDirectories::with_prefix(format!("icons/{theme}/apps/{sz}"));
-            if let Some(p) = t.find_data_file(format!("{iconname}.svg")) {
-                return Some(p);
-            }
-            if let Some(p) = t.find_data_file(format!("{iconname}.png")) {
-                return Some(p);
-            }
-        }
     }
 
     None
@@ -219,7 +304,15 @@ fn get_icon_path_from_xdgicon(iconname: &str) -> Option<PathBuf> {
 fn resolve_icon(icon_source: IconSource) -> Option<PathBuf> {
     match icon_source {
         IconSource::Name(name) => get_icon_path_from_xdgicon(name.as_str()),
-        IconSource::Path(path) => Some(path),
+        IconSource::Path(path) => {
+            if path.exists() {
+                Some(path)
+            } else if let Some(fname) = path.file_name().and_then(|f| f.to_str()) {
+                get_icon_path_from_xdgicon(fname)
+            } else {
+                None
+            }
+        }
     }
 }
 
@@ -227,6 +320,19 @@ pub fn find_icon_for_class(class: &str) -> Option<PathBuf> {
     let lower = class.to_lowercase();
     if let Some(p) = get_icon_path_from_xdgicon(&lower) {
         return Some(p);
+    }
+    // Check known aliases for flatpaks/appimages
+    if lower == "wechat" {
+        if let Some(p) = get_icon_path_from_xdgicon("com.tencent.WeChat") {
+            return Some(p);
+        }
+    }
+    if lower.contains("vectorcraft") {
+        if let Some(p) = get_icon_path_from_xdgicon("vectorcraft")
+            .or_else(|| get_icon_path_from_xdgicon("ai.storyteller.vectorcraft"))
+        {
+            return Some(p);
+        }
     }
     // Check without dashes/underscores or after last period (e.g., org.mozilla.firefox -> firefox)
     if let Some(last_part) = lower.rsplit('.').next() {
@@ -239,6 +345,12 @@ pub fn find_icon_for_class(class: &str) -> Option<PathBuf> {
 
 static APP_CACHE: LazyLock<std::sync::RwLock<Option<Vec<DesktopApp>>>> =
     LazyLock::new(|| std::sync::RwLock::new(None));
+
+pub fn invalidate_desktop_cache() {
+    if let Ok(mut guard) = APP_CACHE.write() {
+        *guard = None;
+    }
+}
 
 pub fn scan_desktop_apps() -> Vec<DesktopApp> {
     if let Ok(guard) = APP_CACHE.read() {
@@ -267,6 +379,41 @@ pub fn scan_desktop_apps() -> Vec<DesktopApp> {
 
             let icon = entry.icon().and_then(|icon_str| {
                 resolve_icon(IconSource::from_unknown(icon_str))
+            }).or_else(|| {
+                // Fallback for AppImages without explicit Icon field in desktop file
+                if let Some(first_exec) = exec_cmds.first() {
+                    let exec_p = std::path::Path::new(first_exec);
+                    if exec_p.extension().is_some_and(|e| e.eq_ignore_ascii_case("appimage")) {
+                        if let Some(parent) = exec_p.parent() {
+                            for candidate in &[&id, &name.to_lowercase(), "vectorcraft", "icon", "app"] {
+                                let p_png = parent.join(format!("{candidate}.png"));
+                                if p_png.exists() {
+                                    return Some(p_png);
+                                }
+                                let p_svg = parent.join(format!("{candidate}.svg"));
+                                if p_svg.exists() {
+                                    return Some(p_svg);
+                                }
+                            }
+                            let sq = parent.join("squashfs-root");
+                            if sq.is_dir() {
+                                for candidate in &[
+                                    "vectorcraft.png",
+                                    "ai.storyteller.vectorcraft.png",
+                                    "vectorcraft.svg",
+                                    "ai.storyteller.vectorcraft.svg",
+                                    "icon.png",
+                                ] {
+                                    let p = sq.join(candidate);
+                                    if p.exists() {
+                                        return Some(p);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                None
             });
 
             Some(DesktopApp {

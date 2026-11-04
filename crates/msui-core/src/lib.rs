@@ -17,7 +17,7 @@ pub mod service;
 pub use clipboard::{ClipboardEntry, ClipboardStore, GLOBAL_CLIPBOARD, watcher::start_clipboard_watcher};
 pub use compositor::{HyprlandClient, HyprlandEvent, HyprlandIpc, HyprlandWorkspaceRef};
 pub use config::{BarConfig, LauncherConfig, MsuiConfig};
-pub use desktop::{find_icon_for_class, DesktopApp, scan_desktop_apps};
+pub use desktop::{find_icon_for_class, invalidate_desktop_cache, scan_desktop_apps, DesktopApp};
 pub use ipc::{get_socket_path, IpcClient, IpcCommand, IpcServer};
 pub use polkit::{
     register_polkit_cancel_handler, register_polkit_request_handler, run_polkit_agent,
