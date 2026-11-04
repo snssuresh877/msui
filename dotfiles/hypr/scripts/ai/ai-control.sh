@@ -12,7 +12,10 @@
 
 set -uo pipefail
 
-MODEL="qwen2.5-coder:1.5b"
+MODEL="$(ollama list 2>/dev/null | awk 'NR>1 {print $1}' | head -n 1)"
+if [[ -z "$MODEL" ]]; then
+    MODEL="qwen2.5-coder:3b"
+fi
 PORT=11434
 API_URL="http://127.0.0.1:${PORT}"
 APP_ID="msui-ai-float"
@@ -37,9 +40,12 @@ start_server() {
         return 0
     fi
 
-    # Start ollama serve in background with no systemd autostart
-    OLLAMA_ORIGINS="*" OLLAMA_HOST="127.0.0.1:${PORT}" ollama serve >/dev/null 2>&1 &
-    local server_pid=$!
+    # Prefer systemd service if installed
+    if [ -f /usr/lib/systemd/system/ollama.service ] || systemctl list-unit-files ollama.service >/dev/null 2>&1; then
+        systemctl start ollama.service
+    else
+        OLLAMA_ORIGINS="*" OLLAMA_HOST="127.0.0.1:${PORT}" ollama serve >/dev/null 2>&1 &
+    fi
 
     # Wait for server readiness (max 10 seconds)
     local retries=20
@@ -68,9 +74,14 @@ stop_server() {
     # 1. Unload any active models from RAM immediately
     curl -s "${API_URL}/api/generate" -d "{\"model\": \"${MODEL}\", \"keep_alive\": 0}" >/dev/null 2>&1 || true
 
-    # 2. Terminate all ollama processes
+    # 2. Stop systemd service cleanly if active
+    if systemctl is-active ollama.service >/dev/null 2>&1; then
+        systemctl stop ollama.service >/dev/null 2>&1 || true
+    fi
+
+    # 3. Terminate any user-level ollama processes
     pkill -TERM -x ollama >/dev/null 2>&1 || true
-    sleep 0.8
+    sleep 0.5
     if pgrep -x ollama >/dev/null 2>&1; then
         pkill -KILL -x ollama >/dev/null 2>&1 || true
     fi

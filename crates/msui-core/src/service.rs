@@ -139,11 +139,12 @@ impl SystemServiceManager {
 
     /// Local AI Engine info
     pub fn ai_info() -> SystemServiceInfo {
-        let is_active = Command::new("pgrep")
-            .args(["-x", "ollama"])
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false);
+        let is_active = Self::is_unit_active("ollama.service")
+            || Command::new("pgrep")
+                .args(["-x", "ollama"])
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
 
         let ram_mb = if is_active {
             Self::get_process_ram_mb("ollama")
@@ -154,7 +155,7 @@ impl SystemServiceManager {
         SystemServiceInfo {
             id: "ai".to_string(),
             name: "Local AI Engine".to_string(),
-            description: "Qwen 2.5 Coder on-demand LLM on port 11434".to_string(),
+            description: "Qwen 2.5 Coder 3B on-demand LLM on port 11434".to_string(),
             is_active,
             is_radio: false,
             radio_state: None,

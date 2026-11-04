@@ -12,7 +12,10 @@
 set -uo pipefail
 
 SCRIPT_DIR="${HOME}/.config/hypr/scripts/ai"
-MODEL="qwen2.5-coder:1.5b"
+MODEL="$(ollama list 2>/dev/null | awk 'NR>1 {print $1}' | head -n 1)"
+if [[ -z "$MODEL" ]]; then
+    MODEL="qwen2.5-coder:3b"
+fi
 PORT=11434
 API_URL="http://127.0.0.1:${PORT}"
 

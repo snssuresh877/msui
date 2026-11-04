@@ -60,8 +60,8 @@ hl.config({
 		rounding = 14,
 
 		-- Translucency so blur shaders and background physics are clearly visible
-		active_opacity = 0.84,
-		inactive_opacity = 0.75,
+		active_opacity = 1.0,
+		inactive_opacity = 1.0,
 
 		----------------------------------------------------
 		-- BLUR (Hyprland 0.57+ Blur Shaders & Variants)
@@ -80,15 +80,11 @@ hl.config({
 		--   "haze"         - Iridescent atmospheric color haze
 		-- Live testing: run 'hypr-blur menu' or press Super + Alt + B
 																																																blur = {
-			enabled = true,
-			variant = "kawase", -- Active: kawase
-			size = 4,
-			passes = 2,
-			vibrancy = 0.5,
-			contrast = 1.0,
+			enabled = false,
+			variant = "kawase", -- Active: solid_color (opaque windows as per system theme)
+			size = 2,
+			passes = 1,
 			proportional = false,
-			ignore_opacity = true,
-			new_optimizations = true,
 		},
 
 		----------------------------------------------------
