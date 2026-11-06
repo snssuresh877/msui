@@ -295,23 +295,29 @@ impl BatteryMonitor {
 
         let val = if enable { "1" } else { "0" };
 
-        // 1. Try direct write (succeeds if udev rule allows or running as root)
+        // 1. Try direct write (succeeds in <1ms if permissions allow or tmpfiles.d is active)
         if fs::write(&path, val).is_ok() {
-            let svc_cmd = if enable {
-                "systemctl enable --now lenovo-conservation.service 2>/dev/null || true"
-            } else {
-                "systemctl disable --now lenovo-conservation.service 2>/dev/null || true"
-            };
-            let _ = std::process::Command::new("sh").arg("-c").arg(svc_cmd).status();
             return Ok(());
         }
 
-        // 2. Fall back to pkexec (spawns PolkitDialog)
+        // 2. Fall back to pkexec (spawns Polkit elevation dialog)
+        // Set mode 0666 and install tmpfiles.d + udev rule so this prompt NEVER happens again
         let script = format!(
-            "echo {val} > '{p}' && ( [ -f /etc/systemd/system/lenovo-conservation.service ] && systemctl {act} lenovo-conservation.service || true )",
+            "echo {val} > '{p}' && chmod 0666 '{p}' 2>/dev/null || true; \
+             printf '%s\\n' \
+               '# Lenovo IdeaPad Battery Conservation Mode permissions' \
+               'z /sys/bus/platform/drivers/ideapad_acpi/*/conservation_mode 0666 root root - -' \
+               'z /sys/bus/platform/drivers/ideapad_laptop/*/conservation_mode 0666 root root - -' \
+               'z /sys/devices/platform/ideapad_acpi/conservation_mode 0666 root root - -' \
+               'z /sys/devices/platform/ideapad_laptop/conservation_mode 0666 root root - -' \
+               > /etc/tmpfiles.d/lenovo-conservation.conf 2>/dev/null || true; \
+             systemd-tmpfiles --create /etc/tmpfiles.d/lenovo-conservation.conf 2>/dev/null || true; \
+             printf '%s\\n' \
+               '# Udev rule for Lenovo IdeaPad Battery Conservation Mode' \
+               'ACTION==\"add|change\", SUBSYSTEM==\"platform\", RUN+=\"/bin/sh -c \\'chmod 0666 /sys/bus/platform/drivers/ideapad_acpi/*/conservation_mode 2>/dev/null || true\\'\"' \
+               > /etc/udev/rules.d/99-lenovo-conservation.rules 2>/dev/null || true",
             val = val,
-            p = path.display(),
-            act = if enable { "enable" } else { "disable" }
+            p = path.display()
         );
 
         let status = std::process::Command::new("pkexec")
@@ -324,6 +330,13 @@ impl BatteryMonitor {
         } else {
             Err("Authorization cancelled or failed".to_string())
         }
+    }
+
+    pub async fn set_conservation_mode_async(enable: bool) -> Result<(), String> {
+        tokio::task::spawn_blocking(move || Self::set_conservation_mode(enable))
+            .await
+            .map_err(|e| e.to_string())
+            .and_then(|r| r)
     }
 
     pub fn read(&self) -> Option<BatteryInfo> {

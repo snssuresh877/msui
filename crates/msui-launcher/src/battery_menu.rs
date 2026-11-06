@@ -46,6 +46,7 @@ pub struct BatteryMenu {
 pub enum Message {
     SelectProfile(PowerProfile),
     ToggleConservationMode(bool),
+    ConservationModeResult(Result<bool, String>),
     Refresh,
     Close,
     IcedEvent(Event),
@@ -122,14 +123,29 @@ impl BatteryMenu {
                 }
             }
             Message::ToggleConservationMode(enable) => {
-                match BatteryMonitor::set_conservation_mode(enable) {
-                    Ok(_) => {
+                self.status_msg = Some(if enable {
+                    "Enabling Desk Mode (55–60%)...".to_string()
+                } else {
+                    "Switching to Full Charge Mode (100%)...".to_string()
+                });
+                return Command::perform(
+                    async move {
+                        BatteryMonitor::set_conservation_mode_async(enable)
+                            .await
+                            .map(|()| enable)
+                    },
+                    Message::ConservationModeResult,
+                );
+            }
+            Message::ConservationModeResult(res) => {
+                match res {
+                    Ok(enable) => {
+                        self.battery_info = self.battery_monitor.read();
                         self.status_msg = Some(if enable {
                             "Enabled Desk Mode (55–60% Charge Limit for Battery Longevity)".to_string()
                         } else {
                             "Switched to Full Charge Mode (Charging to 100%)".to_string()
                         });
-                        self.battery_info = self.battery_monitor.read();
                     }
                     Err(e) => {
                         self.status_msg = Some(format!("Failed to switch charging mode: {e}"));

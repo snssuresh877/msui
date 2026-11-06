@@ -1,3 +1,3 @@
 # Udev rule for Lenovo IdeaPad Battery Conservation Mode
 # Grants write permissions to users for zero-password UI toggling
-ACTION=="add|change", SUBSYSTEM=="platform", DRIVERS=="ideapad_acpi|ideapad_laptop", ATTR{conservation_mode}=="*", MODE="0666"
+ACTION=="add|change", SUBSYSTEM=="platform", RUN+="/bin/sh -c 'chmod 0666 /sys/bus/platform/drivers/ideapad_acpi/*/conservation_mode /sys/bus/platform/drivers/ideapad_laptop/*/conservation_mode 2>/dev/null || true'"

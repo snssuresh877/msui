@@ -99,6 +99,7 @@ pub enum SettingsMessage {
     SetBorderColor(String),
     SetPowerProfile(PowerProfile),
     ToggleConservationMode(bool),
+    ConservationModeResult(Result<bool, String>),
     StepVolume(i8),
     ToggleAudioMute,
     LaunchPavucontrol,
@@ -556,8 +557,23 @@ impl SettingsPanel {
                 PowerProfileManager::set_profile(prof);
             }
             SettingsMessage::ToggleConservationMode(enable) => {
-                match BatteryMonitor::set_conservation_mode(enable) {
-                    Ok(_) => {
+                self.status_feedback = Some(if enable {
+                    "Enabling Desk Mode (55–60%)...".to_string()
+                } else {
+                    "Switching to Full Charge Mode (100%)...".to_string()
+                });
+                return Command::perform(
+                    async move {
+                        BatteryMonitor::set_conservation_mode_async(enable)
+                            .await
+                            .map(|()| enable)
+                    },
+                    SettingsMessage::ConservationModeResult,
+                );
+            }
+            SettingsMessage::ConservationModeResult(res) => {
+                match res {
+                    Ok(enable) => {
                         self.conservation_mode = BatteryMonitor::read_conservation_mode();
                         self.status_feedback = Some(if enable {
                             "Enabled Desk Mode (55–60% Charge Limit for Battery Longevity)".to_string()
