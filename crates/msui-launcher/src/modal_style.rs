@@ -7,36 +7,25 @@ pub fn is_frosted() -> bool {
     MsuiConfig::load_or_default().bar.is_frosted()
 }
 
-/// Mac-style smoked acrylic glass outer modal container.
+/// Obsidian dark glass outer modal container matching the System Settings Panel color.
 /// When `is_frosted` is true:
-/// - Smoked dark acrylic background: `rgba(16, 18, 26, 0.72)`
-/// - Hairline white border highlight: `rgba(255, 255, 255, 0.14)`
+/// - Sleek obsidian dark background: `rgba(18, 18, 24, 0.94)`
+/// - Signature accent border: `rgba(147, 51, 234, 0.45)`, width 1.5
 /// - Generous rounded corners: `radius: 18.0`
 /// When `is_frosted` is false (solid):
-/// - Solid theme background with subtle border.
+/// - Opaque obsidian dark background: `rgba(18, 18, 24, 0.98)`
+/// - Signature accent border: `rgba(147, 51, 234, 0.45)`, width 1.5
 pub fn modal_card_style(is_frosted: bool) -> impl Fn(&Theme) -> container::Style {
-    move |theme: &Theme| {
-        let p = theme.palette();
-        if is_frosted {
-            container::Style {
-                background: Some(Color::from_rgba(16.0 / 255.0, 18.0 / 255.0, 26.0 / 255.0, 0.72).into()),
-                border: Border {
-                    color: Color::from_rgba(1.0, 1.0, 1.0, 0.14),
-                    width: 1.0,
-                    radius: 18.0.into(),
-                },
-                ..Default::default()
-            }
-        } else {
-            container::Style {
-                background: Some(p.background.into()),
-                border: Border {
-                    color: Color::from_rgba(1.0, 1.0, 1.0, 0.12),
-                    width: 1.0,
-                    radius: 18.0.into(),
-                },
-                ..Default::default()
-            }
+    move |_theme: &Theme| {
+        let alpha = if is_frosted { 0.94 } else { 0.98 };
+        container::Style {
+            background: Some(Color::from_rgba(18.0 / 255.0, 18.0 / 255.0, 24.0 / 255.0, alpha).into()),
+            border: Border {
+                color: Color::from_rgba(147.0 / 255.0, 51.0 / 255.0, 234.0 / 255.0, 0.45),
+                width: 1.5,
+                radius: 18.0.into(),
+            },
+            ..Default::default()
         }
     }
 }

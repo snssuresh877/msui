@@ -697,15 +697,7 @@ impl SettingsPanel {
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(|_theme: &Theme| container::Style {
-            background: Some(Color::from_rgba(18.0 / 255.0, 18.0 / 255.0, 24.0 / 255.0, 0.94).into()),
-            border: Border {
-                color: Color::from_rgba(147.0 / 255.0, 51.0 / 255.0, 234.0 / 255.0, 0.45),
-                width: 1.5,
-                radius: 18.0.into(),
-            },
-            ..Default::default()
-        });
+        .style(crate::modal_style::default_modal_card_style());
 
         window_container.into()
     }
