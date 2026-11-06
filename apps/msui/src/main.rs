@@ -1411,6 +1411,162 @@ fn main() -> anyhow::Result<()> {
                 tracing::error!("msUI Settings Panel exited with error: {:?}", e);
             }
         }
+        "border" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            let mut config = MsuiConfig::load_or_default();
+            match sub {
+                Some("off" | "disable" | "hide" | "0") => {
+                    config.gui.border_enabled = false;
+                    config.save_to_default_path()?;
+                    let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
+                    println!("✓ MSUI Universal Border: DISABLED (Border Off)");
+                }
+                Some("on" | "enable" | "show" | "1") => {
+                    config.gui.border_enabled = true;
+                    if config.gui.border_width == 0.0 {
+                        config.gui.border_width = 1.5;
+                    }
+                    config.save_to_default_path()?;
+                    let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
+                    println!("✓ MSUI Universal Border: ENABLED ({}px, {})", config.gui.border_width, config.gui.border_color);
+                }
+                Some("toggle") => {
+                    config.gui.border_enabled = !config.gui.border_enabled;
+                    config.save_to_default_path()?;
+                    let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
+                    let state = if config.gui.border_enabled { "ENABLED" } else { "DISABLED (Border Off)" };
+                    println!("✓ MSUI Universal Border: {}", state);
+                }
+                Some("color") => {
+                    if let Some(col) = args.get(3) {
+                        config.gui.border_color = col.to_string();
+                        config.gui.border_enabled = true;
+                        config.save_to_default_path()?;
+                        let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
+                        println!("✓ MSUI Universal Border Color set to: {}", col);
+                    } else {
+                        eprintln!("Usage: msui border color <#hex> (e.g. msui border color \"#9333ea\")");
+                        std::process::exit(1);
+                    }
+                }
+                Some("width") => {
+                    if let Some(w_str) = args.get(3) {
+                        if let Ok(w) = w_str.parse::<f32>() {
+                            config.gui.border_width = w;
+                            if w <= 0.0 {
+                                config.gui.border_enabled = false;
+                            } else {
+                                config.gui.border_enabled = true;
+                            }
+                            config.save_to_default_path()?;
+                            let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
+                            println!("✓ MSUI Universal Border Width set to: {}px", w);
+                        } else {
+                            eprintln!("Invalid border width: {}", w_str);
+                            std::process::exit(1);
+                        }
+                    } else {
+                        eprintln!("Usage: msui border width <pixels> (e.g. msui border width 1.5)");
+                        std::process::exit(1);
+                    }
+                }
+                Some("opacity") => {
+                    if let Some(o_str) = args.get(3) {
+                        if let Ok(o) = o_str.parse::<f32>() {
+                            config.gui.border_opacity = o.clamp(0.0, 1.0);
+                            config.save_to_default_path()?;
+                            let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
+                            println!("✓ MSUI Universal Border Opacity set to: {}", config.gui.border_opacity);
+                        } else {
+                            eprintln!("Invalid border opacity (must be 0.0 to 1.0): {}", o_str);
+                            std::process::exit(1);
+                        }
+                    } else {
+                        eprintln!("Usage: msui border opacity <0.0-1.0>");
+                        std::process::exit(1);
+                    }
+                }
+                Some("status") | None => {
+                    let status = if config.gui.border_enabled && config.gui.border_width > 0.0 {
+                        format!("ENABLED (Width: {}px, Color: {}, Opacity: {})", config.gui.border_width, config.gui.border_color, config.gui.border_opacity)
+                    } else {
+                        "DISABLED (Border Off)".to_string()
+                    };
+                    println!("MSUI Universal Border: {}", status);
+                }
+                Some(other) => {
+                    eprintln!("Unknown border command: '{}'. Usage: msui border [on|off|toggle|color <hex>|width <px>|opacity <0.0-1.0>|status]", other);
+                    std::process::exit(1);
+                }
+            }
+        }
+        "gui" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            let mut config = MsuiConfig::load_or_default();
+            match sub {
+                Some("bg" | "background") => {
+                    if let Some(bg) = args.get(3) {
+                        config.gui.background = bg.to_string();
+                        config.save_to_default_path()?;
+                        let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
+                        println!("✓ MSUI Universal Background set to: {}", bg);
+                    } else {
+                        eprintln!("Usage: msui gui bg <#hex> (e.g. msui gui bg \"#121218\")");
+                        std::process::exit(1);
+                    }
+                }
+                Some("bg-opacity" | "opacity") => {
+                    if let Some(op_str) = args.get(3) {
+                        if let Ok(op) = op_str.parse::<f32>() {
+                            config.gui.bg_opacity = op.clamp(0.0, 1.0);
+                            config.save_to_default_path()?;
+                            let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
+                            println!("✓ MSUI Universal Background Opacity set to: {}", config.gui.bg_opacity);
+                        } else {
+                            eprintln!("Invalid opacity: {}", op_str);
+                            std::process::exit(1);
+                        }
+                    } else {
+                        eprintln!("Usage: msui gui bg-opacity <0.0-1.0>");
+                        std::process::exit(1);
+                    }
+                }
+                Some("radius" | "corner-radius") => {
+                    if let Some(r_str) = args.get(3) {
+                        if let Ok(r) = r_str.parse::<f32>() {
+                            config.gui.corner_radius = r;
+                            config.save_to_default_path()?;
+                            let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
+                            println!("✓ MSUI Universal Corner Radius set to: {}px", r);
+                        } else {
+                            eprintln!("Invalid corner radius: {}", r_str);
+                            std::process::exit(1);
+                        }
+                    } else {
+                        eprintln!("Usage: msui gui radius <pixels>");
+                        std::process::exit(1);
+                    }
+                }
+                Some("reset") => {
+                    config.gui = msui_core::GuiConfig::default();
+                    config.save_to_default_path()?;
+                    let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
+                    println!("✓ MSUI Universal GUI styling reset to default obsidian & purple accent theme");
+                }
+                Some("status") | None => {
+                    println!("MSUI Universal GUI Configuration:");
+                    println!("  Background:      {} (opacity: {})", config.gui.background, config.gui.bg_opacity);
+                    println!("  Border Enabled:  {}", config.gui.border_enabled);
+                    println!("  Border Color:    {} (opacity: {})", config.gui.border_color, config.gui.border_opacity);
+                    println!("  Border Width:    {}px", config.gui.border_width);
+                    println!("  Corner Radius:   {}px", config.gui.corner_radius);
+                }
+                Some(other) => {
+                    eprintln!("Unknown gui command: '{}'. Usage: msui gui [status|bg <hex>|bg-opacity <0.0-1.0>|radius <px>|reset]", other);
+                    std::process::exit(1);
+                }
+            }
+        }
         "system" => {
             let sub_args: Vec<&str> = args.iter().skip(2).map(|s| s.as_str()).collect();
             let mut cmd = std::process::Command::new("systemcontrol");
@@ -1465,7 +1621,8 @@ fn print_help() {
           open          Open a modal overlay via instant IPC socket\n  \
           close         Close the currently active modal overlay via instant IPC socket\n  \
           reload        Reload msUI configuration from ~/.config/msui/msui.toml live\n  \
-          ping          Ping the running msUI IPC daemon\n  \
+          border        Manage universal tool borders (e.g. 'border on', 'border off', 'border color <hex>', 'border width <px>')\n  \
+          gui           Manage universal GUI styling (e.g. 'gui bg <hex>', 'gui status', 'gui radius <px>', 'gui reset')\n  \
           toast         Run the Toast notifications overlay\n  \
           help          Display this help message\n\n\
         OPTIONS:\n  \

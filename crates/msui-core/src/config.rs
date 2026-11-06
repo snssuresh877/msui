@@ -10,6 +10,8 @@ pub struct MsuiConfig {
     pub launcher: LauncherConfig,
     #[serde(default)]
     pub power: PowerConfig,
+    #[serde(default)]
+    pub gui: GuiConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -177,12 +179,86 @@ impl Default for PowerConfig {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GuiConfig {
+    /// Background color hex code (e.g. "#121218" or "121218")
+    #[serde(default = "default_gui_background")]
+    pub background: String,
+    /// Background opacity when frosted/acrylic mode is enabled (0.0 - 1.0, default 0.94)
+    #[serde(default = "default_gui_bg_opacity")]
+    pub bg_opacity: f32,
+    /// Master border switch: true = show border, false = border off!
+    #[serde(default = "default_true")]
+    pub border_enabled: bool,
+    /// Border accent color hex code (e.g. "#9333ea" or "9333ea")
+    #[serde(default = "default_gui_border_color")]
+    pub border_color: String,
+    /// Border opacity (0.0 - 1.0, default 0.45)
+    #[serde(default = "default_gui_border_opacity")]
+    pub border_opacity: f32,
+    /// Border thickness in pixels (default 1.5)
+    #[serde(default = "default_gui_border_width")]
+    pub border_width: f32,
+    /// Window corner radius in pixels (default 18.0)
+    #[serde(default = "default_gui_corner_radius")]
+    pub corner_radius: f32,
+    /// Subcard glass background opacity (default 0.05)
+    #[serde(default = "default_gui_subcard_opacity")]
+    pub subcard_opacity: f32,
+    /// Subcard subtle border toggle (default: true)
+    #[serde(default = "default_true")]
+    pub subcard_border_enabled: bool,
+}
+
+fn default_gui_background() -> String { "#121218".into() }
+fn default_gui_bg_opacity() -> f32 { 0.94 }
+fn default_gui_border_color() -> String { "#9333ea".into() }
+fn default_gui_border_opacity() -> f32 { 0.45 }
+fn default_gui_border_width() -> f32 { 1.5 }
+fn default_gui_corner_radius() -> f32 { 18.0 }
+fn default_gui_subcard_opacity() -> f32 { 0.05 }
+
+impl Default for GuiConfig {
+    fn default() -> Self {
+        Self {
+            background: default_gui_background(),
+            bg_opacity: default_gui_bg_opacity(),
+            border_enabled: true,
+            border_color: default_gui_border_color(),
+            border_opacity: default_gui_border_opacity(),
+            border_width: default_gui_border_width(),
+            corner_radius: default_gui_corner_radius(),
+            subcard_opacity: default_gui_subcard_opacity(),
+            subcard_border_enabled: true,
+        }
+    }
+}
+
+/// Parse a hex color string like "#121218" or "121218" into normalized RGB components in [0.0, 1.0].
+pub fn parse_hex_color(hex: &str) -> Option<(f32, f32, f32)> {
+    let s = hex.trim().trim_start_matches('#');
+    if s.len() == 6 {
+        let r = u8::from_str_radix(&s[0..2], 16).ok()?;
+        let g = u8::from_str_radix(&s[2..4], 16).ok()?;
+        let b = u8::from_str_radix(&s[4..6], 16).ok()?;
+        Some((r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0))
+    } else if s.len() == 3 {
+        let r = u8::from_str_radix(&s[0..1].repeat(2), 16).ok()?;
+        let g = u8::from_str_radix(&s[1..2].repeat(2), 16).ok()?;
+        let b = u8::from_str_radix(&s[2..3].repeat(2), 16).ok()?;
+        Some((r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0))
+    } else {
+        None
+    }
+}
+
 impl Default for MsuiConfig {
     fn default() -> Self {
         Self {
             bar: BarConfig::default(),
             launcher: LauncherConfig::default(),
             power: PowerConfig::default(),
+            gui: GuiConfig::default(),
         }
     }
 }
@@ -355,5 +431,60 @@ mod tests {
         assert!(!cfg.bar.is_modern());
         assert_eq!(cfg.bar.margin_top, 0);
         assert_eq!(cfg.bar.margin_horizontal, 12);
+    }
+
+    #[test]
+    fn test_gui_config_defaults() {
+        let cfg = MsuiConfig::default();
+        assert_eq!(cfg.gui.background, "#121218");
+        assert_eq!(cfg.gui.bg_opacity, 0.94);
+        assert!(cfg.gui.border_enabled);
+        assert_eq!(cfg.gui.border_color, "#9333ea");
+        assert_eq!(cfg.gui.border_opacity, 0.45);
+        assert_eq!(cfg.gui.border_width, 1.5);
+        assert_eq!(cfg.gui.corner_radius, 18.0);
+        assert_eq!(cfg.gui.subcard_opacity, 0.05);
+        assert!(cfg.gui.subcard_border_enabled);
+    }
+
+    #[test]
+    fn test_parse_hex_color() {
+        // 6-digit hex
+        let (r, g, b) = parse_hex_color("#9333ea").unwrap();
+        assert!((r - 147.0 / 255.0).abs() < 0.001);
+        assert!((g - 51.0 / 255.0).abs() < 0.001);
+        assert!((b - 234.0 / 255.0).abs() < 0.001);
+
+        // Without hash
+        let (r, g, b) = parse_hex_color("121218").unwrap();
+        assert!((r - 18.0 / 255.0).abs() < 0.001);
+        assert!((g - 18.0 / 255.0).abs() < 0.001);
+        assert!((b - 24.0 / 255.0).abs() < 0.001);
+
+        // 3-digit shorthand
+        let (r, g, b) = parse_hex_color("#fff").unwrap();
+        assert_eq!((r, g, b), (1.0, 1.0, 1.0));
+
+        // Invalid
+        assert!(parse_hex_color("not_a_hex").is_none());
+    }
+
+    #[test]
+    fn test_gui_config_deserialize() {
+        let toml_str = r##"
+        [gui]
+        background = "#0f172a"
+        border_enabled = false
+        border_color = "#06b6d4"
+        border_width = 2.0
+        corner_radius = 12.0
+        "##;
+        let cfg: MsuiConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(cfg.gui.background, "#0f172a");
+        assert!(!cfg.gui.border_enabled);
+        assert_eq!(cfg.gui.border_color, "#06b6d4");
+        assert_eq!(cfg.gui.border_width, 2.0);
+        assert_eq!(cfg.gui.corner_radius, 12.0);
+        assert_eq!(cfg.gui.bg_opacity, 0.94); // default preserved
     }
 }
