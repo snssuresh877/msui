@@ -34,7 +34,7 @@ write_val() {
     if [[ -w "$TARGET" ]]; then
         echo "$val" > "$TARGET"
     else
-        pkexec /bin/sh -c "echo '$val' > '$TARGET' && chmod 0666 '$TARGET' 2>/dev/null || true; printf '%s\n' '# Lenovo IdeaPad Battery Conservation Mode permissions' 'z /sys/bus/platform/drivers/ideapad_acpi/*/conservation_mode 0666 root root - -' 'z /sys/bus/platform/drivers/ideapad_laptop/*/conservation_mode 0666 root root - -' 'z /sys/devices/platform/ideapad_acpi/conservation_mode 0666 root root - -' 'z /sys/devices/platform/ideapad_laptop/conservation_mode 0666 root root - -' > /etc/tmpfiles.d/lenovo-conservation.conf 2>/dev/null || true; systemd-tmpfiles --create /etc/tmpfiles.d/lenovo-conservation.conf 2>/dev/null || true; printf '%s\n' '# Udev rule for Lenovo IdeaPad Battery Conservation Mode' 'ACTION==\"add|change\", SUBSYSTEM==\"platform\", RUN+=\"/bin/sh -c \\'chmod 0666 /sys/bus/platform/drivers/ideapad_acpi/*/conservation_mode /sys/bus/platform/drivers/ideapad_laptop/*/conservation_mode 2>/dev/null || true\\'\"' > /etc/udev/rules.d/99-lenovo-conservation.rules 2>/dev/null || true"
+        pkexec /bin/sh -c "echo $val > '$TARGET' && chmod 0666 '$TARGET' 2>/dev/null; mkdir -p /etc/tmpfiles.d && echo 'z /sys/bus/platform/drivers/ideapad_acpi/*/conservation_mode 0666 root root - -' > /etc/tmpfiles.d/lenovo-conservation.conf 2>/dev/null; systemd-tmpfiles --create /etc/tmpfiles.d/lenovo-conservation.conf 2>/dev/null || true; echo 'ACTION==\"add|change\", SUBSYSTEM==\"platform\", RUN+=\"/bin/chmod 0666 /sys/bus/platform/drivers/ideapad_acpi/*/conservation_mode\"' > /etc/udev/rules.d/99-lenovo-conservation.rules 2>/dev/null || true"
     fi
 }
 

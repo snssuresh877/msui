@@ -141,6 +141,9 @@ impl BatteryMenu {
                 match res {
                     Ok(enable) => {
                         self.battery_info = self.battery_monitor.read();
+                        if let Some(ref mut info) = self.battery_info {
+                            info.conservation_mode = Some(enable);
+                        }
                         self.status_msg = Some(if enable {
                             "Enabled Desk Mode (55–60% Charge Limit for Battery Longevity)".to_string()
                         } else {
