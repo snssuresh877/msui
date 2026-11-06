@@ -23,7 +23,7 @@ pub fn run_battery_menu() -> Result<(), iced_exwlshell::Error> {
         ..Font::DEFAULT
     })
     .layer_settings(LayerShellSettings {
-        size: LayerSize::px(680, 640),
+        size: LayerSize::px(680, 680),
         anchor: Anchor::empty(), // Centered on screen
         layer: Layer::Overlay,
         keyboard_interactivity: KeyboardInteractivity::Exclusive,
@@ -40,11 +40,15 @@ pub struct BatteryMenu {
     status_msg: Option<String>,
     is_standalone: bool,
     should_close: bool,
+    pub auto_adaptive: bool,
+    pub is_manual_override: bool,
 }
 
 #[derive(Debug, Clone)]
 pub enum Message {
     SelectProfile(PowerProfile),
+    ToggleAutoAdaptive(bool),
+    ResetToAdaptive,
     ToggleConservationMode(bool),
     ConservationModeResult(Result<bool, String>),
     Refresh,
@@ -81,6 +85,8 @@ impl BatteryMenu {
                 status_msg: None,
                 is_standalone,
                 should_close: false,
+                auto_adaptive: true,
+                is_manual_override: false,
             },
             Command::none(),
         )
@@ -117,10 +123,29 @@ impl BatteryMenu {
             Message::SelectProfile(prof) => {
                 if PowerProfileManager::set_profile(prof) {
                     self.profile = prof;
-                    self.status_msg = Some(format!("Switched power profile to {}", prof.display_name()));
+                    self.is_manual_override = true;
+                    self.status_msg = Some(format!("Switched to {} (Manual Override active)", prof.display_name()));
                 } else {
                     self.status_msg = Some(format!("Failed to switch to {}", prof.display_name()));
                 }
+            }
+            Message::ToggleAutoAdaptive(enable) => {
+                self.auto_adaptive = enable;
+                if enable {
+                    self.is_manual_override = false;
+                    self.status_msg = Some("Auto Adaptive Power: Active (Autonomous Scaling)".to_string());
+                } else {
+                    self.status_msg = Some("Auto Adaptive Power: Disabled (Manual Mode)".to_string());
+                }
+            }
+            Message::ResetToAdaptive => {
+                self.auto_adaptive = true;
+                self.is_manual_override = false;
+                let is_ac = self.battery_info.as_ref().map_or(true, |b| b.is_ac_online);
+                let target = if is_ac { PowerProfile::Balanced } else { PowerProfile::PowerSaver };
+                PowerProfileManager::set_profile(target);
+                self.profile = target;
+                self.status_msg = Some("Restored Auto Adaptive Power management".to_string());
             }
             Message::ToggleConservationMode(enable) => {
                 self.status_msg = Some(if enable {
@@ -240,8 +265,96 @@ impl BatteryMenu {
             );
         }
 
+        let is_ac = self.battery_info.as_ref().map_or(true, |b| b.is_ac_online);
+        let adaptive_banner: Element<'_, Message> = if self.is_manual_override {
+            container(
+                row![
+                    column![
+                        row![
+                            text("⚠️  Manual Override Active").size(13),
+                            container(text(self.profile.display_name()).size(10))
+                                .padding([1, 6])
+                                .style(default_subcard_style()),
+                        ]
+                        .spacing(8)
+                        .align_y(Alignment::Center),
+                        text("Profile locked to manual selection. Background adaptive scaling paused.")
+                            .size(10)
+                            .style(text::secondary),
+                    ]
+                    .spacing(2),
+                    space().width(Length::Fill),
+                    button(text("↺  Return to Auto Adaptive").size(11))
+                        .padding([4, 10])
+                        .style(button::primary)
+                        .on_press(Message::ResetToAdaptive),
+                ]
+                .align_y(Alignment::Center),
+            )
+            .padding(10)
+            .width(Length::Fill)
+            .style(default_subcard_style())
+            .into()
+        } else if self.auto_adaptive {
+            container(
+                row![
+                    column![
+                        row![
+                            text("⚡  Auto Adaptive Power").size(13),
+                            container(text("󰄬 Active (Recommended)").size(10))
+                                .padding([1, 6])
+                                .style(default_subcard_style()),
+                        ]
+                        .spacing(8)
+                        .align_y(Alignment::Center),
+                        text(if is_ac {
+                            "AC Connected: Balanced boost with automatic heavy workload scaling."
+                        } else {
+                            "On Battery: Whisper-efficient operation without 20W spikes; smooth 8-core responsiveness."
+                        })
+                        .size(10)
+                        .style(text::secondary),
+                    ]
+                    .spacing(2),
+                    space().width(Length::Fill),
+                    button(text("Disable").size(10))
+                        .padding([3, 8])
+                        .style(button::secondary)
+                        .on_press(Message::ToggleAutoAdaptive(false)),
+                ]
+                .align_y(Alignment::Center),
+            )
+            .padding(10)
+            .width(Length::Fill)
+            .style(default_subcard_style())
+            .into()
+        } else {
+            container(
+                row![
+                    column![
+                        text("⚙️  Manual Power Mode").size(13),
+                        text("Auto adaptive power is disabled. Profiles will not change automatically.")
+                            .size(10)
+                            .style(text::secondary),
+                    ]
+                    .spacing(2),
+                    space().width(Length::Fill),
+                    button(text("⚡ Enable Auto Adaptive").size(11))
+                        .padding([4, 10])
+                        .style(button::primary)
+                        .on_press(Message::ToggleAutoAdaptive(true)),
+                ]
+                .align_y(Alignment::Center),
+            )
+            .padding(10)
+            .width(Length::Fill)
+            .style(default_subcard_style())
+            .into()
+        };
+
         let main_layout = column![
             header,
+            adaptive_banner,
             profiles_title,
             profile_cards,
             charging_section,

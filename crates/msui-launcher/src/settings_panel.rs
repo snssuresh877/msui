@@ -98,6 +98,7 @@ pub enum SettingsMessage {
     SetGaps(u32, u32),
     SetBorderColor(String),
     SetPowerProfile(PowerProfile),
+    ToggleAutoAdaptive(bool),
     ToggleConservationMode(bool),
     ConservationModeResult(Result<bool, String>),
     StepVolume(i8),
@@ -555,6 +556,15 @@ impl SettingsPanel {
             SettingsMessage::SetPowerProfile(prof) => {
                 self.current_power_profile = prof;
                 PowerProfileManager::set_profile(prof);
+            }
+            SettingsMessage::ToggleAutoAdaptive(enable) => {
+                self.config.power.auto_adaptive = enable;
+                let _ = self.config.save_to_default_path();
+                self.status_feedback = Some(if enable {
+                    "Enabled Auto Adaptive Power Mode".into()
+                } else {
+                    "Switched to Manual Power Mode".into()
+                });
             }
             SettingsMessage::ToggleConservationMode(enable) => {
                 self.status_feedback = Some(if enable {
@@ -1598,8 +1608,27 @@ impl SettingsPanel {
             SettingsMessage::ToggleService("tlp".to_string()),
         );
 
+        let auto_adaptive = self.config.power.auto_adaptive;
+        let adaptive_toggle = self.setting_toggle_row(
+            "⚡ Auto Adaptive Power Mode (Recommended)",
+            auto_adaptive,
+            SettingsMessage::ToggleAutoAdaptive(!auto_adaptive),
+        );
+        let adaptive_card = self.settings_card(
+            "Intelligent Adaptive Management",
+            "Automatic workload detection, AC/battery scaling, and thermal protection",
+            column![
+                adaptive_toggle,
+                text("Automatically scales between Balanced and Whisper-Efficient mode based on AC connection and workload. Manual profile switching is not required.")
+                    .size(11)
+                    .color(Color::from_rgba(1.0, 1.0, 1.0, 0.55)),
+            ]
+            .spacing(8),
+        );
+
         let mut cards = column![
             header,
+            adaptive_card,
             self.settings_card("ACPI Platform Power Profile", "Hardware energy management mode", prof_details),
         ]
         .spacing(12);

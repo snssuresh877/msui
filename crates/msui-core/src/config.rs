@@ -8,6 +8,8 @@ pub struct MsuiConfig {
     pub bar: BarConfig,
     #[serde(default)]
     pub launcher: LauncherConfig,
+    #[serde(default)]
+    pub power: PowerConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -155,11 +157,32 @@ fn default_terminal() -> String {
     "alacritty".into()
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PowerConfig {
+    #[serde(default = "default_true")]
+    pub auto_adaptive: bool,
+    #[serde(default = "default_true")]
+    pub heavy_workload_boost: bool,
+    #[serde(default = "default_true")]
+    pub low_battery_notify: bool,
+}
+
+impl Default for PowerConfig {
+    fn default() -> Self {
+        Self {
+            auto_adaptive: true,
+            heavy_workload_boost: true,
+            low_battery_notify: true,
+        }
+    }
+}
+
 impl Default for MsuiConfig {
     fn default() -> Self {
         Self {
             bar: BarConfig::default(),
             launcher: LauncherConfig::default(),
+            power: PowerConfig::default(),
         }
     }
 }

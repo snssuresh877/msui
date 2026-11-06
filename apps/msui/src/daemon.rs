@@ -221,6 +221,7 @@ pub struct UnifiedShell {
     battery_monitor: BatteryMonitor,
     system_monitor: SystemMonitor,
     power_policy_engine: PowerPolicyEngine,
+    last_is_ac_online: Option<bool>,
 }
 
 impl UnifiedShell {
@@ -293,7 +294,8 @@ impl UnifiedShell {
         let (osd, osd_cmd) = OsdWindow::new_embedded();
         let battery_monitor = BatteryMonitor::new();
         let system_monitor = SystemMonitor::new();
-        let power_policy_engine = PowerPolicyEngine::new();
+        let mut power_policy_engine = PowerPolicyEngine::new();
+        power_policy_engine.set_auto_adaptive(config.power.auto_adaptive);
 
         let shell = Self {
             config,
@@ -311,6 +313,7 @@ impl UnifiedShell {
             battery_monitor,
             system_monitor,
             power_policy_engine,
+            last_is_ac_online: None,
         };
 
         (
@@ -679,7 +682,7 @@ impl UnifiedShell {
             }
             "battery" | "bat" => {
                 let (mid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
-                    size: LayerSize::px(680, 640),
+                    size: LayerSize::px(680, 680),
                     layer: Layer::Overlay,
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,
@@ -688,6 +691,8 @@ impl UnifiedShell {
                     ..Default::default()
                 });
                 let (mut bat, init_cmd) = BatteryMenu::new_embedded();
+                bat.auto_adaptive = self.power_policy_engine.is_auto_adaptive();
+                bat.is_manual_override = self.power_policy_engine.is_manual_override();
                 let reset_cmd = bat.reset().map(|m| DaemonMessage::Modal(ModalMessage::Battery(m)));
                 self.modal_id = Some(mid);
                 self.active_modal = Some(ActiveModal::Battery(bat));
@@ -990,6 +995,19 @@ impl UnifiedShell {
                         inst.update(m).map(|x| DaemonMessage::Modal(ModalMessage::FShare(x)))
                     }
                     (ModalMessage::Battery(m), Some(ActiveModal::Battery(inst))) => {
+                        match &m {
+                            BatteryMessage::SelectProfile(prof) => {
+                                self.power_policy_engine.set_manual_override(*prof);
+                            }
+                            BatteryMessage::ToggleAutoAdaptive(enable) => {
+                                self.power_policy_engine.set_auto_adaptive(*enable);
+                                self.config.power.auto_adaptive = *enable;
+                            }
+                            BatteryMessage::ResetToAdaptive => {
+                                self.power_policy_engine.reset_to_auto();
+                            }
+                            _ => {}
+                        }
                         inst.update(m).map(|x| DaemonMessage::Modal(ModalMessage::Battery(x)))
                     }
                     (ModalMessage::Display(m), Some(ActiveModal::Display(inst))) => {
@@ -1008,10 +1026,14 @@ impl UnifiedShell {
                         inst.update(m).map(|x| DaemonMessage::Modal(ModalMessage::Polkit(x)))
                     }
                     (ModalMessage::Settings(m), Some(ActiveModal::Settings(inst))) => {
+                        if let SettingsMessage::ToggleAutoAdaptive(enable) = &m {
+                            self.power_policy_engine.set_auto_adaptive(*enable);
+                        }
                         let cmd = inst.update(m).map(|x| DaemonMessage::Modal(ModalMessage::Settings(x)));
                         if self.config != inst.config {
                             tracing::info!("SettingsPanel updated config live! Synchronizing bar...");
                             self.config = inst.config.clone();
+                            self.power_policy_engine.set_auto_adaptive(self.config.power.auto_adaptive);
                             self.bar.reload_config(self.config.clone());
 
                             let mut tasks = vec![cmd];
@@ -1438,8 +1460,22 @@ impl UnifiedShell {
             }
             DaemonMessage::PowerTick => {
                 let bat = self.battery_monitor.read();
+                let is_ac = bat.as_ref().map(|b| b.is_ac_online).unwrap_or(true);
+                if let Some(last_ac) = self.last_is_ac_online {
+                    if last_ac != is_ac {
+                        tracing::info!("Power source changed: AC online = {}. Resetting power policy manual override.", is_ac);
+                        self.power_policy_engine.on_power_source_change(is_ac);
+                    }
+                }
+                self.last_is_ac_online = Some(is_ac);
+
                 let metrics = self.system_monitor.sample();
                 let actions = self.power_policy_engine.evaluate(bat.as_ref(), metrics.cpu_usage_percent);
+
+                if let Some(ActiveModal::Battery(ref mut bat_modal)) = self.active_modal {
+                    bat_modal.auto_adaptive = self.power_policy_engine.is_auto_adaptive();
+                    bat_modal.is_manual_override = self.power_policy_engine.is_manual_override();
+                }
 
                 for action in actions {
                     match action {

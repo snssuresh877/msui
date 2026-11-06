@@ -20,6 +20,12 @@ pub struct PowerPolicyEngine {
     last_notified_low_bat: Option<u8>,
     /// Currently applied policy profile
     current_profile: Option<PowerProfile>,
+    /// Whether Auto Adaptive power mode is enabled (default: true)
+    auto_adaptive: bool,
+    /// Whether user explicitly set a profile manually, locking it from routine background scaling
+    is_manual_override: bool,
+    /// The profile selected by user when in manual override mode
+    manual_profile: Option<PowerProfile>,
 }
 
 impl Default for PowerPolicyEngine {
@@ -36,6 +42,9 @@ impl PowerPolicyEngine {
             workload_boost_active: false,
             last_notified_low_bat: None,
             current_profile: None,
+            auto_adaptive: true,
+            is_manual_override: false,
+            manual_profile: None,
         }
     }
 
@@ -51,6 +60,39 @@ impl PowerPolicyEngine {
         self.workload_boost_active
     }
 
+    pub fn is_auto_adaptive(&self) -> bool {
+        self.auto_adaptive
+    }
+
+    pub fn set_auto_adaptive(&mut self, enable: bool) {
+        self.auto_adaptive = enable;
+        if enable {
+            self.is_manual_override = false;
+            self.manual_profile = None;
+        }
+    }
+
+    pub fn is_manual_override(&self) -> bool {
+        self.is_manual_override
+    }
+
+    pub fn set_manual_override(&mut self, profile: PowerProfile) {
+        self.is_manual_override = true;
+        self.manual_profile = Some(profile);
+        self.current_profile = Some(profile);
+    }
+
+    pub fn reset_to_auto(&mut self) {
+        self.is_manual_override = false;
+        self.manual_profile = None;
+    }
+
+    pub fn on_power_source_change(&mut self, _is_ac: bool) {
+        // Power source change seamlessly returns to Auto Adaptive mode
+        self.is_manual_override = false;
+        self.manual_profile = None;
+    }
+
     /// Evaluates power policy on a 2-second sampling interval.
     /// Returns a list of actions to execute (profile change, notifications, or emergency suspend).
     pub fn evaluate(&mut self, bat: Option<&BatteryInfo>, cpu_percent: f32) -> Vec<PolicyAction> {
@@ -58,10 +100,52 @@ impl PowerPolicyEngine {
         let is_ac = bat.map_or(true, |b| b.is_ac_online);
         let bat_percent = bat.map(|b| b.percentage).unwrap_or(100);
 
-        if is_ac {
+        // Safety thresholds on battery ALWAYS evaluate regardless of mode or manual override
+        if !is_ac {
+            // 1. Safety threshold: Emergency Suspend (<= 3%)
+            if bat_percent <= 3 {
+                actions.push(PolicyAction::EmergencySuspend);
+            }
+
+            // 2. Critical notification (<= 5%)
+            if bat_percent <= 5 {
+                let should_notify = match self.last_notified_low_bat {
+                    Some(last) => last > 5 || bat_percent < last,
+                    None => true,
+                };
+                if should_notify {
+                    self.last_notified_low_bat = Some(bat_percent);
+                    actions.push(PolicyAction::NotifyLowBattery {
+                        percent: bat_percent,
+                        is_critical: true,
+                    });
+                }
+            }
+            // 3. Low Battery warning (<= 15%)
+            else if bat_percent <= 15 {
+                let should_notify = match self.last_notified_low_bat {
+                    Some(last) => last > 15 || (last > 10 && bat_percent <= 10),
+                    None => true,
+                };
+                if should_notify {
+                    self.last_notified_low_bat = Some(bat_percent);
+                    actions.push(PolicyAction::NotifyLowBattery {
+                        percent: bat_percent,
+                        is_critical: false,
+                    });
+                }
+            }
+        } else {
             // Reset battery low notification state when connected to AC
             self.last_notified_low_bat = None;
+        }
 
+        // If user manually chose a profile or Auto Adaptive is toggled off, honor user selection
+        if !self.auto_adaptive || self.is_manual_override {
+            return actions;
+        }
+
+        if is_ac {
             // Heavy workload detection: sustained 80%+ for >= 10 seconds (5 ticks at 2s/tick)
             if cpu_percent >= 80.0 {
                 self.high_load_ticks = self.high_load_ticks.saturating_add(1);
@@ -100,41 +184,7 @@ impl PowerPolicyEngine {
             self.high_load_ticks = 0;
             self.low_load_ticks = 0;
 
-            // 1. Safety threshold: Emergency Suspend (<= 3%)
-            if bat_percent <= 3 {
-                actions.push(PolicyAction::EmergencySuspend);
-            }
-
-            // 2. Critical notification (<= 5%)
-            if bat_percent <= 5 {
-                let should_notify = match self.last_notified_low_bat {
-                    Some(last) => last > 5 || bat_percent < last,
-                    None => true,
-                };
-                if should_notify {
-                    self.last_notified_low_bat = Some(bat_percent);
-                    actions.push(PolicyAction::NotifyLowBattery {
-                        percent: bat_percent,
-                        is_critical: true,
-                    });
-                }
-            }
-            // 3. Low Battery warning (<= 15%)
-            else if bat_percent <= 15 {
-                let should_notify = match self.last_notified_low_bat {
-                    Some(last) => last > 15 || (last > 10 && bat_percent <= 10),
-                    None => true,
-                };
-                if should_notify {
-                    self.last_notified_low_bat = Some(bat_percent);
-                    actions.push(PolicyAction::NotifyLowBattery {
-                        percent: bat_percent,
-                        is_critical: false,
-                    });
-                }
-            }
-
-            // 4. Power Profile resolution based on battery level
+            // Power Profile resolution based on battery level
             let target_profile = if bat_percent > 30 {
                 PowerProfile::Balanced
             } else {
@@ -242,5 +292,48 @@ mod tests {
         let bat_2 = mock_battery(2, false);
         let actions = engine.evaluate(Some(&bat_2), 20.0);
         assert!(actions.contains(&PolicyAction::EmergencySuspend));
+    }
+
+    #[test]
+    fn test_manual_override_and_reset_to_auto() {
+        let mut engine = PowerPolicyEngine::new();
+        let bat = mock_battery(80, true);
+
+        // User manually overrides profile to PowerSaver while on AC
+        engine.set_manual_override(PowerProfile::PowerSaver);
+        assert!(engine.is_manual_override());
+        assert_eq!(engine.current_profile(), Some(PowerProfile::PowerSaver));
+
+        // Background evaluation under heavy load does NOT change manual profile
+        let actions = engine.evaluate(Some(&bat), 95.0);
+        assert!(!actions.iter().any(|a| matches!(a, PolicyAction::SetProfile(_))));
+        assert_eq!(engine.current_profile(), Some(PowerProfile::PowerSaver));
+
+        // Resetting to Auto re-enables adaptive background management immediately
+        engine.reset_to_auto();
+        assert!(!engine.is_manual_override());
+
+        let actions = engine.evaluate(Some(&bat), 20.0);
+        assert!(actions.contains(&PolicyAction::SetProfile(PowerProfile::Balanced)));
+        assert_eq!(engine.current_profile(), Some(PowerProfile::Balanced));
+    }
+
+    #[test]
+    fn test_power_source_change_clears_manual_override() {
+        let mut engine = PowerPolicyEngine::new();
+        let _bat_ac = mock_battery(80, true);
+        let bat_battery = mock_battery(80, false);
+
+        // Manual override set while on AC
+        engine.set_manual_override(PowerProfile::Performance);
+        assert!(engine.is_manual_override());
+
+        // AC unplugged (power source change event)
+        engine.on_power_source_change(false);
+        assert!(!engine.is_manual_override());
+
+        // Now on battery, it automatically resolves to Balanced
+        let actions = engine.evaluate(Some(&bat_battery), 20.0);
+        assert!(actions.contains(&PolicyAction::SetProfile(PowerProfile::Balanced)));
     }
 }
