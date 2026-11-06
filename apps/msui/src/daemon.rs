@@ -21,7 +21,7 @@ use msui_core::{
 use msui_launcher::{
     AppDrawer, AppDrawerMessage, AudioMenu, AudioMessage, BatteryMenu, BatteryMessage,
     BluetoothMenu, BluetoothMessage, ClipboardMenu, ClipboardMessage, ControlCenter,
-    ControlCenterMessage, ControlCenterTab, DisplayMenu, DisplayMessage, FShareMessage, FShareModal, Launcher,
+    ControlCenterMessage, DisplayMenu, DisplayMessage, FShareMessage, FShareModal, Launcher,
     LauncherMessage, MediaMenu, MediaMessage, NotificationCenter, NotificationCenterMessage,
     OsdMessage, OsdWindow, PolkitDialog, PolkitDialogArgs, PolkitMessage, PowerMenu, PowerMessage,
     ReminderMenu, ReminderMessage, SettingsMessage, SettingsPanel, StorageMenu, StorageMessage, ThemeMenu, ThemeMessage, ToastApp,
@@ -403,7 +403,7 @@ impl UnifiedShell {
         let target_norm = match target {
             "launcher" => "launcher",
             "power" => "power",
-            "control" | "quicksettings" | "cc" | "topbar" | "bar-settings" => "control",
+            "control" | "quicksettings" | "cc" => "control",
             "clipboard" | "clip" => "clipboard",
             "notifications" | "notifs" => "notifications",
             "drawer" | "tasks" | "apps" | "appdrawer" => "drawer",
@@ -418,17 +418,9 @@ impl UnifiedShell {
             "media" | "player" => "media",
             "reminder" | "reminders" | "timer" | "timers" => "reminder",
             "storage" | "disks" | "drives" => "storage",
-            "settings" | "systemcontrol" | "control-panel" => "settings",
+            "settings" | "systemcontrol" | "control-panel" | "topbar" | "bar-settings" => "settings",
             _ => return Task::none(),
         };
-
-        // If Control Center is already open and user requested topbar settings, switch tab directly
-        if let Some(ActiveModal::ControlCenter(cc)) = &mut self.active_modal {
-            if target == "topbar" || target == "bar-settings" {
-                cc.set_tab(ControlCenterTab::TopBarSettings);
-                return Task::none();
-            }
-        }
 
         // If currently open modal is the same target, toggle it off!
         if self.active_modal.as_ref().map(|m| m.kind()) == Some(target_norm) {
@@ -493,7 +485,7 @@ impl UnifiedShell {
                     self.config.bar.height as i32 + 8
                 };
                 let (mid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
-                    size: LayerSize::px(400, 765),
+                    size: LayerSize::px(400, 660),
                     layer: Layer::Overlay,
                     anchor: Anchor::Top | Anchor::Right,
                     margin: Some(Margin {
@@ -508,9 +500,6 @@ impl UnifiedShell {
                     ..Default::default()
                 });
                 let (mut cc, init_cmd) = ControlCenter::new_embedded(self.config.clone());
-                if target == "topbar" || target == "bar-settings" {
-                    cc.set_tab(ControlCenterTab::TopBarSettings);
-                }
                 let reset_cmd = cc.reset().map(|m| DaemonMessage::Modal(ModalMessage::ControlCenter(m)));
                 self.modal_id = Some(mid);
                 self.active_modal = Some(ActiveModal::ControlCenter(cc));
@@ -1179,7 +1168,7 @@ impl UnifiedShell {
                     }
                     IpcCommand::Open(target) => {
                         let target_norm = match target.as_str() {
-                            "control" | "quicksettings" | "cc" | "topbar" | "bar-settings" => "control",
+                            "control" | "quicksettings" | "cc" => "control",
                             "clipboard" | "clip" => "clipboard",
                             "notifications" | "notifs" => "notifications",
                             "drawer" | "tasks" | "apps" | "appdrawer" => "drawer",
@@ -1194,15 +1183,11 @@ impl UnifiedShell {
                             "media" | "player" => "media",
                             "reminder" | "reminders" | "timer" | "timers" => "reminder",
                             "storage" | "disks" | "drives" => "storage",
-                            "settings" | "systemcontrol" | "control-panel" => "settings",
+                            "settings" | "systemcontrol" | "control-panel" | "topbar" | "bar-settings" => "settings",
                             other => other,
                         };
-                        if let Some(ActiveModal::ControlCenter(cc)) = &mut self.active_modal {
-                            if target == "topbar" || target == "bar-settings" {
-                                cc.set_tab(ControlCenterTab::TopBarSettings);
-                                return Task::none();
-                            } else if target == "control" || target == "quicksettings" || target == "cc" {
-                                cc.set_tab(ControlCenterTab::QuickSettings);
+                        if let Some(ActiveModal::ControlCenter(_)) = &mut self.active_modal {
+                            if target == "control" || target == "quicksettings" || target == "cc" {
                                 return Task::none();
                             }
                         }

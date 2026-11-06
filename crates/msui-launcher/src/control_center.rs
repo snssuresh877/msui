@@ -1,6 +1,6 @@
 use iced::keyboard::key::Named;
 use iced::keyboard::{Event as KeyboardEvent, Key};
-use iced::widget::{button, column, container, row, scrollable, slider, space, text};
+use iced::widget::{button, column, container, row, slider, space, text};
 use iced::{Alignment, Element, Event, Font, Length, Task as Command, event};
 use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
@@ -80,13 +80,12 @@ pub fn run_control_center(config: MsuiConfig) -> Result<(), iced_exwlshell::Erro
 }
 
 pub fn run_control_center_topbar(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
-    INITIAL_TAB.store(true, std::sync::atomic::Ordering::Relaxed);
-    run_control_center_internal(config)
+    crate::settings_panel::run_settings_panel(config)
 }
 
 fn run_control_center_internal(_config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
     let width = 400;
-    let height = 765;
+    let height = 660;
 
     application(
         ControlCenter::new,
@@ -655,9 +654,11 @@ impl ControlCenter {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        // --- 1. Header: Quick Settings Title, Battery & Close ---
-        let title_icon = text(if self.active_tab == ControlCenterTab::QuickSettings { "󰒓" } else { "󰍹" }).size(18);
-        let title_label = text(if self.active_tab == ControlCenterTab::QuickSettings { "Quick Settings" } else { "Top Bar Settings" }).size(15);
+        let is_frosted = self.config.bar.is_frosted();
+
+        // --- 1. Header: Quick Settings Title, Settings & Close ---
+        let title_icon = text("󰒓").size(18);
+        let title_label = text("Quick Settings").size(15);
         let header_left = row![title_icon, title_label].spacing(8).align_y(Alignment::Center);
 
         let settings_btn = button(
@@ -677,286 +678,6 @@ impl ControlCenter {
         let header = row![header_left, space().width(Length::Fill), settings_btn, close_btn]
             .spacing(6)
             .align_y(Alignment::Center);
-
-        // --- Tab Navigation Switcher ---
-        let is_quick = self.active_tab == ControlCenterTab::QuickSettings;
-        let tab_quick = button(
-            row![text("󰒓").size(14), text("Quick Settings").size(12)]
-                .spacing(6)
-                .align_y(Alignment::Center),
-        )
-        .width(Length::FillPortion(1))
-        .style(if is_quick { button::primary } else { button::secondary })
-        .padding([6, 10])
-        .on_press(Message::SwitchTab(ControlCenterTab::QuickSettings));
-
-        let tab_bar = button(
-            row![text("󰍹").size(14), text("Top Bar").size(12)]
-                .spacing(6)
-                .align_y(Alignment::Center),
-        )
-        .width(Length::FillPortion(1))
-        .style(if !is_quick { button::primary } else { button::secondary })
-        .padding([6, 10])
-        .on_press(Message::SwitchTab(ControlCenterTab::TopBarSettings));
-
-        let tab_row = row![tab_quick, tab_bar].spacing(8);
-
-        // --- Top Bar Settings View ---
-        let is_frosted = self.config.bar.is_frosted();
-
-        if self.active_tab == ControlCenterTab::TopBarSettings {
-            let is_modern = self.config.bar.is_modern();
-            let modern_btn = button(
-                row![text("󰍹").size(14), text("Modern Floating").size(11)]
-                    .spacing(6)
-                    .align_y(Alignment::Center),
-            )
-            .width(Length::FillPortion(1))
-            .style(if is_modern { button::primary } else { button::secondary })
-            .padding([7, 10])
-            .on_press(Message::SetBarStyle("modern".to_string()));
-
-            let classic_btn = button(
-                row![text("󰍺").size(14), text("Classic Docked").size(11)]
-                    .spacing(6)
-                    .align_y(Alignment::Center),
-            )
-            .width(Length::FillPortion(1))
-            .style(if !is_modern { button::primary } else { button::secondary })
-            .padding([7, 10])
-            .on_press(Message::SetBarStyle("classic".to_string()));
-
-            let style_card = container(
-                column![
-                    row![
-                        text("Bar Appearance Style").size(12),
-                        space().width(Length::Fill),
-                        text(if is_modern { "Floating Acrylic Island" } else { "Full-Width Docked" }).size(10).style(text::secondary),
-                    ]
-                    .align_y(Alignment::Center),
-                    row![modern_btn, classic_btn].spacing(8),
-                ]
-                .spacing(8),
-            )
-            .style(subcard_style(is_frosted))
-            .padding([10, 12])
-            .width(Length::Fill);
-
-            let is_transp = self.config.bar.is_transparent();
-            let is_solid = self.config.bar.is_solid();
-
-            let frosted_btn = button(
-                row![text("󰖲").size(13), text("Frosted Glass").size(11)]
-                    .spacing(5)
-                    .align_y(Alignment::Center),
-            )
-            .width(Length::FillPortion(1))
-            .style(if is_frosted { button::primary } else { button::secondary })
-            .padding([6, 8])
-            .on_press(Message::SetBarTransparency("frosted".to_string()));
-
-            let transp_btn = button(
-                row![text("󰈈").size(13), text("Pure Transparent").size(11)]
-                    .spacing(5)
-                    .align_y(Alignment::Center),
-            )
-            .width(Length::FillPortion(1))
-            .style(if is_transp { button::primary } else { button::secondary })
-            .padding([6, 8])
-            .on_press(Message::SetBarTransparency("transparent".to_string()));
-
-            let solid_btn = button(
-                row![text("󰃞").size(13), text("Solid Opaque").size(11)]
-                    .spacing(5)
-                    .align_y(Alignment::Center),
-            )
-            .width(Length::FillPortion(1))
-            .style(if is_solid { button::primary } else { button::secondary })
-            .padding([6, 8])
-            .on_press(Message::SetBarTransparency("solid".to_string()));
-
-            let glass_card = container(
-                column![
-                    row![
-                        text("Bar Glass & Transparency").size(12),
-                        space().width(Length::Fill),
-                        text(if is_frosted {
-                            "Frosted Acrylic Blur"
-                        } else if is_transp {
-                            "100% Pure Transparent"
-                        } else {
-                            "Solid Theme Fill"
-                        })
-                        .size(10)
-                        .style(text::secondary),
-                    ]
-                    .align_y(Alignment::Center),
-                    row![frosted_btn, transp_btn, solid_btn].spacing(8),
-                ]
-                .spacing(8),
-            )
-            .style(subcard_style(is_frosted))
-            .padding([10, 12])
-            .width(Length::Fill);
-
-            let cur_ws = self.config.bar.workspace_count;
-            let ws_3_btn = button(
-                row![text("󰮯").size(13), text("3 Slots").size(11)]
-                    .spacing(5)
-                    .align_y(Alignment::Center),
-            )
-            .width(Length::FillPortion(1))
-            .style(if cur_ws == 3 { button::primary } else { button::secondary })
-            .padding([6, 8])
-            .on_press(Message::SetWorkspaceCount(3));
-
-            let ws_4_btn = button(
-                row![text("󰮯").size(13), text("4 Slots").size(11)]
-                    .spacing(5)
-                    .align_y(Alignment::Center),
-            )
-            .width(Length::FillPortion(1))
-            .style(if cur_ws == 4 { button::primary } else { button::secondary })
-            .padding([6, 8])
-            .on_press(Message::SetWorkspaceCount(4));
-
-            let ws_5_btn = button(
-                row![text("󰮯").size(13), text("5 Slots").size(11)]
-                    .spacing(5)
-                    .align_y(Alignment::Center),
-            )
-            .width(Length::FillPortion(1))
-            .style(if cur_ws == 5 { button::primary } else { button::secondary })
-            .padding([6, 8])
-            .on_press(Message::SetWorkspaceCount(5));
-
-            let ws_8_btn = button(
-                row![text("󰮯").size(13), text("8 Slots").size(11)]
-                    .spacing(5)
-                    .align_y(Alignment::Center),
-            )
-            .width(Length::FillPortion(1))
-            .style(if cur_ws == 8 { button::primary } else { button::secondary })
-            .padding([6, 8])
-            .on_press(Message::SetWorkspaceCount(8));
-
-            let workspace_card = container(
-                column![
-                    row![
-                        text("Workspace Pager Slots").size(12),
-                        space().width(Length::Fill),
-                        text(format!("{} Workspaces Displayed", cur_ws)).size(10).style(text::secondary),
-                    ]
-                    .align_y(Alignment::Center),
-                    row![ws_3_btn, ws_4_btn, ws_5_btn, ws_8_btn].spacing(8),
-                ]
-                .spacing(8),
-            )
-            .style(subcard_style(is_frosted))
-            .padding([10, 12])
-            .width(Length::Fill);
-
-            let btn_enable_all = button(
-                row![text("󰐥").size(12), text("Enable All").size(11)]
-                    .spacing(4)
-                    .align_y(Alignment::Center),
-            )
-            .style(button::secondary)
-            .padding([4, 8])
-            .on_press(Message::EnableAllBarModules);
-
-            let btn_minimal = button(
-                row![text("󰅖").size(12), text("Minimal Bar").size(11)]
-                    .spacing(4)
-                    .align_y(Alignment::Center),
-            )
-            .style(button::secondary)
-            .padding([4, 8])
-            .on_press(Message::MinimalBarPreset);
-
-            let presets_row = row![
-                column![
-                    text("Top Bar Modules").size(13),
-                    text("Toggle widgets & shortcuts on bar").size(10),
-                ].spacing(1),
-                space().width(Length::Fill),
-                btn_enable_all,
-                btn_minimal,
-            ]
-            .spacing(6)
-            .align_y(Alignment::Center);
-
-            let mut modules_col = column![].spacing(6);
-
-            // Group 1: Brand & Navigation
-            modules_col = modules_col.push(text("Brand & Navigation").size(11));
-            for m in [
-                BarModule::Brand,
-                BarModule::Workspaces,
-                BarModule::Clock,
-                BarModule::RemindersBadge,
-            ] {
-                modules_col = modules_col.push(view_module_row(m, &self.config.bar));
-            }
-
-            // Group 2: Hardware & Connectivity
-            modules_col = modules_col.push(space().height(4));
-            modules_col = modules_col.push(text("Hardware & Connectivity").size(11));
-            for m in [
-                BarModule::Network,
-                BarModule::Audio,
-                BarModule::Brightness,
-                BarModule::Cpu,
-                BarModule::Memory,
-                BarModule::Storage,
-                BarModule::Battery,
-                BarModule::Bluetooth,
-            ] {
-                modules_col = modules_col.push(view_module_row(m, &self.config.bar));
-            }
-
-            // Group 3: Shortcuts & Utilities
-            modules_col = modules_col.push(space().height(4));
-            modules_col = modules_col.push(text("Shortcuts & Utilities").size(11));
-            for m in [
-                BarModule::Media,
-                BarModule::Wallpaper,
-                BarModule::Theme,
-                BarModule::RemindersBtn,
-                BarModule::Screenshot,
-                BarModule::Clipboard,
-                BarModule::Notifications,
-                BarModule::ControlCenter,
-                BarModule::Settings,
-                BarModule::Terminal,
-                BarModule::Power,
-            ] {
-                modules_col = modules_col.push(view_module_row(m, &self.config.bar));
-            }
-
-            let scrollable_content = scrollable(modules_col)
-                .height(Length::Fill)
-                .width(Length::Fill);
-
-            let content = column![
-                header,
-                tab_row,
-                style_card,
-                glass_card,
-                workspace_card,
-                presets_row,
-                scrollable_content,
-            ]
-            .spacing(10)
-            .padding(14);
-
-            return container(content)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .style(modal_card_style(is_frosted))
-                .into();
-        }
 
         // --- 2. Quick Toggles Grid (2 columns x 3 rows) ---
         // Pill 1: Wi-Fi
@@ -1344,7 +1065,6 @@ impl ControlCenter {
 
         let content = column![
             header,
-            tab_row,
             toggles_box,
             sliders_card,
             profiles_card,
@@ -1360,35 +1080,6 @@ impl ControlCenter {
             .style(modal_card_style(is_frosted))
             .into()
     }
-}
-
-fn view_module_row(module: BarModule, cfg: &BarConfig) -> Element<'_, Message> {
-    let enabled = module.is_enabled(cfg);
-    let (name, icon, desc) = module.details();
-
-    let icon_txt = text(icon).size(15);
-    let title_txt = text(name).size(12);
-    let desc_txt = text(desc).size(10);
-
-    let info_col = column![title_txt, desc_txt].spacing(1);
-    let left_group = row![icon_txt, info_col].spacing(8).align_y(Alignment::Center);
-
-    let toggle_btn = button(
-        text(if enabled { "󰄴 ON" } else { "󰅖 OFF" }).size(11),
-    )
-    .style(if enabled { button::primary } else { button::secondary })
-    .padding([4, 10])
-    .on_press(Message::ToggleBarModule(module));
-
-    let item_row = row![left_group, space().width(Length::Fill), toggle_btn]
-        .spacing(6)
-        .align_y(Alignment::Center);
-
-    container(item_row)
-        .style(subcard_style(cfg.is_frosted()))
-        .padding([6, 10])
-        .width(Length::Fill)
-        .into()
 }
 
 fn spawn_detached(cmd: &str) {

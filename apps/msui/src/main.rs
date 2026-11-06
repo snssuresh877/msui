@@ -802,10 +802,10 @@ fn main() -> anyhow::Result<()> {
                     if try_ipc_toggle("topbar") {
                         return Ok(());
                     }
-                    tracing::info!("Starting msUI Control Center (Top Bar Settings)...");
+                    tracing::info!("Starting msUI Settings Panel (Bar Settings)...");
                     let config = MsuiConfig::load_or_default();
-                    if let Err(e) = msui_launcher::run_control_center_topbar(config) {
-                        tracing::error!("msUI Control Center exited with error: {:?}", e);
+                    if let Err(e) = msui_launcher::run_settings_panel(config) {
+                        tracing::error!("msUI Settings Panel exited with error: {:?}", e);
                     }
                 }
                 _ => {
@@ -824,10 +824,10 @@ fn main() -> anyhow::Result<()> {
             if try_ipc_toggle("topbar") {
                 return Ok(());
             }
-            tracing::info!("Starting msUI Control Center (Top Bar Settings)...");
+            tracing::info!("Starting msUI Settings Panel (Bar Settings)...");
             let config = MsuiConfig::load_or_default();
-            if let Err(e) = msui_launcher::run_control_center_topbar(config) {
-                tracing::error!("msUI Control Center exited with error: {:?}", e);
+            if let Err(e) = msui_launcher::run_settings_panel(config) {
+                tracing::error!("msUI Settings Panel exited with error: {:?}", e);
             }
         }
         "media" | "mpris" | "player" => {
