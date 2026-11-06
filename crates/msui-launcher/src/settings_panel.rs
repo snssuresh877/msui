@@ -1645,7 +1645,7 @@ impl SettingsPanel {
             let is_sel = self.osd_pos_selected == i;
             let chip = button(
                 row![
-                    if is_sel { text("✓ ").size(10).color(Color::WHITE) } else { text("").size(0) },
+                    if is_sel { text("✓ ").size(10).color(Color::WHITE) } else { text("").size(10) },
                     text(*tag).size(11).color(if is_sel {
                         Color::WHITE
                     } else {

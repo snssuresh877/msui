@@ -679,7 +679,7 @@ impl UnifiedShell {
             }
             "battery" | "bat" => {
                 let (mid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
-                    size: LayerSize::px(680, 560),
+                    size: LayerSize::px(680, 640),
                     layer: Layer::Overlay,
                     anchor: Anchor::empty(),
                     keyboard_interactivity: KeyboardInteractivity::Exclusive,

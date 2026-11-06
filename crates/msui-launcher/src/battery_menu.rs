@@ -283,18 +283,21 @@ impl BatteryMenu {
 
         let title = text("Battery Lifespan & Charging Mode").size(14).style(text::secondary);
 
+        let desk_badge: Element<'_, Message> = if is_desk {
+            container(text("󰄬 Active").size(11))
+                .padding([1, 6])
+                .style(default_subcard_style())
+                .into()
+        } else {
+            space().width(0).into()
+        };
+
         let desk_btn = button(
             column![
                 row![
                     text("🛡️  Desk Mode (55–60%)").size(13),
                     space().width(Length::Fill),
-                    if is_desk {
-                        container(text("󰄬 Active").size(11))
-                            .padding([1, 6])
-                            .style(default_subcard_style())
-                    } else {
-                        container(text("").size(0))
-                    }
+                    desk_badge,
                 ]
                 .align_y(Alignment::Center),
                 text("Caps charge at 55–60% to prolong battery life when continuously plugged into AC.")
@@ -308,18 +311,21 @@ impl BatteryMenu {
         .style(if is_desk { button::primary } else { button::secondary })
         .on_press(Message::ToggleConservationMode(true));
 
+        let full_badge: Element<'_, Message> = if !is_desk {
+            container(text("󰄬 Active").size(11))
+                .padding([1, 6])
+                .style(default_subcard_style())
+                .into()
+        } else {
+            space().width(0).into()
+        };
+
         let full_btn = button(
             column![
                 row![
                     text("🔋  Full Charge (100%)").size(13),
                     space().width(Length::Fill),
-                    if !is_desk {
-                        container(text("󰄬 Active").size(11))
-                            .padding([1, 6])
-                            .style(default_subcard_style())
-                    } else {
-                        container(text("").size(0))
-                    }
+                    full_badge,
                 ]
                 .align_y(Alignment::Center),
                 text("Charges battery to 100% capacity for maximum mobility, travel, and untethered work.")
