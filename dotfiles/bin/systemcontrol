@@ -86,6 +86,7 @@ normalize_service() {
         ai|ollama|localai|qwen) echo "ai" ;;
         wifi|wlan|network|radio) echo "wifi" ;;
         tlp|power) echo "tlp" ;;
+        battery|conservation|charge|charging) echo "battery" ;;
         flatpak|flatpak-helper) echo "flatpak" ;;
         *) echo "$1" ;;
     esac
@@ -180,6 +181,22 @@ cmd_status() {
         printf "%-18s ${fp_color}%-16s${NC} %-12s %-12s %-24s\n" "Flatpak Helper" "$fp_status" "${fp_ram} MB" "N/A" "flatpak-system-helper.service"
     fi
 
+    # 7. Lenovo Battery Conservation Mode
+    if [ "$target" = "all" ] || [ "$target" = "battery" ]; then
+        local bat_file="/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/conservation_mode"
+        if [ -f "$bat_file" ]; then
+            local mode
+            mode=$(cat "$bat_file" 2>/dev/null || echo "0")
+            local bat_status="Full Charge (100%)"
+            local bat_color="$BLUE"
+            if [ "$mode" = "1" ]; then
+                bat_status="Desk Mode (60%)"
+                bat_color="$GREEN"
+            fi
+            printf "%-18s ${bat_color}%-16s${NC} %-12s %-12s %-24s\n" "Battery Limit" "$bat_status" "0 MB" "N/A" "Lenovo Conservation Mode"
+        fi
+    fi
+
     echo ""
 }
 
@@ -227,9 +244,12 @@ cmd_enable() {
             ( systemctl start flatpak-system-helper.service >/dev/null 2>&1 ) &
             echo -e "${GREEN}✓ Flatpak system helper active.${NC}"
             ;;
+        battery)
+            battery-conservation desk
+            ;;
         *)
             echo -e "${RED}Unknown service: $svc${NC}"
-            echo "Available services: bluetooth, protonvpn, ai, wifi, tlp, flatpak"
+            echo "Available services: bluetooth, protonvpn, ai, wifi, tlp, flatpak, battery"
             exit 1
             ;;
     esac
@@ -279,9 +299,12 @@ cmd_disable() {
             ( systemctl stop flatpak-system-helper.service >/dev/null 2>&1 ) &
             echo -e "${GREEN}✓ Flatpak helper stopping in background.${NC}"
             ;;
+        battery)
+            battery-conservation full
+            ;;
         *)
             echo -e "${RED}Unknown service: $svc${NC}"
-            echo "Available services: bluetooth, protonvpn, ai, wifi, tlp, flatpak"
+            echo "Available services: bluetooth, protonvpn, ai, wifi, tlp, flatpak, battery"
             exit 1
             ;;
     esac
@@ -333,6 +356,9 @@ cmd_toggle() {
             else
                 cmd_enable flatpak
             fi
+            ;;
+        battery)
+            battery-conservation toggle
             ;;
         *)
             echo -e "${RED}Unknown service: $svc${NC}"
@@ -481,11 +507,11 @@ main() {
         help|--help|-h)
             cmd_help
             ;;
-        bluetooth|bt|protonvpn|proton|vpn|ai|ollama|wifi|tlp|flatpak)
+        bluetooth|bt|protonvpn|proton|vpn|ai|ollama|wifi|tlp|flatpak|battery|conservation|charge|charging)
             local action="${1:-toggle}"
             case "$action" in
-                on|enable|start) cmd_enable "$cmd" ;;
-                off|disable|stop) cmd_disable "$cmd" ;;
+                on|enable|start|desk) cmd_enable "$cmd" ;;
+                off|disable|stop|full) cmd_disable "$cmd" ;;
                 status) cmd_status "$cmd" ;;
                 toggle|*) cmd_toggle "$cmd" ;;
             esac

@@ -164,6 +164,7 @@ mod tests {
             status: if is_ac { BatteryStatus::Charging } else { BatteryStatus::Discharging },
             is_charging: is_ac,
             is_ac_online: is_ac,
+            conservation_mode: None,
             power_watts: 8.0,
             voltage_volts: 11.5,
             energy_now_wh: 20.0,

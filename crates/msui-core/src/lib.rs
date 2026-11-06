@@ -85,7 +85,12 @@ mod tests {
     #[test]
     fn test_battery_monitor() {
         let mon = BatteryMonitor::new();
-        let _ = mon.read();
+        let bat = mon.read();
+        if let Some(b) = bat {
+            println!("Battery status: {:?}, percentage: {}%, conservation_mode: {:?}", b.status, b.percentage, b.conservation_mode);
+        }
+        let _ = BatteryMonitor::conservation_mode_path();
+        let _ = BatteryMonitor::read_conservation_mode();
     }
 
     #[test]

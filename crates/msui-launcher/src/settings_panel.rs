@@ -9,7 +9,7 @@ use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
 use msui_core::{
-    AudioInfo, AudioMonitor, DndManager, MsuiConfig, PowerProfile, PowerProfileManager,
+    AudioInfo, AudioMonitor, BatteryMonitor, DndManager, MsuiConfig, PowerProfile, PowerProfileManager,
     SystemServiceInfo, SystemServiceManager, ThemeManager, WallpaperManager,
 };
 use std::process::Command as StdCommand;
@@ -55,6 +55,7 @@ pub struct SettingsPanel {
     frosted_enabled: bool,
     dnd_enabled: bool,
     current_power_profile: PowerProfile,
+    conservation_mode: Option<bool>,
     audio_info: AudioInfo,
     active_gaps: (u32, u32),
     active_border_color: String,
@@ -97,6 +98,7 @@ pub enum SettingsMessage {
     SetGaps(u32, u32),
     SetBorderColor(String),
     SetPowerProfile(PowerProfile),
+    ToggleConservationMode(bool),
     StepVolume(i8),
     ToggleAudioMute,
     LaunchPavucontrol,
@@ -259,6 +261,7 @@ impl SettingsPanel {
                 frosted_enabled,
                 dnd_enabled,
                 current_power_profile,
+                conservation_mode: BatteryMonitor::read_conservation_mode(),
                 audio_info,
                 active_gaps: (5, 12),
                 active_border_color: "rgba(9333eaff)".to_string(),
@@ -275,6 +278,7 @@ impl SettingsPanel {
         self.dnd_enabled = DndManager::is_dnd_enabled();
         self.audio_info = AudioMonitor::read();
         self.current_power_profile = PowerProfileManager::get_profile();
+        self.conservation_mode = BatteryMonitor::read_conservation_mode();
         self.active_blur_preset = detect_current_blur_preset();
         self.transparency_enabled = self.active_blur_preset != 11;
         if self.active_blur_preset != 11 {
@@ -550,6 +554,21 @@ impl SettingsPanel {
             SettingsMessage::SetPowerProfile(prof) => {
                 self.current_power_profile = prof;
                 PowerProfileManager::set_profile(prof);
+            }
+            SettingsMessage::ToggleConservationMode(enable) => {
+                match BatteryMonitor::set_conservation_mode(enable) {
+                    Ok(_) => {
+                        self.conservation_mode = BatteryMonitor::read_conservation_mode();
+                        self.status_feedback = Some(if enable {
+                            "Enabled Desk Mode (55–60% Charge Limit for Battery Longevity)".to_string()
+                        } else {
+                            "Switched to Full Charge Mode (Charging to 100%)".to_string()
+                        });
+                    }
+                    Err(e) => {
+                        self.status_feedback = Some(format!("Failed to switch charging mode: {e}"));
+                    }
+                }
             }
             SettingsMessage::StepVolume(delta) => {
                 if delta > 0 {
@@ -1563,13 +1582,38 @@ impl SettingsPanel {
             SettingsMessage::ToggleService("tlp".to_string()),
         );
 
-        column![
+        let mut cards = column![
             header,
             self.settings_card("ACPI Platform Power Profile", "Hardware energy management mode", prof_details),
-            self.settings_card("Automated Battery Optimization", "Kernel power daemon management", tlp_row),
         ]
-        .spacing(12)
-        .into()
+        .spacing(12);
+
+        if self.conservation_mode.is_some() || BatteryMonitor::conservation_mode_path().is_some() {
+            let is_desk = self.conservation_mode.unwrap_or(false);
+            let mode_chips = row![
+                self.chip_button("🛡️ Desk Mode (55–60%)", is_desk, SettingsMessage::ToggleConservationMode(true)),
+                self.chip_button("🔋 Full Charge (100%)", !is_desk, SettingsMessage::ToggleConservationMode(false)),
+            ]
+            .spacing(8);
+
+            let mode_desc = if is_desk {
+                "Desk Mode: Battery charging is limited to 55–60% by hardware to protect lithium chemistry from degradation while on AC adapter."
+            } else {
+                "Full Charge Mode: Battery charges to 100% capacity for maximum mobility, travel, and untethered battery runtime."
+            };
+
+            let mode_details = column![
+                mode_chips,
+                text(mode_desc).size(11).color(Color::from_rgba(1.0, 1.0, 1.0, 0.55)),
+            ]
+            .spacing(8);
+
+            cards = cards.push(self.settings_card("Battery Health & Charging Limit", "Lenovo hardware conservation mode", mode_details));
+        }
+
+        cards = cards.push(self.settings_card("Automated Battery Optimization", "Kernel power daemon management", tlp_row));
+
+        cards.into()
     }
 
     /// On-screen displays Tab (Replicating user's screenshot exactly!)

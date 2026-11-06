@@ -494,6 +494,10 @@ fn main() -> anyhow::Result<()> {
                         println!("msUI Battery Telemetry & Diagnostics");
                         println!("{}", "=".repeat(45));
                         println!("{:<22}: {}% ({})", "Battery Charge", bat.percentage, bat.status.as_str());
+                        if let Some(mode) = bat.conservation_mode {
+                            let mode_str = if mode { "Desk Mode (Active: ~55–60% charge limit)" } else { "Full Charge Mode (100%)" };
+                            println!("{:<22}: {}", "Charging Mode", mode_str);
+                        }
                         println!("{:<22}: {}", "AC Adapter", if bat.is_ac_online { "Online (Plugged In)" } else { "Offline (On Battery)" });
                         println!("{:<22}: {:.2} W", "Power Draw", bat.power_watts);
                         println!("{:<22}: {:.2} V", "Voltage", bat.voltage_volts);
@@ -512,6 +516,51 @@ fn main() -> anyhow::Result<()> {
                         println!("{:<22}: {} ({})", "Active Power Profile", active_prof.display_name(), active_prof.as_str());
                     } else {
                         println!("No battery detected on this system (Desktop / AC Only).");
+                    }
+                }
+                Some("desk") => {
+                    match msui_core::BatteryMonitor::set_conservation_mode(true) {
+                        Ok(()) => println!("Enabled Desk Mode: battery charging capped at 55–60% for battery longevity."),
+                        Err(e) => {
+                            eprintln!("Failed to enable desk mode: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                Some("full") => {
+                    match msui_core::BatteryMonitor::set_conservation_mode(false) {
+                        Ok(()) => println!("Enabled Full Charge Mode: battery will charge to 100% capacity."),
+                        Err(e) => {
+                            eprintln!("Failed to switch to full charge mode: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                Some("conservation") => {
+                    let sub2 = args.get(3).map(|s| s.as_str());
+                    match sub2 {
+                        Some("on" | "enable" | "1") => {
+                            match msui_core::BatteryMonitor::set_conservation_mode(true) {
+                                Ok(()) => println!("Lenovo Conservation Mode enabled (55–60% limit)."),
+                                Err(e) => {
+                                    eprintln!("Failed to enable conservation mode: {}", e);
+                                    std::process::exit(1);
+                                }
+                            }
+                        }
+                        Some("off" | "disable" | "0") => {
+                            match msui_core::BatteryMonitor::set_conservation_mode(false) {
+                                Ok(()) => println!("Lenovo Conservation Mode disabled (charging to 100%)."),
+                                Err(e) => {
+                                    eprintln!("Failed to disable conservation mode: {}", e);
+                                    std::process::exit(1);
+                                }
+                            }
+                        }
+                        _ => {
+                            let current = msui_core::BatteryMonitor::read_conservation_mode();
+                            println!("Conservation Mode: {:?}", current);
+                        }
                     }
                 }
                 Some("profile") => {

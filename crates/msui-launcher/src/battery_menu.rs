@@ -23,7 +23,7 @@ pub fn run_battery_menu() -> Result<(), iced_exwlshell::Error> {
         ..Font::DEFAULT
     })
     .layer_settings(LayerShellSettings {
-        size: LayerSize::px(680, 560),
+        size: LayerSize::px(680, 640),
         anchor: Anchor::empty(), // Centered on screen
         layer: Layer::Overlay,
         keyboard_interactivity: KeyboardInteractivity::Exclusive,
@@ -45,6 +45,7 @@ pub struct BatteryMenu {
 #[derive(Debug, Clone)]
 pub enum Message {
     SelectProfile(PowerProfile),
+    ToggleConservationMode(bool),
     Refresh,
     Close,
     IcedEvent(Event),
@@ -120,6 +121,21 @@ impl BatteryMenu {
                     self.status_msg = Some(format!("Failed to switch to {}", prof.display_name()));
                 }
             }
+            Message::ToggleConservationMode(enable) => {
+                match BatteryMonitor::set_conservation_mode(enable) {
+                    Ok(_) => {
+                        self.status_msg = Some(if enable {
+                            "Enabled Desk Mode (55–60% Charge Limit for Battery Longevity)".to_string()
+                        } else {
+                            "Switched to Full Charge Mode (Charging to 100%)".to_string()
+                        });
+                        self.battery_info = self.battery_monitor.read();
+                    }
+                    Err(e) => {
+                        self.status_msg = Some(format!("Failed to switch charging mode: {e}"));
+                    }
+                }
+            }
             Message::Refresh => {
                 self.profile = PowerProfileManager::get_profile();
                 self.battery_info = self.battery_monitor.read();
@@ -187,7 +203,10 @@ impl BatteryMenu {
             profile_cards = profile_cards.push(self.view_profile_card(p));
         }
 
-        // Section 2: Battery Telemetry & Diagnostics
+        // Section 2: Charging Limit & Battery Lifespan
+        let charging_section = self.view_charging_mode_section();
+
+        // Section 3: Battery Telemetry & Diagnostics
         let battery_section = self.view_battery_section();
 
         // Footer / Status Banner
@@ -206,11 +225,11 @@ impl BatteryMenu {
             header,
             profiles_title,
             profile_cards,
-            space().height(6),
+            charging_section,
             battery_section,
             footer,
         ]
-        .spacing(12)
+        .spacing(10)
         .padding(20);
 
         container(main_layout)
@@ -255,6 +274,70 @@ impl BatteryMenu {
             .into()
     }
 
+    fn view_charging_mode_section(&self) -> Element<'_, Message> {
+        let is_desk = self
+            .battery_info
+            .as_ref()
+            .and_then(|b| b.conservation_mode)
+            .unwrap_or(false);
+
+        let title = text("Battery Lifespan & Charging Mode").size(14).style(text::secondary);
+
+        let desk_btn = button(
+            column![
+                row![
+                    text("🛡️  Desk Mode (55–60%)").size(13),
+                    space().width(Length::Fill),
+                    if is_desk {
+                        container(text("󰄬 Active").size(11))
+                            .padding([1, 6])
+                            .style(default_subcard_style())
+                    } else {
+                        container(text("").size(0))
+                    }
+                ]
+                .align_y(Alignment::Center),
+                text("Caps charge at 55–60% to prolong battery life when continuously plugged into AC.")
+                    .size(10)
+                    .style(text::secondary),
+            ]
+            .spacing(4),
+        )
+        .width(Length::FillPortion(1))
+        .padding(10)
+        .style(if is_desk { button::primary } else { button::secondary })
+        .on_press(Message::ToggleConservationMode(true));
+
+        let full_btn = button(
+            column![
+                row![
+                    text("🔋  Full Charge (100%)").size(13),
+                    space().width(Length::Fill),
+                    if !is_desk {
+                        container(text("󰄬 Active").size(11))
+                            .padding([1, 6])
+                            .style(default_subcard_style())
+                    } else {
+                        container(text("").size(0))
+                    }
+                ]
+                .align_y(Alignment::Center),
+                text("Charges battery to 100% capacity for maximum mobility, travel, and untethered work.")
+                    .size(10)
+                    .style(text::secondary),
+            ]
+            .spacing(4),
+        )
+        .width(Length::FillPortion(1))
+        .padding(10)
+        .style(if !is_desk { button::primary } else { button::secondary })
+        .on_press(Message::ToggleConservationMode(false));
+
+        let cards = row![desk_btn, full_btn].spacing(10).width(Length::Fill);
+
+        column![title, cards].spacing(6).into()
+    }
+
     fn view_battery_section(&self) -> Element<'_, Message> {
         let Some(bat) = &self.battery_info else {
             return container(
@@ -286,7 +369,13 @@ impl BatteryMenu {
         let status_badge = if bat.is_charging {
             "󰚥 Charging (AC Connected)"
         } else if bat.is_ac_online {
-            "󰚥 AC Connected (Full)"
+            if bat.conservation_mode == Some(true) {
+                "󰚥 Conservation Mode (Holding at 55–60%)"
+            } else if bat.percentage >= 95 {
+                "󰚥 AC Connected (Full)"
+            } else {
+                "󰚥 AC Connected (Holding Charge)"
+            }
         } else {
             "󰚦 On Battery"
         };

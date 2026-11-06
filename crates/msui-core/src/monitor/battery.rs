@@ -180,6 +180,7 @@ pub struct BatteryInfo {
     pub status: BatteryStatus,
     pub is_charging: bool,
     pub is_ac_online: bool,
+    pub conservation_mode: Option<bool>,
     pub power_watts: f32,
     pub voltage_volts: f32,
     pub energy_now_wh: f32,
@@ -248,6 +249,81 @@ impl BatteryMonitor {
             }
         }
         None
+    }
+
+    pub fn conservation_mode_path() -> Option<PathBuf> {
+        let candidates = [
+            "/sys/bus/platform/drivers/ideapad_acpi/VPC2004:00/conservation_mode",
+            "/sys/bus/platform/drivers/ideapad_laptop/VPC2004:00/conservation_mode",
+            "/sys/devices/platform/ideapad_acpi/conservation_mode",
+            "/sys/devices/platform/ideapad_laptop/conservation_mode",
+            "/sys/devices/pci0000:00/0000:00:14.3/PNP0C09:00/VPC2004:00/conservation_mode",
+        ];
+        for c in candidates {
+            let p = PathBuf::from(c);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+        if let Ok(entries) = fs::read_dir("/sys/bus/platform/drivers") {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.starts_with("ideapad") {
+                    if let Ok(devs) = fs::read_dir(entry.path()) {
+                        for dev in devs.flatten() {
+                            let mode_file = dev.path().join("conservation_mode");
+                            if mode_file.is_file() {
+                                return Some(mode_file);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub fn read_conservation_mode() -> Option<bool> {
+        let path = Self::conservation_mode_path()?;
+        let content = fs::read_to_string(path).ok()?;
+        Some(content.trim() == "1")
+    }
+
+    pub fn set_conservation_mode(enable: bool) -> Result<(), String> {
+        let path = Self::conservation_mode_path()
+            .ok_or_else(|| "No Lenovo conservation_mode sysfs interface found on this machine".to_string())?;
+
+        let val = if enable { "1" } else { "0" };
+
+        // 1. Try direct write (succeeds if udev rule allows or running as root)
+        if fs::write(&path, val).is_ok() {
+            let svc_cmd = if enable {
+                "systemctl enable --now lenovo-conservation.service 2>/dev/null || true"
+            } else {
+                "systemctl disable --now lenovo-conservation.service 2>/dev/null || true"
+            };
+            let _ = std::process::Command::new("sh").arg("-c").arg(svc_cmd).status();
+            return Ok(());
+        }
+
+        // 2. Fall back to pkexec (spawns PolkitDialog)
+        let script = format!(
+            "echo {val} > '{p}' && ( [ -f /etc/systemd/system/lenovo-conservation.service ] && systemctl {act} lenovo-conservation.service || true )",
+            val = val,
+            p = path.display(),
+            act = if enable { "enable" } else { "disable" }
+        );
+
+        let status = std::process::Command::new("pkexec")
+            .args(["/bin/sh", "-c", &script])
+            .status()
+            .map_err(|e| format!("Failed to spawn pkexec: {e}"))?;
+
+        if status.success() {
+            Ok(())
+        } else {
+            Err("Authorization cancelled or failed".to_string())
+        }
     }
 
     pub fn read(&self) -> Option<BatteryInfo> {
@@ -346,11 +422,14 @@ impl BatteryMonitor {
             None
         };
 
+        let conservation_mode = Self::read_conservation_mode();
+
         Some(BatteryInfo {
             percentage,
             status,
             is_charging,
             is_ac_online,
+            conservation_mode,
             power_watts,
             voltage_volts,
             energy_now_wh,
