@@ -9,8 +9,9 @@ use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
 use msui_core::{
-    AudioInfo, AudioMonitor, BatteryMonitor, DndManager, MsuiConfig, PowerProfile, PowerProfileManager,
-    SystemServiceInfo, SystemServiceManager, ThemeManager, WallpaperManager,
+    AudioInfo, AudioMonitor, BatteryMonitor, ColorEngine, ColorSchemeMode,
+    CorePalette, DndManager, MsuiConfig, PowerProfile, PowerProfileManager, SemanticTokens,
+    SystemServiceInfo, SystemServiceManager, ThemeManager, WallpaperManager, PRESETS,
 };
 use std::process::Command as StdCommand;
 use std::time::{Duration, Instant};
@@ -83,6 +84,10 @@ pub enum SettingsMessage {
     ToggleFrosted,
     ToggleDnd,
     SetTheme(String),
+    ColorExtractWallpaper,
+    ColorSetPreset(String),
+    ColorSetMode(ColorSchemeMode),
+    ColorSetAccent(String),
     WallpaperNext,
     WallpaperRandom,
     SetBarPosition(String),
@@ -248,7 +253,7 @@ impl SettingsPanel {
         (
             Self {
                 config,
-                active_tab: SettingsTab::Interface,
+                active_tab: SettingsTab::Wallpaper,
                 search_query: String::new(),
                 services,
                 is_standalone,
@@ -475,11 +480,86 @@ impl SettingsPanel {
             SettingsMessage::SetTheme(name) => {
                 ThemeManager::set_theme(&name);
             }
+            SettingsMessage::ColorExtractWallpaper => {
+                if let Some(cur) = WallpaperManager::get_current() {
+                    let mode = if self.config.color.scheme == "light" {
+                        ColorSchemeMode::Light
+                    } else {
+                        ColorSchemeMode::Dark
+                    };
+                    if let Ok(tokens) = ColorEngine::apply_wallpaper(&cur, mode) {
+                        self.config.color.mode = "dynamic".to_string();
+                        self.config.gui.background = tokens.background.clone();
+                        self.config.gui.border_color = tokens.primary.clone();
+                        let _ = self.config.save_to_default_path();
+                    }
+                }
+            }
+            SettingsMessage::ColorSetPreset(preset_id) => {
+                let mode = if self.config.color.scheme == "light" {
+                    ColorSchemeMode::Light
+                } else {
+                    ColorSchemeMode::Dark
+                };
+                if let Ok(tokens) = ColorEngine::apply_preset(&preset_id, mode) {
+                    self.config.color.mode = "preset".to_string();
+                    self.config.color.active_preset = preset_id;
+                    self.config.gui.background = tokens.background.clone();
+                    self.config.gui.border_color = tokens.primary.clone();
+                    let _ = self.config.save_to_default_path();
+                }
+            }
+            SettingsMessage::ColorSetMode(mode) => {
+                self.config.color.scheme = match mode {
+                    ColorSchemeMode::Light => "light".to_string(),
+                    ColorSchemeMode::Dark => "dark".to_string(),
+                };
+                let tokens = ColorEngine::current_tokens();
+                let pal = CorePalette::from_hex(&tokens.primary)
+                    .unwrap_or_else(|| CorePalette::from_hex("#9333ea").unwrap());
+                let new_tokens = SemanticTokens::from_palette(&pal, mode);
+                let _ = ColorEngine::save_and_apply(&new_tokens);
+                self.config.gui.background = new_tokens.background.clone();
+                self.config.gui.border_color = new_tokens.primary.clone();
+                let _ = self.config.save_to_default_path();
+            }
+            SettingsMessage::ColorSetAccent(hex) => {
+                let mode = if self.config.color.scheme == "light" {
+                    ColorSchemeMode::Light
+                } else {
+                    ColorSchemeMode::Dark
+                };
+                if let Ok(tokens) = ColorEngine::apply_accent(&hex, mode) {
+                    self.config.color.mode = "accent".to_string();
+                    self.config.color.accent_override = hex.clone();
+                    self.config.gui.background = tokens.background.clone();
+                    self.config.gui.border_color = tokens.primary.clone();
+                    let _ = self.config.save_to_default_path();
+                }
+            }
             SettingsMessage::WallpaperNext => {
-                WallpaperManager::cycle();
+                if let Some(next) = WallpaperManager::cycle() {
+                    if self.config.color.mode == "dynamic" {
+                        let mode = if self.config.color.scheme == "light" {
+                            ColorSchemeMode::Light
+                        } else {
+                            ColorSchemeMode::Dark
+                        };
+                        let _ = ColorEngine::apply_wallpaper(&next, mode);
+                    }
+                }
             }
             SettingsMessage::WallpaperRandom => {
-                WallpaperManager::random();
+                if let Some(next) = WallpaperManager::random() {
+                    if self.config.color.mode == "dynamic" {
+                        let mode = if self.config.color.scheme == "light" {
+                            ColorSchemeMode::Light
+                        } else {
+                            ColorSchemeMode::Dark
+                        };
+                        let _ = ColorEngine::apply_wallpaper(&next, mode);
+                    }
+                }
             }
             SettingsMessage::SetBarPosition(pos) => {
                 self.config.bar.anchor = pos;
@@ -1623,83 +1703,291 @@ impl SettingsPanel {
         scrollable(content).height(Length::Fill).into()
     }
 
-    /// Wallpaper & Colors Tab
+    /// Adaptive Color Engine & Wallpaper Tab
     fn view_wallpaper_tab(&self) -> Element<'_, SettingsMessage> {
         let header = column![
-            text("Wallpaper & colors").size(19).color(Color::WHITE),
-            text("Theme palettes, wallpaper cycling, and desktop styling")
+            text("Adaptive Color Engine & Wallpaper").size(19).color(Color::WHITE),
+            text("Material Design 3 HCT dynamic palettes, wallpaper extraction, and cross-desktop styling")
                 .size(11)
                 .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
         ]
         .spacing(4);
 
-        let themes = [
-            ("Catppuccin Mocha", "catppuccin-mocha"),
-            ("Tokyo Night", "tokyo-night"),
-            ("Nord Frost", "nord"),
-            ("Rosé Pine", "rose-pine"),
-            ("Dracula Dark", "dracula"),
-        ];
+        let tokens = ColorEngine::current_tokens();
+        let is_light = self.config.color.scheme == "light";
+        let color_mode = &self.config.color.mode;
 
-        let mut theme_buttons: Vec<Element<'_, SettingsMessage>> = Vec::new();
-        for (name, id) in themes {
-            let id_str = id.to_string();
-            let chip = button(text(name).size(11).color(Color::WHITE))
-                .padding([8, 12])
-                .style(|_t, status| {
-                    let bg = match status {
-                        iced::widget::button::Status::Hovered => {
-                            Color::from_rgba(139.0 / 255.0, 92.0 / 255.0, 246.0 / 255.0, 0.50)
-                        }
-                        _ => Color::from_rgba(1.0, 1.0, 1.0, 0.08),
-                    };
-                    iced::widget::button::Style {
-                        background: Some(bg.into()),
-                        border: Border {
-                            radius: 10.0.into(),
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    }
-                })
-                .on_press(SettingsMessage::SetTheme(id_str))
-                .into();
-            theme_buttons.push(chip);
-        }
+        let parse_color = |hex: &str| -> Color {
+            if let Some((r, g, b)) = msui_core::parse_hex_color(hex) {
+                Color::from_rgb(r, g, b)
+            } else {
+                Color::WHITE
+            }
+        };
 
-        let mut theme_row = row![].spacing(8);
-        for chip in theme_buttons {
-            theme_row = theme_row.push(chip);
-        }
-        let theme_chips = theme_row;
+        // Source Mode Selector
+        let mode_row = row![
+            self.chip_button("󰔎 Wallpaper Adaptive", color_mode == "dynamic", SettingsMessage::ColorExtractWallpaper),
+            self.chip_button("󰓎 Curated Presets", color_mode == "preset", SettingsMessage::ColorSetPreset("midnight".into())),
+            self.chip_button("󰏘 Custom Accent", color_mode == "accent", SettingsMessage::ColorSetAccent("#9333ea".into())),
+        ]
+        .spacing(8);
 
-        let wall_controls = row![
-            button(text("Next Wallpaper").size(12).color(Color::WHITE))
-                .padding([8, 14])
-                .style(|_t: &Theme, _s| iced::widget::button::Style {
-                    background: Some(Color::from_rgb8(139, 92, 246).into()),
-                    border: Border { radius: 10.0.into(), ..Default::default() },
+        // Theme Mode Selector
+        let theme_row = row![
+            self.chip_button("󰖔 Dark Mode", !is_light, SettingsMessage::ColorSetMode(ColorSchemeMode::Dark)),
+            self.chip_button("󰖙 Light Mode", is_light, SettingsMessage::ColorSetMode(ColorSchemeMode::Light)),
+        ]
+        .spacing(8);
+
+        // One-click Extract & Apply button
+        let extract_btn = button(
+            row![
+                text("󰄬").size(13).color(Color::WHITE),
+                text("Extract From Wallpaper & Apply Desktop").size(12).color(Color::WHITE),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center),
+        )
+        .padding([8, 16])
+        .style(|_t, status| {
+            let bg = match status {
+                iced::widget::button::Status::Hovered => Color::from_rgba(147.0 / 255.0, 51.0 / 255.0, 234.0 / 255.0, 0.90),
+                _ => Color::from_rgba(147.0 / 255.0, 51.0 / 255.0, 234.0 / 255.0, 0.70),
+            };
+            iced::widget::button::Style {
+                background: Some(bg.into()),
+                border: Border { radius: 10.0.into(), ..Default::default() },
+                ..Default::default()
+            }
+        })
+        .on_press(SettingsMessage::ColorExtractWallpaper);
+
+        // Swatches preview
+        let swatch_box = |label: &'static str, hex: &str| -> Element<'_, SettingsMessage> {
+            let col = parse_color(hex);
+            let pill = container(text("").size(1))
+                .width(20)
+                .height(20)
+                .style(move |_| iced::widget::container::Style {
+                    background: Some(col.into()),
+                    border: Border {
+                        radius: 6.0.into(),
+                        width: 1.0,
+                        color: Color::from_rgba(1.0, 1.0, 1.0, 0.20),
+                    },
                     ..Default::default()
-                })
-                .on_press(SettingsMessage::WallpaperNext),
-            button(text("Random Wallpaper").size(12).color(Color::WHITE))
-                .padding([8, 14])
-                .style(|_t: &Theme, _s| iced::widget::button::Style {
-                    background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.10).into()),
-                    border: Border { radius: 10.0.into(), ..Default::default() },
-                    ..Default::default()
-                })
-                .on_press(SettingsMessage::WallpaperRandom),
+                });
+
+            container(
+                row![
+                    pill,
+                    column![
+                        text(label).size(11).color(Color::WHITE),
+                        text(hex.to_string()).size(10).color(Color::from_rgba(1.0, 1.0, 1.0, 0.55)),
+                    ]
+                    .spacing(2),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+            )
+            .padding([4, 6])
+            .into()
+        };
+
+        let swatches_row = row![
+            swatch_box("Primary", &tokens.primary),
+            swatch_box("Secondary", &tokens.secondary),
+            swatch_box("Surface", &tokens.surface),
+            swatch_box("Background", &tokens.background),
         ]
         .spacing(10);
 
-        column![
-            header,
-            self.settings_card("Theme Presets", "Color palettes for the shell, modals, and bar widgets", theme_chips),
-            self.settings_card("Wallpaper Switcher", "Cycle backgrounds from ~/.config/hypr/wallpapers", wall_controls),
+        // Live Mockup Card Preview showing generated tokens in action
+        let preview_primary_col = parse_color(&tokens.primary);
+        let preview_on_primary_col = parse_color(&tokens.on_primary);
+        let preview_bg_col = parse_color(&tokens.background);
+        let preview_surface_col = parse_color(&tokens.surface);
+        let preview_on_surface_col = parse_color(&tokens.on_surface);
+        let preview_outline_col = parse_color(&tokens.outline);
+
+        let live_preview_mock = container(
+            column![
+                row![
+                    text("Desktop Mockup Preview").size(12).color(preview_on_surface_col),
+                    space().width(Length::Fill),
+                    text("WCAG Contrast Verified").size(10).color(preview_primary_col),
+                ]
+                .align_y(Alignment::Center),
+                row![
+                    container(
+                        text("Primary Action").size(11).color(preview_on_primary_col)
+                    )
+                    .padding([5, 12])
+                    .style(move |_| iced::widget::container::Style {
+                        background: Some(preview_primary_col.into()),
+                        border: Border { radius: 6.0.into(), ..Default::default() },
+                        ..Default::default()
+                    }),
+                    container(
+                        text("Surface Card").size(11).color(preview_on_surface_col)
+                    )
+                    .padding([5, 12])
+                    .style(move |_| iced::widget::container::Style {
+                        background: Some(preview_surface_col.into()),
+                        border: Border {
+                            radius: 6.0.into(),
+                            width: 1.0,
+                            color: preview_outline_col,
+                        },
+                        ..Default::default()
+                    }),
+                    text("Accessible luminance").size(11).color(preview_on_surface_col),
+                ]
+                .spacing(10)
+                .align_y(Alignment::Center),
+            ]
+            .spacing(10),
+        )
+        .padding(12)
+        .width(Length::Fill)
+        .style(move |_| iced::widget::container::Style {
+            background: Some(preview_bg_col.into()),
+            border: Border {
+                radius: 10.0.into(),
+                width: 1.0,
+                color: preview_outline_col,
+            },
+            ..Default::default()
+        });
+
+        let divider = || {
+            container(text("").size(1))
+                .width(Length::Fill)
+                .height(1)
+                .style(|_| iced::widget::container::Style {
+                    background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.06).into()),
+                    ..Default::default()
+                })
+        };
+
+        let card1_content = column![
+            row![
+                text("Color Source").size(12).color(Color::WHITE),
+                space().width(Length::Fill),
+                mode_row,
+            ]
+            .align_y(Alignment::Center),
+            divider(),
+            row![
+                text("Theme Mode").size(12).color(Color::WHITE),
+                space().width(Length::Fill),
+                theme_row,
+            ]
+            .align_y(Alignment::Center),
+            divider(),
+            row![
+                extract_btn,
+                space().width(Length::Fill),
+                text(format!("Scheme: {}", if is_light { "Light" } else { "Dark" }))
+                    .size(11)
+                    .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+            ]
+            .align_y(Alignment::Center),
+            divider(),
+            column![
+                text("Active Semantic Tokens").size(12).color(Color::WHITE),
+                swatches_row,
+                live_preview_mock,
+            ]
+            .spacing(8),
         ]
-        .spacing(12)
-        .into()
+        .spacing(10);
+
+        // Presets Chips in 2 rows of 3 chips each
+        let active_preset = &self.config.color.active_preset;
+        let mut preset_chips_row1 = row![].spacing(8);
+        let mut preset_chips_row2 = row![].spacing(8);
+
+        for (i, p) in PRESETS.iter().enumerate() {
+            let label = format!("{} ({})", p.name, p.accent_hex);
+            let is_selected = color_mode == "preset" && active_preset == p.id;
+            let btn = self.chip_button(label, is_selected, SettingsMessage::ColorSetPreset(p.id.to_string()));
+            if i < 3 {
+                preset_chips_row1 = preset_chips_row1.push(btn);
+            } else {
+                preset_chips_row2 = preset_chips_row2.push(btn);
+            }
+        }
+
+        let presets_layout = column![
+            preset_chips_row1,
+            preset_chips_row2,
+        ]
+        .spacing(8);
+
+        let cur_wall = WallpaperManager::get_current()
+            .map(|p| p.file_name().unwrap_or_default().to_string_lossy().to_string())
+            .unwrap_or_else(|| "None selected".to_string());
+
+        let wall_controls = row![
+            button(
+                row![
+                    text("󰒭").size(13).color(Color::WHITE),
+                    text("Next Wallpaper").size(12).color(Color::WHITE),
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center),
+            )
+            .padding([8, 14])
+            .style(|_t, status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered => Color::from_rgba(139.0 / 255.0, 92.0 / 255.0, 246.0 / 255.0, 0.90),
+                    _ => Color::from_rgba(139.0 / 255.0, 92.0 / 255.0, 246.0 / 255.0, 0.70),
+                };
+                iced::widget::button::Style {
+                    background: Some(bg.into()),
+                    border: Border { radius: 10.0.into(), ..Default::default() },
+                    ..Default::default()
+                }
+            })
+            .on_press(SettingsMessage::WallpaperNext),
+            button(
+                row![
+                    text("󰒝").size(13).color(Color::WHITE),
+                    text("Random Wallpaper").size(12).color(Color::WHITE),
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center),
+            )
+            .padding([8, 14])
+            .style(|_t, status| {
+                let bg = match status {
+                    iced::widget::button::Status::Hovered => Color::from_rgba(1.0, 1.0, 1.0, 0.16),
+                    _ => Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                };
+                iced::widget::button::Style {
+                    background: Some(bg.into()),
+                    border: Border { radius: 10.0.into(), ..Default::default() },
+                    ..Default::default()
+                }
+            })
+            .on_press(SettingsMessage::WallpaperRandom),
+            space().width(Length::Fill),
+            text(format!("Active: {}", cur_wall)).size(11).color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center);
+
+        let content = column![
+            header,
+            self.settings_card("Adaptive Color Engine (Material Design 3 HCT)", "Dynamic palette generation, wallpaper extraction, and cross-desktop theming", card1_content),
+            self.settings_card("Curated Design Presets", "Harmonious fallbacks and handcrafted desktop aesthetics", presets_layout),
+            self.settings_card("Wallpaper Manager & Rotation", "Active desktop background image and wallpaper cycling", wall_controls),
+        ]
+        .spacing(12);
+
+        scrollable(content).height(Length::Fill).into()
     }
 
     /// Notifications Tab

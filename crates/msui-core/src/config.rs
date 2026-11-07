@@ -12,6 +12,8 @@ pub struct MsuiConfig {
     pub power: PowerConfig,
     #[serde(default)]
     pub gui: GuiConfig,
+    #[serde(default)]
+    pub color: ColorConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -252,6 +254,33 @@ pub fn parse_hex_color(hex: &str) -> Option<(f32, f32, f32)> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ColorConfig {
+    #[serde(default = "default_color_mode")]
+    pub mode: String,
+    #[serde(default = "default_color_scheme")]
+    pub scheme: String,
+    #[serde(default = "default_active_preset")]
+    pub active_preset: String,
+    #[serde(default)]
+    pub accent_override: String,
+}
+
+impl Default for ColorConfig {
+    fn default() -> Self {
+        Self {
+            mode: default_color_mode(),
+            scheme: default_color_scheme(),
+            active_preset: default_active_preset(),
+            accent_override: String::new(),
+        }
+    }
+}
+
+fn default_color_mode() -> String { "dynamic".to_string() }
+fn default_color_scheme() -> String { "dark".to_string() }
+fn default_active_preset() -> String { "midnight".to_string() }
+
 impl Default for MsuiConfig {
     fn default() -> Self {
         Self {
@@ -259,6 +288,7 @@ impl Default for MsuiConfig {
             launcher: LauncherConfig::default(),
             power: PowerConfig::default(),
             gui: GuiConfig::default(),
+            color: ColorConfig::default(),
         }
     }
 }

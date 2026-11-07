@@ -1590,6 +1590,116 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        "color" | "theme-engine" => {
+            let sub = args.get(2).map(|s| s.as_str());
+            let mode = if args.iter().any(|a| a == "--light" || a == "light") {
+                msui_core::ColorSchemeMode::Light
+            } else {
+                msui_core::ColorSchemeMode::Dark
+            };
+
+            match sub {
+                Some("auto" | "wallpaper" | "extract") => {
+                    let wall_path = if let Some(p) = args.get(3) {
+                        std::path::PathBuf::from(p)
+                    } else if let Some(cur) = msui_core::WallpaperManager::get_current() {
+                        cur
+                    } else {
+                        eprintln!("No wallpaper found to extract colors from.");
+                        std::process::exit(1);
+                    };
+
+                    println!("Extracting adaptive Material 3 palette from: {}", wall_path.display());
+                    match msui_core::ColorEngine::apply_wallpaper(&wall_path, mode) {
+                        Ok(tokens) => {
+                            println!("✓ Successfully extracted and applied adaptive desktop theme ({:?}):", mode);
+                            println!("  Primary:      {}", tokens.primary);
+                            println!("  Secondary:    {}", tokens.secondary);
+                            println!("  Surface:      {}", tokens.surface);
+                            println!("  Background:   {}", tokens.background);
+                            println!("  Outline:      {}", tokens.outline);
+                        }
+                        Err(e) => {
+                            eprintln!("Color extraction error: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                Some("preset") => {
+                    if let Some(name) = args.get(3) {
+                        match msui_core::ColorEngine::apply_preset(name, mode) {
+                            Ok(tokens) => {
+                                println!("✓ Applied preset '{}' ({:?}):", name, mode);
+                                println!("  Primary:    {}", tokens.primary);
+                                println!("  Background: {}", tokens.background);
+                            }
+                            Err(e) => {
+                                eprintln!("Error applying preset: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        println!("Available presets:");
+                        for p in msui_core::PRESETS {
+                            println!("  • {:<12} - {} (Accent: {}, Bg: {})", p.id, p.name, p.accent_hex, p.bg_hex);
+                        }
+                        println!("\nUsage: msui color preset <name> [--light]");
+                    }
+                }
+                Some("set" | "accent") => {
+                    if let Some(hex) = args.get(3) {
+                        match msui_core::ColorEngine::apply_accent(hex, mode) {
+                            Ok(tokens) => {
+                                println!("✓ Generated and applied Material 3 scheme from accent '{}' ({:?}):", hex, mode);
+                                println!("  Primary:    {}", tokens.primary);
+                                println!("  Surface:    {}", tokens.surface);
+                                println!("  Background: {}", tokens.background);
+                            }
+                            Err(e) => {
+                                eprintln!("Error applying accent: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Usage: msui color set <#hex> [--light]");
+                        std::process::exit(1);
+                    }
+                }
+                Some("mode") => {
+                    if let Some(m_str) = args.get(3) {
+                        let m = match m_str.to_lowercase().as_str() {
+                            "light" => msui_core::ColorSchemeMode::Light,
+                            _ => msui_core::ColorSchemeMode::Dark,
+                        };
+                        let mut tokens = msui_core::ColorEngine::current_tokens();
+                        let pal = msui_core::CorePalette::from_hex(&tokens.primary)
+                            .unwrap_or_else(|| msui_core::CorePalette::from_hex("#9333ea").unwrap());
+                        tokens = msui_core::SemanticTokens::from_palette(&pal, m);
+                        let _ = msui_core::ColorEngine::save_and_apply(&tokens);
+                        println!("✓ Switched theme mode to: {:?}", m);
+                    } else {
+                        eprintln!("Usage: msui color mode [dark|light]");
+                        std::process::exit(1);
+                    }
+                }
+                Some("status" | "current") | None => {
+                    let tokens = msui_core::ColorEngine::current_tokens();
+                    println!("MSUI Adaptive Color Engine Status ({:?}):", tokens.mode);
+                    println!("  Primary:      {}", tokens.primary);
+                    println!("  On-Primary:   {}", tokens.on_primary);
+                    println!("  Secondary:    {}", tokens.secondary);
+                    println!("  Tertiary:     {}", tokens.tertiary);
+                    println!("  Surface:      {}", tokens.surface);
+                    println!("  Background:   {}", tokens.background);
+                    println!("  Outline:      {}", tokens.outline);
+                    println!("  Error:        {}", tokens.error);
+                }
+                Some(other) => {
+                    eprintln!("Unknown color command: '{}'.\nUsage: msui color [auto|preset <name>|set <hex>|mode <dark|light>|status]", other);
+                    std::process::exit(1);
+                }
+            }
+        }
         "system" => {
             let sub_args: Vec<&str> = args.iter().skip(2).map(|s| s.as_str()).collect();
             let mut cmd = std::process::Command::new("systemcontrol");
@@ -1620,6 +1730,7 @@ fn print_help() {
           msui [COMMAND]\n\n\
         COMMANDS:\n  \
           bar           Run the Wayland Layer Shell status bar & background daemons (default)\n  \
+          color         MSUI Adaptive Color Engine (auto|preset <name>|set <hex>|mode <dark|light>|status)\n  \
           drawer        Open the App Drawer & Window Task Switcher overlay (or 'list', 'focus <addr>', 'close <addr>')\n  \
           control       Open the Unified Quick Settings Control Center popup (or 'dnd <on|off|toggle>')\n  \
           media         Open the MPRIS Now Playing Controller overlay (or 'status', 'play-pause', 'next', 'prev', 'seek <secs>')\n  \

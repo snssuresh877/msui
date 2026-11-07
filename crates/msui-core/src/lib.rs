@@ -13,10 +13,11 @@ pub mod tray;
 pub mod fshare;
 pub mod wallpaper;
 pub mod service;
+pub mod color;
 
 pub use clipboard::{ClipboardEntry, ClipboardStore, GLOBAL_CLIPBOARD, watcher::start_clipboard_watcher};
 pub use compositor::{HyprlandClient, HyprlandEvent, HyprlandIpc, HyprlandWorkspaceRef};
-pub use config::{parse_hex_color, BarConfig, GuiConfig, LauncherConfig, MsuiConfig};
+pub use config::{parse_hex_color, BarConfig, ColorConfig, GuiConfig, LauncherConfig, MsuiConfig};
 pub use desktop::{find_icon_for_class, invalidate_desktop_cache, scan_desktop_apps, DesktopApp};
 pub use ipc::{get_socket_path, IpcClient, IpcCommand, IpcServer};
 pub use polkit::{
@@ -42,6 +43,7 @@ pub use service::{SystemServiceInfo, SystemServiceManager};
 pub use theme::{ThemeDefinition, ThemeManager, BUILTIN_THEMES};
 pub use tray::{activate_tray_item, activate_tray_item_async, activate_tray_item_blocking, get_tray_items, watcher::run_tray_watcher, TrayItem};
 pub use wallpaper::{WallpaperItem, WallpaperManager};
+pub use color::{ColorEngine, ColorPreset, ColorSchemeMode, CorePalette, Hct, SemanticTokens, Srgb, ThemeExporter, WallpaperExtractor, PRESETS};
 
 
 #[cfg(test)]

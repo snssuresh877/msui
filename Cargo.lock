@@ -2518,6 +2518,7 @@ dependencies = [
  "chrono",
  "freedesktop-desktop-entry",
  "iced",
+ "image",
  "qrcode",
  "serde",
  "serde_json",
