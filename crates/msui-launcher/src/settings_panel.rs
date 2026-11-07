@@ -1264,13 +1264,119 @@ impl SettingsPanel {
     /// Interface Style Tab
     fn view_interface_tab(&self) -> Element<'_, SettingsMessage> {
         let header = column![
-            text("Interface & Blur Style").size(19).color(Color::WHITE),
-            text("Hyprland 0.57+ hardware shaders, blur refraction modes, window gaps, and borders")
+            text("Interface & Visual Style").size(19).color(Color::WHITE),
+            text("Universal appearance for all MSUI tools, top bar background, and Hyprland window aesthetics")
                 .size(11)
                 .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
         ]
         .spacing(4);
 
+        // --- SECTION 1: Universal MSUI Shell & Tools Appearance ---
+        let cur_bg = self.config.gui.background.to_lowercase();
+        let bg_row_1 = row![
+            self.chip_button("⬛ Obsidian Dark (#121218)", cur_bg == "#121218", SettingsMessage::SetGuiBackground("#121218".into())),
+            self.chip_button("🌌 Midnight Navy (#0f172a)", cur_bg == "#0f172a", SettingsMessage::SetGuiBackground("#0f172a".into())),
+            self.chip_button("🌑 OLED Black (#000000)", cur_bg == "#000000" || cur_bg == "#050508", SettingsMessage::SetGuiBackground("#000000".into())),
+        ]
+        .spacing(8);
+
+        let bg_row_2 = row![
+            self.chip_button("☕ Slate Mocha (#1e1e2e)", cur_bg == "#1e1e2e", SettingsMessage::SetGuiBackground("#1e1e2e".into())),
+            self.chip_button("🌊 Tokyo Twilight (#1a1b26)", cur_bg == "#1a1b26", SettingsMessage::SetGuiBackground("#1a1b26".into())),
+            self.chip_button("🌲 Forest Deep (#141c18)", cur_bg == "#141c18", SettingsMessage::SetGuiBackground("#141c18".into())),
+        ]
+        .spacing(8);
+
+        let bg_group = column![
+            text("Theme Background Color").size(12).color(Color::from_rgb8(196, 181, 253)),
+            text("Universal dark backdrop applied to all MSUI tools, dialogs, and the Top Bar")
+                .size(10)
+                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.45)),
+            bg_row_1,
+            bg_row_2,
+        ]
+        .spacing(6);
+
+        let is_border_on = self.config.gui.border_enabled && self.config.gui.border_width > 0.0;
+        let border_master = row![
+            column![
+                text("Window Border Outline").size(12).color(Color::from_rgb8(196, 181, 253)),
+                text("Master switch to enable or turn borders completely off across all MSUI tools")
+                    .size(10)
+                    .color(Color::from_rgba(1.0, 1.0, 1.0, 0.45)),
+            ]
+            .spacing(2),
+            space().width(Length::Fill),
+            self.chip_button("󰄬 Border On", is_border_on, SettingsMessage::ToggleGuiBorder(true)),
+            self.chip_button("󰅖 Border Off", !is_border_on, SettingsMessage::ToggleGuiBorder(false)),
+        ]
+        .align_y(Alignment::Center)
+        .spacing(8);
+
+        let cur_border_color = self.config.gui.border_color.to_lowercase();
+        let border_color_row_1 = row![
+            self.chip_button("🟣 Purple Neon", is_border_on && cur_border_color == "#9333ea", SettingsMessage::SetGuiBorderColor("#9333ea".into())),
+            self.chip_button("🔵 Cyan Electric", is_border_on && cur_border_color == "#06b6d4", SettingsMessage::SetGuiBorderColor("#06b6d4".into())),
+            self.chip_button("🟢 Emerald Green", is_border_on && cur_border_color == "#10b981", SettingsMessage::SetGuiBorderColor("#10b981".into())),
+        ]
+        .spacing(8);
+
+        let border_color_row_2 = row![
+            self.chip_button("🟠 Amber Orange", is_border_on && cur_border_color == "#f97316", SettingsMessage::SetGuiBorderColor("#f97316".into())),
+            self.chip_button("🔴 Rose Pink", is_border_on && cur_border_color == "#f43f5e", SettingsMessage::SetGuiBorderColor("#f43f5e".into())),
+            self.chip_button("⚪ Frost White", is_border_on && cur_border_color == "#ffffff", SettingsMessage::SetGuiBorderColor("#ffffff".into())),
+        ]
+        .spacing(8);
+
+        let bw = self.config.gui.border_width;
+        let border_width_chips = row![
+            self.chip_button("Off (0px)", !is_border_on, SettingsMessage::SetGuiBorderWidth(0.0)),
+            self.chip_button("Subtle (1.0px)", is_border_on && (bw - 1.0).abs() < 0.1, SettingsMessage::SetGuiBorderWidth(1.0)),
+            self.chip_button("Standard (1.5px)", is_border_on && (bw - 1.5).abs() < 0.1, SettingsMessage::SetGuiBorderWidth(1.5)),
+            self.chip_button("Bold (2.5px)", is_border_on && (bw - 2.5).abs() < 0.1, SettingsMessage::SetGuiBorderWidth(2.5)),
+        ]
+        .spacing(8);
+
+        let border_group = column![
+            border_master,
+            text("Border Accent Color").size(11).color(Color::from_rgba(1.0, 1.0, 1.0, 0.65)),
+            border_color_row_1,
+            border_color_row_2,
+            text("Border Thickness").size(11).color(Color::from_rgba(1.0, 1.0, 1.0, 0.65)),
+            border_width_chips,
+        ]
+        .spacing(6);
+
+        let rad = self.config.gui.corner_radius;
+        let radius_chips = row![
+            self.chip_button("Square (0px)", (rad - 0.0).abs() < 0.1, SettingsMessage::SetGuiCornerRadius(0.0)),
+            self.chip_button("Compact (10px)", (rad - 10.0).abs() < 0.1, SettingsMessage::SetGuiCornerRadius(10.0)),
+            self.chip_button("Rounded (18px)", (rad - 18.0).abs() < 0.1, SettingsMessage::SetGuiCornerRadius(18.0)),
+            self.chip_button("Pill (26px)", (rad - 26.0).abs() < 0.1, SettingsMessage::SetGuiCornerRadius(26.0)),
+        ]
+        .spacing(8);
+
+        let geometry_group = column![
+            text("Window Geometry & Corner Radius").size(12).color(Color::from_rgb8(196, 181, 253)),
+            radius_chips,
+        ]
+        .spacing(6);
+
+        let divider = || container(row![]).height(Length::Fixed(1.0)).width(Length::Fill).style(|_t| container::Style {
+            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.06).into()),
+            ..Default::default()
+        });
+
+        let msui_shell_card_content = column![
+            bg_group,
+            divider(),
+            border_group,
+            divider(),
+            geometry_group,
+        ]
+        .spacing(14);
+
+        // --- SECTION 2: Compositor Effects & Glass Engine ---
         let toggles = column![
             self.setting_toggle_row(
                 "Window & Interface Transparency",
@@ -1295,7 +1401,6 @@ impl SettingsPanel {
         ]
         .spacing(6);
 
-        // 11 Blur Presets (matching hypr-blur 0.57 controller)
         let blur_presets: [(u8, &'static str, &'static str, &'static str); 11] = [
             (1, "🚫", "No Blur", "Disable blur while preserving translucency (Lightweight)"),
             (10, "🌫️", "Dual-Kawase", "Standard dual-kawase pyramid blur (clean & lightweight)"),
@@ -1349,7 +1454,8 @@ impl SettingsPanel {
             ..Default::default()
         });
 
-        let blur_shaders_card = column![
+        let blur_shaders_column = column![
+            text("Hyprland 0.57+ Blur Shaders & Appearance Presets").size(12).color(Color::from_rgb8(196, 181, 253)),
             row_1,
             row_2,
             row_3,
@@ -1357,7 +1463,27 @@ impl SettingsPanel {
         ]
         .spacing(8);
 
-        // Window Gaps Presets
+        let compositor_card_content = column![
+            toggles,
+            divider(),
+            blur_shaders_column,
+        ]
+        .spacing(14);
+
+        // --- SECTION 3: Hyprland Window Management & Tiling ---
+        let hypr_border_row_1 = row![
+            self.chip_button("🟣 Purple Neon", self.active_border_color == "rgba(9333eaff)", SettingsMessage::SetBorderColor("rgba(9333eaff)".into())),
+            self.chip_button("🔵 Cyan Electric", self.active_border_color == "rgba(06b6d4ff)", SettingsMessage::SetBorderColor("rgba(06b6d4ff)".into())),
+            self.chip_button("🟢 Emerald Green", self.active_border_color == "rgba(10b981ff)", SettingsMessage::SetBorderColor("rgba(10b981ff)".into())),
+        ]
+        .spacing(8);
+
+        let hypr_border_row_2 = row![
+            self.chip_button("🟠 Amber Orange", self.active_border_color == "rgba(f97316ff)", SettingsMessage::SetBorderColor("rgba(f97316ff)".into())),
+            self.chip_button("🔴 Rose Pink", self.active_border_color == "rgba(f43f5eff)", SettingsMessage::SetBorderColor("rgba(f43f5eff)".into())),
+        ]
+        .spacing(8);
+
         let gaps_chips = row![
             self.chip_button("Compact (3px / 6px)", self.active_gaps == (3, 6), SettingsMessage::SetGaps(3, 6)),
             self.chip_button("Balanced (5px / 12px)", self.active_gaps == (5, 12), SettingsMessage::SetGaps(5, 12)),
@@ -1365,76 +1491,41 @@ impl SettingsPanel {
         ]
         .spacing(8);
 
-        // Border Colors
-        let border_chips = row![
-            self.chip_button("🟣 Purple Neon", self.active_border_color == "rgba(9333eaff)", SettingsMessage::SetBorderColor("rgba(9333eaff)".into())),
-            self.chip_button("🔵 Cyan Electric", self.active_border_color == "rgba(06b6d4ff)", SettingsMessage::SetBorderColor("rgba(06b6d4ff)".into())),
-            self.chip_button("🟢 Emerald Green", self.active_border_color == "rgba(10b981ff)", SettingsMessage::SetBorderColor("rgba(10b981ff)".into())),
-            self.chip_button("🟠 Amber Orange", self.active_border_color == "rgba(f97316ff)", SettingsMessage::SetBorderColor("rgba(f97316ff)".into())),
-            self.chip_button("🔴 Rose Pink", self.active_border_color == "rgba(f43f5eff)", SettingsMessage::SetBorderColor("rgba(f43f5eff)".into())),
-        ]
-        .spacing(8);
-
-        // Universal MSUI Tool Styling (Background, Border, Border Off)
-        let is_border_on = self.config.gui.border_enabled && self.config.gui.border_width > 0.0;
-        let border_mode_chips = row![
-            self.chip_button("󰄬 Border On", is_border_on, SettingsMessage::ToggleGuiBorder(true)),
-            self.chip_button("󰅖 Border Off", !is_border_on, SettingsMessage::ToggleGuiBorder(false)),
-        ]
-        .spacing(8);
-
-        let cur_border_color = self.config.gui.border_color.to_lowercase();
-        let msui_border_chips = row![
-            self.chip_button("🟣 Purple Neon (#9333ea)", is_border_on && cur_border_color == "#9333ea", SettingsMessage::SetGuiBorderColor("#9333ea".into())),
-            self.chip_button("🔵 Cyan Electric (#06b6d4)", is_border_on && cur_border_color == "#06b6d4", SettingsMessage::SetGuiBorderColor("#06b6d4".into())),
-            self.chip_button("🟢 Emerald Green (#10b981)", is_border_on && cur_border_color == "#10b981", SettingsMessage::SetGuiBorderColor("#10b981".into())),
-            self.chip_button("🟠 Amber Orange (#f97316)", is_border_on && cur_border_color == "#f97316", SettingsMessage::SetGuiBorderColor("#f97316".into())),
-            self.chip_button("🔴 Rose Pink (#f43f5e)", is_border_on && cur_border_color == "#f43f5e", SettingsMessage::SetGuiBorderColor("#f43f5e".into())),
-            self.chip_button("⚪ Frost White (#ffffff)", is_border_on && cur_border_color == "#ffffff", SettingsMessage::SetGuiBorderColor("#ffffff".into())),
-        ]
-        .spacing(8);
-
-        let bw = self.config.gui.border_width;
-        let border_width_chips = row![
-            self.chip_button("Off (0px)", !is_border_on, SettingsMessage::SetGuiBorderWidth(0.0)),
-            self.chip_button("Subtle (1.0px)", is_border_on && (bw - 1.0).abs() < 0.1, SettingsMessage::SetGuiBorderWidth(1.0)),
-            self.chip_button("Standard (1.5px)", is_border_on && (bw - 1.5).abs() < 0.1, SettingsMessage::SetGuiBorderWidth(1.5)),
-            self.chip_button("Bold (2.5px)", is_border_on && (bw - 2.5).abs() < 0.1, SettingsMessage::SetGuiBorderWidth(2.5)),
-        ]
-        .spacing(8);
-
-        let cur_bg = self.config.gui.background.to_lowercase();
-        let bg_chips = row![
-            self.chip_button("⬛ Obsidian Dark (#121218)", cur_bg == "#121218", SettingsMessage::SetGuiBackground("#121218".into())),
-            self.chip_button("🌌 Midnight Navy (#0f172a)", cur_bg == "#0f172a", SettingsMessage::SetGuiBackground("#0f172a".into())),
-            self.chip_button("🌑 OLED Pure Black (#000000)", cur_bg == "#000000" || cur_bg == "#050508", SettingsMessage::SetGuiBackground("#000000".into())),
-            self.chip_button("☕ Slate Mocha (#1e1e2e)", cur_bg == "#1e1e2e", SettingsMessage::SetGuiBackground("#1e1e2e".into())),
-            self.chip_button("🌊 Tokyo Twilight (#1a1b26)", cur_bg == "#1a1b26", SettingsMessage::SetGuiBackground("#1a1b26".into())),
-        ]
-        .spacing(8);
-
-        let rad = self.config.gui.corner_radius;
-        let radius_chips = row![
-            self.chip_button("Square (0px)", (rad - 0.0).abs() < 0.1, SettingsMessage::SetGuiCornerRadius(0.0)),
-            self.chip_button("Compact (10px)", (rad - 10.0).abs() < 0.1, SettingsMessage::SetGuiCornerRadius(10.0)),
-            self.chip_button("Rounded (18px)", (rad - 18.0).abs() < 0.1, SettingsMessage::SetGuiCornerRadius(18.0)),
-            self.chip_button("Pill (26px)", (rad - 26.0).abs() < 0.1, SettingsMessage::SetGuiCornerRadius(26.0)),
+        let hyprland_card_content = column![
+            text("Active Window Border Accent").size(12).color(Color::from_rgb8(196, 181, 253)),
+            text("Accent outline around the currently focused Hyprland application window")
+                .size(10)
+                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.45)),
+            hypr_border_row_1,
+            hypr_border_row_2,
+            divider(),
+            text("Window Inner & Outer Gaps").size(12).color(Color::from_rgb8(196, 181, 253)),
+            text("Tiling workspace padding between application windows")
+                .size(10)
+                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.45)),
+            gaps_chips,
         ]
         .spacing(8);
 
         let content = column![
             header,
-            self.settings_card("Universal Tool Borders (Master Switch)", "Enable or completely turn off borders across all MSUI tools", border_mode_chips),
-            self.settings_card("Universal Tool Border Accent Color", "Color highlight around all MSUI modal tools and dialogs", msui_border_chips),
-            self.settings_card("Universal Tool Border Thickness", "Stroke width of outer modal borders", border_width_chips),
-            self.settings_card("Universal Tool Background Color", "Dark theme background applied across all MSUI tools", bg_chips),
-            self.settings_card("Universal Tool Corner Radius", "Curvature of modal and overlay windows", radius_chips),
-            self.settings_card("Compositor Effects & Glass", "Hardware-accelerated window aesthetics", toggles),
-            self.settings_card("Hyprland 0.57+ Blur Shaders & Appearance Presets", "Select dual-kawase, acrylic, frost, rain drops, or liquid physics shaders", blur_shaders_card),
-            self.settings_card("Window Inner & Outer Gaps", "Hyprland tiling workspace padding", gaps_chips),
-            self.settings_card("Active Window Border Accent", "Accent highlight around the focused Hyprland window", border_chips),
+            self.settings_card(
+                "Universal MSUI Shell & Tools Appearance",
+                "Theme background, border accents, and geometry across all MSUI tools & Top Bar",
+                msui_shell_card_content
+            ),
+            self.settings_card(
+                "Compositor Effects & Glass Engine",
+                "Hardware-accelerated window aesthetics and Hyprland blur shaders",
+                compositor_card_content
+            ),
+            self.settings_card(
+                "Hyprland Tiling & Active Window Focus",
+                "Active window border highlight and workspace gaps",
+                hyprland_card_content
+            ),
         ]
-        .spacing(12);
+        .spacing(14);
 
         scrollable(content).height(Length::Fill).into()
     }

@@ -386,7 +386,30 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        "-bg" | "--bg" => {
+            if let Some(bg) = args.get(2) {
+                let mut config = MsuiConfig::load_or_default();
+                config.gui.background = bg.to_string();
+                config.save_to_default_path()?;
+                let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
+                println!("✓ MSUI Universal Background set to: {}", bg);
+            } else {
+                let config = MsuiConfig::load_or_default();
+                println!("MSUI Universal Background: {}", config.gui.background);
+            }
+            return Ok(());
+        }
         "bg" | "wallpaper-daemon" => {
+            if let Some(arg2) = args.get(2) {
+                if arg2.starts_with('#') || (arg2.len() == 6 && arg2.chars().all(|c| c.is_ascii_hexdigit())) {
+                    let mut config = MsuiConfig::load_or_default();
+                    config.gui.background = arg2.to_string();
+                    config.save_to_default_path()?;
+                    let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
+                    println!("✓ MSUI Universal Background set to: {}", arg2);
+                    return Ok(());
+                }
+            }
             if IpcClient::send_blocking(&IpcCommand::Ping).is_ok() {
                 println!("msUI unified daemon is already running (native wallpaper engine active).");
                 return Ok(());
@@ -1411,7 +1434,7 @@ fn main() -> anyhow::Result<()> {
                 tracing::error!("msUI Settings Panel exited with error: {:?}", e);
             }
         }
-        "border" => {
+        "-border" | "--border" | "border" => {
             let sub = args.get(2).map(|s| s.as_str());
             let mut config = MsuiConfig::load_or_default();
             match sub {

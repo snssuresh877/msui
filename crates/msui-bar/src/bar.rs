@@ -11,10 +11,10 @@ use iced_wayland_subscriber::OutputId;
 use iced_wayland_subscriber::shell::{ShellEvent, ShellReceiver};
 
 use msui_core::{
-    AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BluetoothInfo, BluetoothManager,
-    BrightnessInfo, BrightnessMonitor, MediaInfo, MediaMonitor, MsuiConfig, NetworkInfo,
-    NetworkMonitor, ReminderItem, ReminderManager, StorageManager, SystemControl, SystemMetrics,
-    SystemMonitor, ThemeManager, TrayItem,
+    parse_hex_color, AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BluetoothInfo,
+    BluetoothManager, BrightnessInfo, BrightnessMonitor, MediaInfo, MediaMonitor, MsuiConfig,
+    NetworkInfo, NetworkMonitor, ReminderItem, ReminderManager, StorageManager, SystemControl,
+    SystemMetrics, SystemMonitor, ThemeManager, TrayItem,
 };
 use std::time::Duration;
 
@@ -1028,16 +1028,30 @@ impl Bar {
         let is_transp = self.config.bar.is_transparent();
         let is_solid = self.config.bar.is_solid();
 
+        // Universal GUI background and border configuration
+        let gui = &self.config.gui;
+        let (r, g, b) = parse_hex_color(&gui.background).unwrap_or((18.0 / 255.0, 18.0 / 255.0, 24.0 / 255.0));
+        let (br_r, br_g, br_b) = parse_hex_color(&gui.border_color).unwrap_or((147.0 / 255.0, 51.0 / 255.0, 234.0 / 255.0));
+        let border_enabled = gui.border_enabled;
+        let border_opacity = gui.border_opacity;
+        let bg_opacity = gui.bg_opacity;
+
         let bar_container = if is_modern {
             let radius = self.config.bar.corner_radius;
-            let b_width = self.config.bar.border_width;
+            let b_width = if border_enabled { self.config.bar.border_width } else { 0.0 };
             container(bar_content)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .style(move |theme: &Theme| {
-                    let p = theme.palette();
+                .style(move |_theme: &Theme| {
                     let mut border = iced::border::rounded(radius);
                     border.width = b_width;
+                    if !border_enabled || b_width == 0.0 {
+                        border.width = 0.0;
+                        border.color = iced::Color::TRANSPARENT;
+                    } else {
+                        border.color = iced::Color::from_rgba(br_r, br_g, br_b, border_opacity);
+                    }
+
                     if is_transp {
                         border.color = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.05);
                         container::Style {
@@ -1046,17 +1060,16 @@ impl Bar {
                             ..Default::default()
                         }
                     } else if is_solid {
-                        border.color = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.12);
                         container::Style {
-                            background: Some(p.background.into()),
+                            background: Some(iced::Color::from_rgba(r, g, b, 0.98).into()),
                             border,
                             ..Default::default()
                         }
                     } else {
-                        // Frosted Glass: Smoked dark acrylic with Wayland GPU hardware blur
-                        border.color = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.12);
+                        // Frosted Glass: Universal GUI background with Wayland GPU hardware blur
+                        let alpha = (bg_opacity * 0.85).clamp(0.50, 0.95);
                         container::Style {
-                            background: Some(iced::Color::from_rgba(12.0 / 255.0, 14.0 / 255.0, 20.0 / 255.0, 0.58).into()),
+                            background: Some(iced::Color::from_rgba(r, g, b, alpha).into()),
                             border,
                             ..Default::default()
                         }
@@ -1066,8 +1079,19 @@ impl Bar {
             container(bar_content)
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .style(move |theme: &Theme| {
-                    let p = theme.palette();
+                .style(move |_theme: &Theme| {
+                    let b_width = if border_enabled { 1.0 } else { 0.0 };
+                    let b_color = if border_enabled {
+                        iced::Color::from_rgba(br_r, br_g, br_b, border_opacity.min(0.25))
+                    } else {
+                        iced::Color::TRANSPARENT
+                    };
+                    let border = iced::Border {
+                        color: b_color,
+                        width: b_width,
+                        radius: 0.0.into(),
+                    };
+
                     if is_transp {
                         container::Style {
                             background: None,
@@ -1075,18 +1099,16 @@ impl Bar {
                         }
                     } else if is_solid {
                         container::Style {
-                            background: Some(p.background.into()),
+                            background: Some(iced::Color::from_rgba(r, g, b, 0.98).into()),
+                            border,
                             ..Default::default()
                         }
                     } else {
-                        // Frosted Glass in classic docked mode: Smoked dark acrylic
+                        // Frosted Glass in classic docked mode
+                        let alpha = (bg_opacity * 0.85).clamp(0.50, 0.95);
                         container::Style {
-                            background: Some(iced::Color::from_rgba(12.0 / 255.0, 14.0 / 255.0, 20.0 / 255.0, 0.58).into()),
-                            border: iced::Border {
-                                color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08),
-                                width: 1.0,
-                                radius: 0.0.into(),
-                            },
+                            background: Some(iced::Color::from_rgba(r, g, b, alpha).into()),
+                            border,
                             ..Default::default()
                         }
                     }
