@@ -138,7 +138,6 @@ pub enum Message {
     OpenWifi,
     OpenBluetooth,
     OpenWallpaper,
-    OpenTheme,
     OpenAudio,
     OpenBattery,
     OpenDisplay,
@@ -581,11 +580,6 @@ impl Bar {
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
                 spawn_detached(std::process::Command::new(bin).arg("wallpaper"));
             }
-            Message::OpenTheme => {
-                let bin = std::env::current_exe()
-                    .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
-                spawn_detached(std::process::Command::new(bin).arg("theme"));
-            }
             Message::OpenAudio => {
                 let bin = std::env::current_exe()
                     .unwrap_or_else(|_| std::path::PathBuf::from("msui"));
@@ -994,15 +988,6 @@ impl Bar {
                 .padding([2, 6])
                 .on_press(Message::OpenWallpaper);
             right_row = right_row.push(wall_btn);
-        }
-
-        // Theme Selector Shortcut
-        if self.config.bar.show_theme {
-            let theme_btn = button(text(" 󰔎 ").size(13))
-                .style(bar_btn_transparent)
-                .padding([2, 6])
-                .on_press(Message::OpenTheme);
-            right_row = right_row.push(theme_btn);
         }
 
         // Reminders & Timers Shortcut

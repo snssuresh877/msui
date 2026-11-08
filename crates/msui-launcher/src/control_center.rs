@@ -137,7 +137,6 @@ pub enum BarModule {
     Battery,
     Bluetooth,
     Wallpaper,
-    Theme,
     RemindersBtn,
     Screenshot,
     Clipboard,
@@ -165,7 +164,6 @@ impl BarModule {
             BarModule::Bluetooth => ("Bluetooth Status", "󰂯", "Bluetooth power state and active devices"),
             BarModule::Media => ("Media Player Widget", "󰝚", "Now Playing music title & play/pause"),
             BarModule::Wallpaper => ("Wallpaper Picker", "󰸉", "Quick wallpaper cycle and selector button"),
-            BarModule::Theme => ("Theme Switcher", "󰔎", "Catppuccin, Nord, Dracula theme picker"),
             BarModule::RemindersBtn => ("Reminders & Timers", "󰥔", "Quick countdown timer manager button"),
             BarModule::Screenshot => ("Screenshot Tool", "󰄀", "One-click screen capture button"),
             BarModule::Clipboard => ("Clipboard History", "󰅍", "Clipboard manager with search"),
@@ -193,7 +191,6 @@ impl BarModule {
             BarModule::Battery => cfg.show_battery,
             BarModule::Bluetooth => cfg.show_bluetooth,
             BarModule::Wallpaper => cfg.show_wallpaper,
-            BarModule::Theme => cfg.show_theme,
             BarModule::RemindersBtn => cfg.show_reminders_btn,
             BarModule::Screenshot => cfg.show_screenshot,
             BarModule::Clipboard => cfg.show_clipboard,
@@ -221,7 +218,6 @@ impl BarModule {
             BarModule::Battery => cfg.show_battery = !cfg.show_battery,
             BarModule::Bluetooth => cfg.show_bluetooth = !cfg.show_bluetooth,
             BarModule::Wallpaper => cfg.show_wallpaper = !cfg.show_wallpaper,
-            BarModule::Theme => cfg.show_theme = !cfg.show_theme,
             BarModule::RemindersBtn => cfg.show_reminders_btn = !cfg.show_reminders_btn,
             BarModule::Screenshot => cfg.show_screenshot = !cfg.show_screenshot,
             BarModule::Clipboard => cfg.show_clipboard = !cfg.show_clipboard,
@@ -411,7 +407,7 @@ impl ControlCenter {
                 b.show_battery = true;
                 b.show_bluetooth = true;
                 b.show_wallpaper = true;
-                b.show_theme = true;
+                b.show_theme = false;
                 b.show_reminders_btn = true;
                 b.show_screenshot = true;
                 b.show_clipboard = true;

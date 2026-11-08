@@ -74,7 +74,7 @@ pub struct BarConfig {
     pub show_bluetooth: bool,
     #[serde(default = "default_true")]
     pub show_wallpaper: bool,
-    #[serde(default = "default_true")]
+    #[serde(default = "default_false")]
     pub show_theme: bool,
     #[serde(default = "default_true")]
     pub show_reminders_btn: bool,
@@ -324,7 +324,7 @@ impl Default for BarConfig {
             show_battery: true,
             show_bluetooth: true,
             show_wallpaper: true,
-            show_theme: true,
+            show_theme: false,
             show_reminders_btn: true,
             show_screenshot: true,
             show_clipboard: true,

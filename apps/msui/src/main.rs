@@ -421,19 +421,22 @@ fn main() -> anyhow::Result<()> {
         }
         "theme" | "themes" => {
             if let Some(name) = args.get(2) {
-                if ThemeManager::set_theme(name) {
+                if msui_core::ColorPreset::find(name).is_some() {
+                    let _ = msui_core::ColorEngine::apply_preset(name, msui_core::ColorSchemeMode::Dark);
+                    println!("Applied '{}' theme preset via Adaptive Color Engine", name);
+                } else if ThemeManager::set_theme(name) {
                     println!("Theme switched to: {}", name);
                 } else {
                     eprintln!("Failed to set theme: {}", name);
                     std::process::exit(1);
                 }
             } else {
-                if try_ipc_toggle("theme") {
+                if try_ipc_toggle("settings") {
                     return Ok(());
                 }
-                tracing::info!("Starting msUI Theme Selector...");
-                if let Err(e) = msui_launcher::run_theme_menu() {
-                    tracing::error!("msUI Theme Menu exited with error: {:?}", e);
+                let config = MsuiConfig::load_or_default();
+                if let Err(e) = msui_launcher::run_settings_panel(config) {
+                    tracing::error!("msUI Settings Panel exited with error: {:?}", e);
                 }
             }
         }

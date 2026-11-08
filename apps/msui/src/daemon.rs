@@ -866,7 +866,6 @@ impl UnifiedShell {
                     BarMessage::OpenWifi => return self.toggle_modal("wifi"),
                     BarMessage::OpenBluetooth => return self.toggle_modal("bluetooth"),
                     BarMessage::OpenAudio => return self.toggle_modal("audio"),
-                    BarMessage::OpenTheme => return self.toggle_modal("theme"),
                     BarMessage::OpenWallpaper => return self.toggle_modal("wallpaper"),
                     BarMessage::OpenBattery => return self.toggle_modal("battery"),
                     BarMessage::OpenDisplay => return self.toggle_modal("display"),
