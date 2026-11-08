@@ -119,6 +119,7 @@ pub enum SettingsMessage {
     SetDockPosition(String),
     SetDockSize(u32),
     SetWeatherUnit(String),
+    SetNotificationTimeout(u32),
     Tick,
     Close,
     Ignored,
@@ -779,7 +780,14 @@ impl SettingsPanel {
                 self.status_feedback = Some(format!("Dock size set to {} px", size));
             }
             SettingsMessage::SetWeatherUnit(unit) => {
+                self.config.gui.weather_unit = unit.clone();
+                let _ = self.config.save_to_default_path();
                 self.status_feedback = Some(format!("Weather unit set to {}", unit));
+            }
+            SettingsMessage::SetNotificationTimeout(secs) => {
+                self.config.notification.timeout_seconds = secs;
+                let _ = self.config.save_to_default_path();
+                self.status_feedback = Some(format!("Notification timeout set to {}s", secs));
             }
             SettingsMessage::Tick => {
                 let should_refresh = self
@@ -1389,22 +1397,34 @@ impl SettingsPanel {
         let is_muted = self.audio_info.is_muted;
         let btn_text = self.text_primary();
 
+        let is_light = self.is_light_theme();
+        let step_bg = if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.06) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.08) };
+        let step_border = if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.12) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.08) };
+
         let vol_display = row![
             text(format!("{}%", vol)).size(24).color(btn_text),
             space().width(Length::Fixed(16.0)),
             button(text("− 5%").size(12).color(btn_text))
                 .padding([6, 12])
-                .style(|_t: &Theme, _s| iced::widget::button::Style {
-                    background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()),
-                    border: Border { radius: 8.0.into(), ..Default::default() },
+                .style(move |_t: &Theme, _s| iced::widget::button::Style {
+                    background: Some(step_bg.into()),
+                    border: Border {
+                        color: step_border,
+                        width: 1.0,
+                        radius: 8.0.into(),
+                    },
                     ..Default::default()
                 })
                 .on_press(SettingsMessage::StepVolume(-5)),
             button(text("+ 5%").size(12).color(btn_text))
                 .padding([6, 12])
-                .style(|_t: &Theme, _s| iced::widget::button::Style {
-                    background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()),
-                    border: Border { radius: 8.0.into(), ..Default::default() },
+                .style(move |_t: &Theme, _s| iced::widget::button::Style {
+                    background: Some(step_bg.into()),
+                    border: Border {
+                        color: step_border,
+                        width: 1.0,
+                        radius: 8.0.into(),
+                    },
                     ..Default::default()
                 })
                 .on_press(SettingsMessage::StepVolume(5)),
@@ -1777,9 +1797,10 @@ impl SettingsPanel {
             "System overview cards, weather forecast, and desktop utilities",
         );
 
+        let is_celsius = self.config.gui.weather_unit != "fahrenheit";
         let unit_chips = row![
-            self.chip_button("Celsius (°C)", true, SettingsMessage::SetWeatherUnit("celsius".into())),
-            self.chip_button("Fahrenheit (°F)", false, SettingsMessage::SetWeatherUnit("fahrenheit".into())),
+            self.chip_button("Celsius (°C)", is_celsius, SettingsMessage::SetWeatherUnit("celsius".into())),
+            self.chip_button("Fahrenheit (°F)", !is_celsius, SettingsMessage::SetWeatherUnit("fahrenheit".into())),
         ]
         .spacing(8);
 
@@ -2094,10 +2115,11 @@ impl SettingsPanel {
             SettingsMessage::ToggleDnd,
         );
 
+        let cur_timeout = self.config.notification.timeout_seconds;
         let timeout_chips = row![
-            self.chip_button("3 Seconds", false, SettingsMessage::Ignored),
-            self.chip_button("5 Seconds (Default)", true, SettingsMessage::Ignored),
-            self.chip_button("8 Seconds", false, SettingsMessage::Ignored),
+            self.chip_button("3 Seconds", cur_timeout == 3, SettingsMessage::SetNotificationTimeout(3)),
+            self.chip_button("5 Seconds (Default)", cur_timeout == 5, SettingsMessage::SetNotificationTimeout(5)),
+            self.chip_button("8 Seconds", cur_timeout == 8, SettingsMessage::SetNotificationTimeout(8)),
         ]
         .spacing(8);
 
@@ -2133,7 +2155,7 @@ impl SettingsPanel {
 
         let prof_details = column![
             prof_chips,
-            text(prof_info).size(11).color(Color::from_rgba(1.0, 1.0, 1.0, 0.55)),
+            text(prof_info).size(11).color(self.text_muted()),
         ]
         .spacing(8);
 
@@ -2163,7 +2185,7 @@ impl SettingsPanel {
                 adaptive_toggle,
                 text("Automatically scales between Balanced and Whisper-Efficient mode based on AC connection and workload. Manual profile switching is not required.")
                     .size(11)
-                    .color(Color::from_rgba(1.0, 1.0, 1.0, 0.55)),
+                    .color(self.text_muted()),
             ]
             .spacing(8),
         );
@@ -2191,7 +2213,7 @@ impl SettingsPanel {
 
             let mode_details = column![
                 mode_chips,
-                text(mode_desc).size(11).color(Color::from_rgba(1.0, 1.0, 1.0, 0.55)),
+                text(mode_desc).size(11).color(self.text_muted()),
             ]
             .spacing(8);
 
@@ -2224,6 +2246,12 @@ impl SettingsPanel {
             "Audio output switch",
         ];
 
+        let is_light = self.is_light_theme();
+        let unsel_text = self.text_primary();
+        let slot_bg = if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.12) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.15) };
+        let mockup_bg = if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.04) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.04) };
+        let mockup_border = if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.12) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.10) };
+
         let mut chip_buttons: Vec<Element<'_, SettingsMessage>> = Vec::new();
         for (i, tag) in pos_tags.iter().enumerate() {
             let is_sel = self.osd_pos_selected == i;
@@ -2233,7 +2261,7 @@ impl SettingsPanel {
                     text(*tag).size(11).color(if is_sel {
                         Color::WHITE
                     } else {
-                        Color::from_rgba(1.0, 1.0, 1.0, 0.80)
+                        unsel_text
                     })
                 ]
                 .align_y(Alignment::Center),
@@ -2252,14 +2280,28 @@ impl SettingsPanel {
                 } else {
                     let bg = match status {
                         iced::widget::button::Status::Hovered => {
-                            Color::from_rgba(1.0, 1.0, 1.0, 0.10)
+                            if is_light {
+                                Color::from_rgba(0.0, 0.0, 0.0, 0.08)
+                            } else {
+                                Color::from_rgba(1.0, 1.0, 1.0, 0.10)
+                            }
                         }
-                        _ => Color::from_rgba(1.0, 1.0, 1.0, 0.05),
+                        _ => {
+                            if is_light {
+                                Color::from_rgba(0.0, 0.0, 0.0, 0.04)
+                            } else {
+                                Color::from_rgba(1.0, 1.0, 1.0, 0.05)
+                            }
+                        }
                     };
                     iced::widget::button::Style {
                         background: Some(bg.into()),
                         border: Border {
-                            color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                            color: if is_light {
+                                Color::from_rgba(0.0, 0.0, 0.0, 0.12)
+                            } else {
+                                Color::from_rgba(1.0, 1.0, 1.0, 0.08)
+                            },
                             width: 1.0,
                             radius: 8.0.into(),
                         },
@@ -2289,22 +2331,22 @@ impl SettingsPanel {
                 // Top slots
                 row![
                     container(space().width(Length::Fixed(40.0)).height(Length::Fixed(12.0)))
-                        .style(|_t| container::Style {
-                            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.15).into()),
+                        .style(move |_t| container::Style {
+                            background: Some(slot_bg.into()),
                             border: Border { radius: 4.0.into(), ..Default::default() },
                             ..Default::default()
                         }),
                     space().width(Length::Fill),
                     container(space().width(Length::Fixed(40.0)).height(Length::Fixed(12.0)))
-                        .style(|_t| container::Style {
-                            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.15).into()),
+                        .style(move |_t| container::Style {
+                            background: Some(slot_bg.into()),
                             border: Border { radius: 4.0.into(), ..Default::default() },
                             ..Default::default()
                         }),
                     space().width(Length::Fill),
                     container(space().width(Length::Fixed(40.0)).height(Length::Fixed(12.0)))
-                        .style(|_t| container::Style {
-                            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.15).into()),
+                        .style(move |_t| container::Style {
+                            background: Some(slot_bg.into()),
                             border: Border { radius: 4.0.into(), ..Default::default() },
                             ..Default::default()
                         }),
@@ -2314,8 +2356,8 @@ impl SettingsPanel {
                 // Bottom slots with Purple Highlight Pill in center!
                 row![
                     container(space().width(Length::Fixed(40.0)).height(Length::Fixed(12.0)))
-                        .style(|_t| container::Style {
-                            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.15).into()),
+                        .style(move |_t| container::Style {
+                            background: Some(slot_bg.into()),
                             border: Border { radius: 4.0.into(), ..Default::default() },
                             ..Default::default()
                         }),
@@ -2329,8 +2371,8 @@ impl SettingsPanel {
                         }),
                     space().width(Length::Fill),
                     container(space().width(Length::Fixed(40.0)).height(Length::Fixed(12.0)))
-                        .style(|_t| container::Style {
-                            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.15).into()),
+                        .style(move |_t| container::Style {
+                            background: Some(slot_bg.into()),
                             border: Border { radius: 4.0.into(), ..Default::default() },
                             ..Default::default()
                         }),
@@ -2341,10 +2383,10 @@ impl SettingsPanel {
         )
         .width(Length::Fixed(240.0))
         .height(Length::Fixed(110.0))
-        .style(|_t| container::Style {
-            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.04).into()),
+        .style(move |_t| container::Style {
+            background: Some(mockup_bg.into()),
             border: Border {
-                color: Color::from_rgba(1.0, 1.0, 1.0, 0.10),
+                color: mockup_border,
                 width: 1.5,
                 radius: 12.0.into(),
             },

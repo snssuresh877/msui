@@ -133,6 +133,13 @@ impl NotificationStore {
         let id = self.next_id;
         self.next_id = self.next_id.wrapping_add(1).max(1);
 
+        let timeout_ms = if expire_timeout_ms <= 0 {
+            let s = crate::config::MsuiConfig::load_or_default().notification.timeout_seconds;
+            if s == 0 { 5000 } else { (s * 1000) as i32 }
+        } else {
+            expire_timeout_ms
+        };
+
         let notif = Notification {
             id,
             app_name,
@@ -140,7 +147,7 @@ impl NotificationStore {
             summary,
             body,
             actions,
-            expire_timeout_ms: if expire_timeout_ms <= 0 { 5000 } else { expire_timeout_ms },
+            expire_timeout_ms: timeout_ms,
             timestamp: Local::now().format("%I:%M %p").to_string(),
             unread: true,
         };

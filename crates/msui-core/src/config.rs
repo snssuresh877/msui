@@ -14,6 +14,8 @@ pub struct MsuiConfig {
     pub gui: GuiConfig,
     #[serde(default)]
     pub color: ColorConfig,
+    #[serde(default)]
+    pub notification: NotificationConfig,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -216,6 +218,9 @@ pub struct GuiConfig {
     /// Window animation speed preset: "fast", "default", "smooth" (default: "default")
     #[serde(default = "default_gui_animation_speed")]
     pub animation_speed: String,
+    /// Weather temperature unit: "celsius" or "fahrenheit" (default: "celsius")
+    #[serde(default = "default_gui_weather_unit")]
+    pub weather_unit: String,
 }
 
 fn default_gui_background() -> String { "#121218".into() }
@@ -227,6 +232,7 @@ fn default_gui_corner_radius() -> f32 { 18.0 }
 fn default_gui_subcard_opacity() -> f32 { 0.05 }
 fn default_gui_font_family() -> String { "JetBrainsMono Nerd Font".into() }
 fn default_gui_animation_speed() -> String { "default".into() }
+fn default_gui_weather_unit() -> String { "celsius".into() }
 
 impl Default for GuiConfig {
     fn default() -> Self {
@@ -242,6 +248,24 @@ impl Default for GuiConfig {
             subcard_border_enabled: true,
             font_family: default_gui_font_family(),
             animation_speed: default_gui_animation_speed(),
+            weather_unit: default_gui_weather_unit(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NotificationConfig {
+    /// Notification banner auto-dismiss timeout in seconds (default: 5)
+    #[serde(default = "default_notif_timeout")]
+    pub timeout_seconds: u32,
+}
+
+fn default_notif_timeout() -> u32 { 5 }
+
+impl Default for NotificationConfig {
+    fn default() -> Self {
+        Self {
+            timeout_seconds: default_notif_timeout(),
         }
     }
 }
@@ -299,6 +323,7 @@ impl Default for MsuiConfig {
             power: PowerConfig::default(),
             gui: GuiConfig::default(),
             color: ColorConfig::default(),
+            notification: NotificationConfig::default(),
         }
     }
 }
