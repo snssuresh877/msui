@@ -1,6 +1,6 @@
 //! Desktop theme template exporter for Hyprland, Waybar, terminals, GTK, and MSUI.
 
-use super::semantic::SemanticTokens;
+use super::semantic::{ColorSchemeMode, SemanticTokens};
 use crate::config::MsuiConfig;
 use crate::ipc::{IpcClient, IpcCommand};
 use std::fs;
@@ -167,10 +167,17 @@ impl ThemeExporter {
         let mut cfg = MsuiConfig::load_or_default();
         cfg.gui.background = tokens.background.clone();
         cfg.gui.border_color = tokens.primary.clone();
+        cfg.color.scheme = match tokens.mode {
+            ColorSchemeMode::Light => "light".to_string(),
+            ColorSchemeMode::Dark => "dark".to_string(),
+        };
         let _ = cfg.save_to_default_path();
 
-        // Notify daemon via IPC ReloadConfig
-        let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
+        // Notify daemon asynchronously via IPC ReloadConfig in a background thread
+        // to avoid nested runtime panics or UI thread blocking
+        std::thread::spawn(move || {
+            let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
+        });
         Ok(())
     }
 }

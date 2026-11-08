@@ -482,31 +482,45 @@ impl SettingsPanel {
             }
             SettingsMessage::ColorExtractWallpaper => {
                 if let Some(cur) = WallpaperManager::get_current() {
-                    let mode = if self.config.color.scheme == "light" {
+                    let mode = if self.is_light_theme() {
                         ColorSchemeMode::Light
                     } else {
                         ColorSchemeMode::Dark
                     };
-                    if let Ok(tokens) = ColorEngine::apply_wallpaper(&cur, mode) {
-                        self.config.color.mode = "dynamic".to_string();
-                        self.config.gui.background = tokens.background.clone();
-                        self.config.gui.border_color = tokens.primary.clone();
-                        let _ = self.config.save_to_default_path();
+                    match ColorEngine::apply_wallpaper(&cur, mode) {
+                        Ok(tokens) => {
+                            self.config.color.mode = "dynamic".to_string();
+                            self.config.gui.background = tokens.background.clone();
+                            self.config.gui.border_color = tokens.primary.clone();
+                            let _ = self.config.save_to_default_path();
+                            self.status_feedback = Some("✓ Extracted adaptive Material 3 theme from wallpaper".to_string());
+                        }
+                        Err(e) => {
+                            self.status_feedback = Some(format!("Extraction error: {}", e));
+                        }
                     }
+                } else {
+                    self.status_feedback = Some("No wallpaper found in ~/Pictures/Wallpapers".to_string());
                 }
             }
             SettingsMessage::ColorSetPreset(preset_id) => {
-                let mode = if self.config.color.scheme == "light" {
+                let mode = if self.is_light_theme() {
                     ColorSchemeMode::Light
                 } else {
                     ColorSchemeMode::Dark
                 };
-                if let Ok(tokens) = ColorEngine::apply_preset(&preset_id, mode) {
-                    self.config.color.mode = "preset".to_string();
-                    self.config.color.active_preset = preset_id;
-                    self.config.gui.background = tokens.background.clone();
-                    self.config.gui.border_color = tokens.primary.clone();
-                    let _ = self.config.save_to_default_path();
+                match ColorEngine::apply_preset(&preset_id, mode) {
+                    Ok(tokens) => {
+                        self.config.color.mode = "preset".to_string();
+                        self.config.color.active_preset = preset_id.clone();
+                        self.config.gui.background = tokens.background.clone();
+                        self.config.gui.border_color = tokens.primary.clone();
+                        let _ = self.config.save_to_default_path();
+                        self.status_feedback = Some(format!("✓ Applied '{}' color preset", preset_id));
+                    }
+                    Err(e) => {
+                        self.status_feedback = Some(format!("Preset error: {}", e));
+                    }
                 }
             }
             SettingsMessage::ColorSetMode(mode) => {
@@ -522,42 +536,57 @@ impl SettingsPanel {
                 self.config.gui.background = new_tokens.background.clone();
                 self.config.gui.border_color = new_tokens.primary.clone();
                 let _ = self.config.save_to_default_path();
+                self.status_feedback = Some(format!("✓ Switched mode to {:?}", mode));
             }
             SettingsMessage::ColorSetAccent(hex) => {
-                let mode = if self.config.color.scheme == "light" {
+                let mode = if self.is_light_theme() {
                     ColorSchemeMode::Light
                 } else {
                     ColorSchemeMode::Dark
                 };
-                if let Ok(tokens) = ColorEngine::apply_accent(&hex, mode) {
-                    self.config.color.mode = "accent".to_string();
-                    self.config.color.accent_override = hex.clone();
-                    self.config.gui.background = tokens.background.clone();
-                    self.config.gui.border_color = tokens.primary.clone();
-                    let _ = self.config.save_to_default_path();
+                match ColorEngine::apply_accent(&hex, mode) {
+                    Ok(tokens) => {
+                        self.config.color.mode = "accent".to_string();
+                        self.config.color.accent_override = hex.clone();
+                        self.config.gui.background = tokens.background.clone();
+                        self.config.gui.border_color = tokens.primary.clone();
+                        let _ = self.config.save_to_default_path();
+                        self.status_feedback = Some(format!("✓ Applied custom accent {}", hex));
+                    }
+                    Err(e) => {
+                        self.status_feedback = Some(format!("Accent error: {}", e));
+                    }
                 }
             }
             SettingsMessage::WallpaperNext => {
                 if let Some(next) = WallpaperManager::cycle() {
                     if self.config.color.mode == "dynamic" {
-                        let mode = if self.config.color.scheme == "light" {
+                        let mode = if self.is_light_theme() {
                             ColorSchemeMode::Light
                         } else {
                             ColorSchemeMode::Dark
                         };
-                        let _ = ColorEngine::apply_wallpaper(&next, mode);
+                        if let Ok(tokens) = ColorEngine::apply_wallpaper(&next, mode) {
+                            self.config.gui.background = tokens.background.clone();
+                            self.config.gui.border_color = tokens.primary.clone();
+                            let _ = self.config.save_to_default_path();
+                        }
                     }
                 }
             }
             SettingsMessage::WallpaperRandom => {
                 if let Some(next) = WallpaperManager::random() {
                     if self.config.color.mode == "dynamic" {
-                        let mode = if self.config.color.scheme == "light" {
+                        let mode = if self.is_light_theme() {
                             ColorSchemeMode::Light
                         } else {
                             ColorSchemeMode::Dark
                         };
-                        let _ = ColorEngine::apply_wallpaper(&next, mode);
+                        if let Ok(tokens) = ColorEngine::apply_wallpaper(&next, mode) {
+                            self.config.gui.background = tokens.background.clone();
+                            self.config.gui.border_color = tokens.primary.clone();
+                            let _ = self.config.save_to_default_path();
+                        }
                     }
                 }
             }
@@ -764,17 +793,53 @@ impl SettingsPanel {
         Command::none()
     }
 
+    pub fn is_light_theme(&self) -> bool {
+        if self.config.color.scheme == "light" {
+            return true;
+        }
+        msui_core::parse_hex_color(&self.config.gui.background)
+            .map_or(false, |(r, g, b)| (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.45)
+    }
+
+    pub fn text_primary(&self) -> Color {
+        if self.is_light_theme() {
+            Color::from_rgb(0.12, 0.12, 0.18)
+        } else {
+            Color::WHITE
+        }
+    }
+
+    pub fn text_muted(&self) -> Color {
+        if self.is_light_theme() {
+            Color::from_rgba(0.12, 0.12, 0.18, 0.55)
+        } else {
+            Color::from_rgba(1.0, 1.0, 1.0, 0.45)
+        }
+    }
+
+    fn tab_header<'a>(&self, title: &'static str, subtitle: &'static str) -> Element<'a, SettingsMessage> {
+        column![
+            text(title).size(19).color(self.text_primary()),
+            text(subtitle).size(11).color(self.text_muted()),
+        ]
+        .spacing(4)
+        .into()
+    }
+
     pub fn view(&self) -> Element<'_, SettingsMessage> {
+        let is_light = self.is_light_theme();
+        let title_col = if is_light { Color::from_rgb(0.12, 0.12, 0.18) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.90) };
+        let close_col = if is_light { Color::from_rgba(0.12, 0.12, 0.18, 0.70) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.70) };
         let title_bar = row![
             space().width(Length::Fixed(40.0)),
             container(
                 text("Settings")
                     .size(15)
-                    .color(Color::from_rgba(1.0, 1.0, 1.0, 0.90))
+                    .color(title_col)
             )
             .width(Length::Fill)
             .align_x(iced::alignment::Horizontal::Center),
-            button(text("✕").size(14).color(Color::from_rgba(1.0, 1.0, 1.0, 0.70)))
+            button(text("✕").size(14).color(close_col))
                 .padding([4, 10])
                 .style(|_t, status| {
                     let bg = match status {
@@ -817,25 +882,26 @@ impl SettingsPanel {
     }
 
     fn view_sidebar(&self) -> Element<'_, SettingsMessage> {
+        let is_light = self.is_light_theme();
         let search_box = container(
             row![
-                text("🔍").size(13).color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+                text("🔍").size(13).color(if is_light { Color::from_rgba(0.12, 0.12, 0.18, 0.50) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.50) }),
                 text_input("Search settings", &self.search_query)
                     .size(13)
                     .on_input(SettingsMessage::SearchChanged)
-                    .style(|_t, _s| text_input::Style {
+                    .style(move |_t, _s| text_input::Style {
                         background: Color::TRANSPARENT.into(),
                         border: Border::default(),
                         icon: Color::TRANSPARENT,
-                        placeholder: Color::from_rgba(1.0, 1.0, 1.0, 0.40),
-                        value: Color::WHITE,
+                        placeholder: if is_light { Color::from_rgba(0.12, 0.12, 0.18, 0.40) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.40) },
+                        value: if is_light { Color::from_rgb(0.12, 0.12, 0.18) } else { Color::WHITE },
                         selection: Color::from_rgb8(139, 92, 246),
                     })
                     .width(Length::Fill),
-                container(text("").size(15).color(Color::WHITE))
+                container(text("").size(15).color(if is_light { Color::from_rgb(0.12, 0.12, 0.18) } else { Color::WHITE }))
                     .padding([2, 6])
-                    .style(|_t| container::Style {
-                        background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.12).into()),
+                    .style(move |_t| container::Style {
+                        background: Some(if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.06).into() } else { Color::from_rgba(1.0, 1.0, 1.0, 0.12).into() }),
                         border: Border {
                             radius: 12.0.into(),
                             ..Default::default()
@@ -847,10 +913,10 @@ impl SettingsPanel {
             .align_y(Alignment::Center),
         )
         .padding([6, 10])
-        .style(|_t| container::Style {
-            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.05).into()),
+        .style(move |_t| container::Style {
+            background: Some(if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.04).into() } else { Color::from_rgba(1.0, 1.0, 1.0, 0.05).into() }),
             border: Border {
-                color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                color: if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.08) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.08) },
                 width: 1.0,
                 radius: 12.0.into(),
             },
@@ -997,12 +1063,23 @@ impl SettingsPanel {
         subtitle: &'static str,
     ) -> Element<'_, SettingsMessage> {
         let is_selected = self.active_tab == tab;
+        let is_light = self.is_light_theme();
 
-        let icon_box = container(text(icon).size(16).color(Color::WHITE))
+        let icon_col = if is_selected {
+            Color::WHITE
+        } else if is_light {
+            Color::from_rgba(0.12, 0.12, 0.18, 0.90)
+        } else {
+            Color::WHITE
+        };
+
+        let icon_box = container(text(icon).size(16).color(icon_col))
             .padding([6, 8])
             .style(move |_t| container::Style {
                 background: Some(if is_selected {
                     Color::from_rgba(1.0, 1.0, 1.0, 0.20).into()
+                } else if is_light {
+                    Color::from_rgba(0.0, 0.0, 0.0, 0.05).into()
                 } else {
                     Color::from_rgba(1.0, 1.0, 1.0, 0.06).into()
                 }),
@@ -1013,19 +1090,27 @@ impl SettingsPanel {
                 ..Default::default()
             });
 
+        let title_col = if is_selected {
+            Color::WHITE
+        } else if is_light {
+            Color::from_rgba(0.12, 0.12, 0.18, 0.90)
+        } else {
+            Color::from_rgba(1.0, 1.0, 1.0, 0.88)
+        };
+
+        let sub_col = if is_selected {
+            Color::from_rgba(1.0, 1.0, 1.0, 0.70)
+        } else if is_light {
+            Color::from_rgba(0.12, 0.12, 0.18, 0.55)
+        } else {
+            Color::from_rgba(1.0, 1.0, 1.0, 0.45)
+        };
+
         let labels = column![
             text(title)
                 .size(13)
-                .color(if is_selected {
-                    Color::WHITE
-                } else {
-                    Color::from_rgba(1.0, 1.0, 1.0, 0.88)
-                }),
-            text(subtitle).size(10).color(if is_selected {
-                Color::from_rgba(1.0, 1.0, 1.0, 0.70)
-            } else {
-                Color::from_rgba(1.0, 1.0, 1.0, 0.45)
-            }),
+                .color(title_col),
+            text(subtitle).size(10).color(sub_col),
         ]
         .spacing(2);
 
@@ -1050,10 +1135,18 @@ impl SettingsPanel {
                 } else {
                     let bg = match status {
                         iced::widget::button::Status::Hovered => {
-                            Color::from_rgba(1.0, 1.0, 1.0, 0.08)
+                            if is_light {
+                                Color::from_rgba(0.0, 0.0, 0.0, 0.06)
+                            } else {
+                                Color::from_rgba(1.0, 1.0, 1.0, 0.08)
+                            }
                         }
                         iced::widget::button::Status::Pressed => {
-                            Color::from_rgba(1.0, 1.0, 1.0, 0.12)
+                            if is_light {
+                                Color::from_rgba(0.0, 0.0, 0.0, 0.10)
+                            } else {
+                                Color::from_rgba(1.0, 1.0, 1.0, 0.12)
+                            }
                         }
                         _ => Color::TRANSPARENT,
                     };
@@ -1088,10 +1181,19 @@ impl SettingsPanel {
             SettingsTab::Audio => self.view_audio_tab(),
         };
 
-        let container_style = |_t: &Theme| container::Style {
-            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.02).into()),
+        let is_light = self.is_light_theme();
+        let container_style = move |_t: &Theme| container::Style {
+            background: Some(if is_light {
+                Color::from_rgba(0.0, 0.0, 0.0, 0.02).into()
+            } else {
+                Color::from_rgba(1.0, 1.0, 1.0, 0.02).into()
+            }),
             border: Border {
-                color: Color::from_rgba(1.0, 1.0, 1.0, 0.05),
+                color: if is_light {
+                    Color::from_rgba(0.0, 0.0, 0.0, 0.06)
+                } else {
+                    Color::from_rgba(1.0, 1.0, 1.0, 0.05)
+                },
                 width: 1.0,
                 radius: 14.0.into(),
             },
@@ -1108,13 +1210,10 @@ impl SettingsPanel {
 
     /// Top Bar Layout Tab
     fn view_bar_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("Top Bar Layout & Styling").size(19).color(Color::WHITE),
-            text("Configure anchor position, floating island margins, height, and visual transparency")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
+        let header = self.tab_header(
+            "Top Bar Layout & Styling",
+            "Configure anchor position, floating island margins, height, and visual transparency",
+        );
 
         // Position: Top or Bottom
         let is_top = self.config.bar.anchor.to_lowercase() != "bottom";
@@ -1181,13 +1280,10 @@ impl SettingsPanel {
 
     /// Bar Widgets Tab
     fn view_bar_widgets_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("Bar Widgets & Modules").size(19).color(Color::WHITE),
-            text("Select active modules in the status bar and configure workspace indicator counts")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
+        let header = self.tab_header(
+            "Bar Widgets & Modules",
+            "Select active modules in the status bar and configure workspace indicator counts",
+        );
 
         let cur_count = self.config.bar.workspace_count;
         let ws_chips = row![
@@ -1232,13 +1328,10 @@ impl SettingsPanel {
 
     /// Application Launcher Tab
     fn view_launcher_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("Application Launcher").size(19).color(Color::WHITE),
-            text("Window dimensions, search density, and default terminal emulator")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
+        let header = self.tab_header(
+            "Application Launcher",
+            "Window dimensions, search density, and default terminal emulator",
+        );
 
         let (w, h) = (self.config.launcher.width, self.config.launcher.height);
         let dim_chips = row![
@@ -1279,21 +1372,19 @@ impl SettingsPanel {
 
     /// Audio & Sound Tab
     fn view_audio_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("Audio & Sound").size(19).color(Color::WHITE),
-            text("Master volume, mute controls, and audio device management")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
+        let header = self.tab_header(
+            "Audio & Sound",
+            "Master volume, mute controls, and audio device management",
+        );
 
         let vol = self.audio_info.volume_percent;
         let is_muted = self.audio_info.is_muted;
+        let btn_text = self.text_primary();
 
         let vol_display = row![
-            text(format!("{}%", vol)).size(24).color(Color::WHITE),
+            text(format!("{}%", vol)).size(24).color(btn_text),
             space().width(Length::Fixed(16.0)),
-            button(text("− 5%").size(12).color(Color::WHITE))
+            button(text("− 5%").size(12).color(btn_text))
                 .padding([6, 12])
                 .style(|_t: &Theme, _s| iced::widget::button::Style {
                     background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()),
@@ -1301,7 +1392,7 @@ impl SettingsPanel {
                     ..Default::default()
                 })
                 .on_press(SettingsMessage::StepVolume(-5)),
-            button(text("+ 5%").size(12).color(Color::WHITE))
+            button(text("+ 5%").size(12).color(btn_text))
                 .padding([6, 12])
                 .style(|_t: &Theme, _s| iced::widget::button::Style {
                     background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.08).into()),
@@ -1343,13 +1434,10 @@ impl SettingsPanel {
 
     /// Interface Style Tab
     fn view_interface_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("Interface & Visual Style").size(19).color(Color::WHITE),
-            text("Universal appearance for all MSUI tools, top bar background, and Hyprland window aesthetics")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
+        let header = self.tab_header(
+            "Interface & Visual Style",
+            "Universal appearance for all MSUI tools, top bar background, and Hyprland window aesthetics",
+        );
 
         // --- SECTION 1: Universal MSUI Shell & Tools Appearance ---
         let cur_bg = self.config.gui.background.to_lowercase();
@@ -1612,13 +1700,10 @@ impl SettingsPanel {
 
     /// Fonts & Motion Tab
     fn view_fonts_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("Fonts & motion").size(19).color(Color::WHITE),
-            text("System typography, UI scale factor, and window animation timing")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
+        let header = self.tab_header(
+            "Fonts & motion",
+            "System typography, UI scale factor, and window animation timing",
+        );
 
         let anim_chips = row![
             self.chip_button("Snappy (0.15s)", false, SettingsMessage::SetAnimationSpeed("fast")),
@@ -1646,13 +1731,10 @@ impl SettingsPanel {
 
     /// Dock Tab
     fn view_dock_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("Dock & Quick Launch").size(19).color(Color::WHITE),
-            text("Position, pinned application icons, and auto-hide behaviors")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
+        let header = self.tab_header(
+            "Dock & Quick Launch",
+            "Position, pinned application icons, and auto-hide behaviors",
+        );
 
         let pos_chips = row![
             self.chip_button("Bottom (Default)", true, SettingsMessage::SetDockPosition("bottom".into())),
@@ -1680,13 +1762,10 @@ impl SettingsPanel {
 
     /// Dashboard Tab
     fn view_dashboard_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("Dashboard & Widgets").size(19).color(Color::WHITE),
-            text("System overview cards, weather forecast, and desktop utilities")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
+        let header = self.tab_header(
+            "Dashboard & Widgets",
+            "System overview cards, weather forecast, and desktop utilities",
+        );
 
         let unit_chips = row![
             self.chip_button("Celsius (°C)", true, SettingsMessage::SetWeatherUnit("celsius".into())),
@@ -1705,16 +1784,14 @@ impl SettingsPanel {
 
     /// Adaptive Color Engine & Wallpaper Tab
     fn view_wallpaper_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("Adaptive Color Engine & Wallpaper").size(19).color(Color::WHITE),
-            text("Material Design 3 HCT dynamic palettes, wallpaper extraction, and cross-desktop styling")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
+        let is_light = self.is_light_theme();
+
+        let header = self.tab_header(
+            "Adaptive Color Engine & Wallpaper",
+            "Material Design 3 HCT dynamic palettes, wallpaper extraction, and cross-desktop styling",
+        );
 
         let tokens = ColorEngine::current_tokens();
-        let is_light = self.config.color.scheme == "light";
         let color_mode = &self.config.color.mode;
 
         let parse_color = |hex: &str| -> Color {
@@ -1764,7 +1841,7 @@ impl SettingsPanel {
         .on_press(SettingsMessage::ColorExtractWallpaper);
 
         // Swatches preview
-        let swatch_box = |label: &'static str, hex: &str| -> Element<'_, SettingsMessage> {
+        let swatch_box = move |label: &'static str, hex: &str| -> Element<'_, SettingsMessage> {
             let col = parse_color(hex);
             let pill = container(text("").size(1))
                 .width(20)
@@ -1774,7 +1851,7 @@ impl SettingsPanel {
                     border: Border {
                         radius: 6.0.into(),
                         width: 1.0,
-                        color: Color::from_rgba(1.0, 1.0, 1.0, 0.20),
+                        color: if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.15) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.20) },
                     },
                     ..Default::default()
                 });
@@ -1783,8 +1860,8 @@ impl SettingsPanel {
                 row![
                     pill,
                     column![
-                        text(label).size(11).color(Color::WHITE),
-                        text(hex.to_string()).size(10).color(Color::from_rgba(1.0, 1.0, 1.0, 0.55)),
+                        text(label).size(11).color(if is_light { Color::from_rgb(0.12, 0.12, 0.18) } else { Color::WHITE }),
+                        text(hex.to_string()).size(10).color(if is_light { Color::from_rgba(0.12, 0.12, 0.18, 0.60) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.55) }),
                     ]
                     .spacing(2),
                 ]
@@ -1861,26 +1938,28 @@ impl SettingsPanel {
             ..Default::default()
         });
 
-        let divider = || {
+        let divider = move || {
             container(text("").size(1))
                 .width(Length::Fill)
                 .height(1)
-                .style(|_| iced::widget::container::Style {
-                    background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.06).into()),
+                .style(move |_| iced::widget::container::Style {
+                    background: Some(if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.06).into() } else { Color::from_rgba(1.0, 1.0, 1.0, 0.06).into() }),
                     ..Default::default()
                 })
         };
 
+        let label_color = if is_light { Color::from_rgb(0.12, 0.12, 0.18) } else { Color::WHITE };
+
         let card1_content = column![
             row![
-                text("Color Source").size(12).color(Color::WHITE),
+                text("Color Source").size(12).color(label_color),
                 space().width(Length::Fill),
                 mode_row,
             ]
             .align_y(Alignment::Center),
             divider(),
             row![
-                text("Theme Mode").size(12).color(Color::WHITE),
+                text("Theme Mode").size(12).color(label_color),
                 space().width(Length::Fill),
                 theme_row,
             ]
@@ -1891,12 +1970,12 @@ impl SettingsPanel {
                 space().width(Length::Fill),
                 text(format!("Scheme: {}", if is_light { "Light" } else { "Dark" }))
                     .size(11)
-                    .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+                    .color(if is_light { Color::from_rgba(0.12, 0.12, 0.18, 0.60) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.50) }),
             ]
             .align_y(Alignment::Center),
             divider(),
             column![
-                text("Active Semantic Tokens").size(12).color(Color::WHITE),
+                text("Active Semantic Tokens").size(12).color(label_color),
                 swatches_row,
                 live_preview_mock,
             ]
@@ -1930,20 +2009,22 @@ impl SettingsPanel {
             .map(|p| p.file_name().unwrap_or_default().to_string_lossy().to_string())
             .unwrap_or_else(|| "None selected".to_string());
 
+        let wall_btn_text = if is_light { Color::from_rgba(0.12, 0.12, 0.18, 0.90) } else { Color::WHITE };
+
         let wall_controls = row![
             button(
                 row![
-                    text("󰒭").size(13).color(Color::WHITE),
-                    text("Next Wallpaper").size(12).color(Color::WHITE),
+                    text("󰒭").size(13).color(wall_btn_text),
+                    text("Next Wallpaper").size(12).color(wall_btn_text),
                 ]
                 .spacing(6)
                 .align_y(Alignment::Center),
             )
             .padding([8, 14])
-            .style(|_t, status| {
+            .style(move |_t, status| {
                 let bg = match status {
-                    iced::widget::button::Status::Hovered => Color::from_rgba(139.0 / 255.0, 92.0 / 255.0, 246.0 / 255.0, 0.90),
-                    _ => Color::from_rgba(139.0 / 255.0, 92.0 / 255.0, 246.0 / 255.0, 0.70),
+                    iced::widget::button::Status::Hovered => if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.08) } else { Color::from_rgba(139.0 / 255.0, 92.0 / 255.0, 246.0 / 255.0, 0.90) },
+                    _ => if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.04) } else { Color::from_rgba(139.0 / 255.0, 92.0 / 255.0, 246.0 / 255.0, 0.70) },
                 };
                 iced::widget::button::Style {
                     background: Some(bg.into()),
@@ -1954,17 +2035,17 @@ impl SettingsPanel {
             .on_press(SettingsMessage::WallpaperNext),
             button(
                 row![
-                    text("󰒝").size(13).color(Color::WHITE),
-                    text("Random Wallpaper").size(12).color(Color::WHITE),
+                    text("󰒝").size(13).color(wall_btn_text),
+                    text("Random Wallpaper").size(12).color(wall_btn_text),
                 ]
                 .spacing(6)
                 .align_y(Alignment::Center),
             )
             .padding([8, 14])
-            .style(|_t, status| {
+            .style(move |_t, status| {
                 let bg = match status {
-                    iced::widget::button::Status::Hovered => Color::from_rgba(1.0, 1.0, 1.0, 0.16),
-                    _ => Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                    iced::widget::button::Status::Hovered => if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.08) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.16) },
+                    _ => if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.04) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.08) },
                 };
                 iced::widget::button::Style {
                     background: Some(bg.into()),
@@ -1974,7 +2055,7 @@ impl SettingsPanel {
             })
             .on_press(SettingsMessage::WallpaperRandom),
             space().width(Length::Fill),
-            text(format!("Active: {}", cur_wall)).size(11).color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+            text(format!("Active: {}", cur_wall)).size(11).color(if is_light { Color::from_rgba(0.12, 0.12, 0.18, 0.60) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.50) }),
         ]
         .spacing(10)
         .align_y(Alignment::Center);
@@ -1992,13 +2073,10 @@ impl SettingsPanel {
 
     /// Notifications Tab
     fn view_notifications_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("Notifications & Focus").size(19).color(Color::WHITE),
-            text("Do Not Disturb, popup previews, and notification rules")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
+        let header = self.tab_header(
+            "Notifications & Focus",
+            "Do Not Disturb, popup previews, and notification rules",
+        );
 
         let dnd_row = self.setting_toggle_row(
             "Do Not Disturb (Silence All Popups)",
@@ -2024,13 +2102,10 @@ impl SettingsPanel {
 
     /// Power & Battery Tab
     fn view_power_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("Power & Battery").size(19).color(Color::WHITE),
-            text("ACPI energy profiles, TLP background optimizer, and battery life tuning")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
+        let header = self.tab_header(
+            "Power & Battery",
+            "ACPI energy profiles, TLP background optimizer, and battery life tuning",
+        );
 
         let cur_prof = self.current_power_profile;
         let prof_chips = row![
@@ -2120,13 +2195,10 @@ impl SettingsPanel {
 
     /// On-screen displays Tab (Replicating user's screenshot exactly!)
     fn view_osd_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("On-screen displays").size(19).color(Color::WHITE),
-            text("Position and visibility of overlays and popups")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
+        let header = self.tab_header(
+            "On-screen displays",
+            "Position and visibility of overlays and popups",
+        );
 
         let pos_tags = [
             "Default",
@@ -2307,15 +2379,10 @@ impl SettingsPanel {
 
     /// System Services Tab
     fn view_services_tab(&self) -> Element<'_, SettingsMessage> {
-        let header = column![
-            text("System Services & Daemons")
-                .size(19)
-                .color(Color::WHITE),
-            text("Control background services and hardware radios to reduce idle RAM and save battery.")
-                .size(11)
-                .color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
-        ]
-        .spacing(4);
+        let header = self.tab_header(
+            "System Services & Daemons",
+            "Control background services and hardware radios to reduce idle RAM and save battery.",
+        );
 
         // Calculate summary stats
         let active_count = self.services.iter().filter(|s| s.is_active).count();
@@ -2507,11 +2574,17 @@ impl SettingsPanel {
         subtitle: &'static str,
         content: impl Into<Element<'a, SettingsMessage>>,
     ) -> Element<'a, SettingsMessage> {
+        let is_light = self.is_light_theme();
+        let title_col = if is_light { Color::from_rgb(0.12, 0.12, 0.18) } else { Color::WHITE };
+        let sub_col = if is_light { Color::from_rgba(0.12, 0.12, 0.18, 0.55) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.45) };
+        let card_bg = if is_light { Color::from_rgba(1.0, 1.0, 1.0, 0.70) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.03) };
+        let card_border = if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.08) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.06) };
+
         container(
             column![
                 column![
-                    text(title).size(13).color(Color::WHITE),
-                    text(subtitle).size(10).color(Color::from_rgba(1.0, 1.0, 1.0, 0.45)),
+                    text(title).size(13).color(title_col),
+                    text(subtitle).size(10).color(sub_col),
                 ]
                 .spacing(2),
                 content.into(),
@@ -2520,10 +2593,10 @@ impl SettingsPanel {
         )
         .padding(14)
         .width(Length::Fill)
-        .style(|_t| container::Style {
-            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.03).into()),
+        .style(move |_t| container::Style {
+            background: Some(card_bg.into()),
             border: Border {
-                color: Color::from_rgba(1.0, 1.0, 1.0, 0.06),
+                color: card_border,
                 width: 1.0,
                 radius: 12.0.into(),
             },
@@ -2540,11 +2613,14 @@ impl SettingsPanel {
         msg: SettingsMessage,
     ) -> Element<'_, SettingsMessage> {
         let label_str = label.into();
+        let is_light = self.is_light_theme();
         button(
             text(label_str)
                 .size(11)
                 .color(if is_selected {
                     Color::WHITE
+                } else if is_light {
+                    Color::from_rgba(0.12, 0.12, 0.18, 0.85)
                 } else {
                     Color::from_rgba(1.0, 1.0, 1.0, 0.70)
                 }),
@@ -2562,13 +2638,30 @@ impl SettingsPanel {
                 }
             } else {
                 let bg = match status {
-                    iced::widget::button::Status::Hovered => Color::from_rgba(1.0, 1.0, 1.0, 0.09),
-                    _ => Color::from_rgba(1.0, 1.0, 1.0, 0.04),
+                    iced::widget::button::Status::Hovered => {
+                        if is_light {
+                            Color::from_rgba(0.0, 0.0, 0.0, 0.06)
+                        } else {
+                            Color::from_rgba(1.0, 1.0, 1.0, 0.09)
+                        }
+                    }
+                    _ => {
+                        if is_light {
+                            Color::from_rgba(0.0, 0.0, 0.0, 0.03)
+                        } else {
+                            Color::from_rgba(1.0, 1.0, 1.0, 0.04)
+                        }
+                    }
+                };
+                let border_col = if is_light {
+                    Color::from_rgba(0.0, 0.0, 0.0, 0.08)
+                } else {
+                    Color::from_rgba(1.0, 1.0, 1.0, 0.08)
                 };
                 iced::widget::button::Style {
                     background: Some(bg.into()),
                     border: Border {
-                        color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                        color: border_col,
                         width: 1.0,
                         radius: 9.0.into(),
                     },

@@ -157,15 +157,48 @@ pub enum Message {
     Ignored,
 }
 
-fn bar_btn_transparent(_theme: &Theme, status: button::Status) -> button::Style {
+static IS_LIGHT_BAR: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn is_light_bar_theme(theme: &Theme) -> bool {
+    let p = theme.palette();
+    let theme_light = (0.2126 * p.background.r + 0.7152 * p.background.g + 0.0722 * p.background.b) > 0.45;
+    theme_light || IS_LIGHT_BAR.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+fn bar_btn_transparent(theme: &Theme, status: button::Status) -> button::Style {
+    let is_light = is_light_bar_theme(theme);
     let bg = match status {
-        button::Status::Hovered => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10).into()),
-        button::Status::Pressed => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.18).into()),
+        button::Status::Hovered => {
+            if is_light {
+                Some(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.07).into())
+            } else {
+                Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.10).into())
+            }
+        }
+        button::Status::Pressed => {
+            if is_light {
+                Some(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.12).into())
+            } else {
+                Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.18).into())
+            }
+        }
         _ => None,
     };
     let text_color = match status {
-        button::Status::Hovered => iced::Color::WHITE,
-        _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.94),
+        button::Status::Hovered => {
+            if is_light {
+                iced::Color::from_rgb(0.04, 0.04, 0.06)
+            } else {
+                iced::Color::WHITE
+            }
+        }
+        _ => {
+            if is_light {
+                iced::Color::from_rgba(0.12, 0.13, 0.18, 0.94)
+            } else {
+                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.94)
+            }
+        }
     };
     button::Style {
         background: bg,
@@ -177,14 +210,39 @@ fn bar_btn_transparent(_theme: &Theme, status: button::Status) -> button::Style 
 
 fn bar_btn_stepper(theme: &Theme, status: button::Status) -> button::Style {
     let p = theme.palette();
+    let is_light = is_light_bar_theme(theme);
     let bg = match status {
-        button::Status::Hovered => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.12).into()),
-        button::Status::Pressed => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.20).into()),
+        button::Status::Hovered => {
+            if is_light {
+                Some(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.08).into())
+            } else {
+                Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.12).into())
+            }
+        }
+        button::Status::Pressed => {
+            if is_light {
+                Some(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.14).into())
+            } else {
+                Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.20).into())
+            }
+        }
         _ => None,
     };
     let text_color = match status {
-        button::Status::Hovered => iced::Color::WHITE,
-        _ => p.text,
+        button::Status::Hovered => {
+            if is_light {
+                iced::Color::from_rgb(0.04, 0.04, 0.06)
+            } else {
+                iced::Color::WHITE
+            }
+        }
+        _ => {
+            if is_light {
+                iced::Color::from_rgba(0.12, 0.13, 0.18, 0.94)
+            } else {
+                p.text
+            }
+        }
     };
     button::Style {
         background: bg,
@@ -196,6 +254,7 @@ fn bar_btn_stepper(theme: &Theme, status: button::Status) -> button::Style {
 
 fn bar_btn_brand(theme: &Theme, status: button::Status) -> button::Style {
     let p = theme.palette();
+    let is_light = is_light_bar_theme(theme);
     let bg = match status {
         button::Status::Hovered => Some(iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.28).into()),
         button::Status::Pressed => Some(iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.38).into()),
@@ -204,9 +263,14 @@ fn bar_btn_brand(theme: &Theme, status: button::Status) -> button::Style {
     let mut border = iced::border::rounded(6);
     border.width = 1.0;
     border.color = iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.45);
+    let text_color = if is_light {
+        p.primary
+    } else {
+        iced::Color::WHITE
+    };
     button::Style {
         background: bg,
-        text_color: iced::Color::WHITE,
+        text_color,
         border,
         ..Default::default()
     }
@@ -214,31 +278,62 @@ fn bar_btn_brand(theme: &Theme, status: button::Status) -> button::Style {
 
 fn bar_btn_active(theme: &Theme, status: button::Status) -> button::Style {
     let p = theme.palette();
+    let is_light = is_light_bar_theme(theme);
     let bg = match status {
         button::Status::Hovered => iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.38),
         button::Status::Pressed => iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.48),
-        _ => iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.25),
+        _ => iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, if is_light { 0.20 } else { 0.25 }),
     };
     let mut border = iced::border::rounded(6);
     border.width = 1.0;
     border.color = iced::Color::from_rgba(p.primary.r, p.primary.g, p.primary.b, 0.50);
+    let text_color = if is_light {
+        p.primary
+    } else {
+        iced::Color::WHITE
+    };
     button::Style {
         background: Some(bg.into()),
-        text_color: iced::Color::WHITE,
+        text_color,
         border,
         ..Default::default()
     }
 }
 
-fn bar_btn_inactive_ws(_theme: &Theme, status: button::Status) -> button::Style {
+fn bar_btn_inactive_ws(theme: &Theme, status: button::Status) -> button::Style {
+    let is_light = is_light_bar_theme(theme);
     let bg = match status {
-        button::Status::Hovered => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.12).into()),
-        button::Status::Pressed => Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.20).into()),
+        button::Status::Hovered => {
+            if is_light {
+                Some(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.07).into())
+            } else {
+                Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.12).into())
+            }
+        }
+        button::Status::Pressed => {
+            if is_light {
+                Some(iced::Color::from_rgba(0.0, 0.0, 0.0, 0.14).into())
+            } else {
+                Some(iced::Color::from_rgba(1.0, 1.0, 1.0, 0.20).into())
+            }
+        }
         _ => None,
     };
     let text_color = match status {
-        button::Status::Hovered => iced::Color::WHITE,
-        _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.72),
+        button::Status::Hovered => {
+            if is_light {
+                iced::Color::from_rgb(0.04, 0.04, 0.06)
+            } else {
+                iced::Color::WHITE
+            }
+        }
+        _ => {
+            if is_light {
+                iced::Color::from_rgba(0.12, 0.13, 0.18, 0.65)
+            } else {
+                iced::Color::from_rgba(1.0, 1.0, 1.0, 0.72)
+            }
+        }
     };
     button::Style {
         background: bg,
@@ -268,13 +363,20 @@ fn bar_btn_danger(theme: &Theme, status: button::Status) -> button::Style {
 
 fn bar_btn_power(theme: &Theme, status: button::Status) -> button::Style {
     let p = theme.palette();
+    let is_light = is_light_bar_theme(theme);
     let bg = match status {
         button::Status::Hovered => Some(iced::Color::from_rgba(p.danger.r, p.danger.g, p.danger.b, 0.22).into()),
         button::Status::Pressed => Some(iced::Color::from_rgba(p.danger.r, p.danger.g, p.danger.b, 0.34).into()),
         _ => None,
     };
     let text_color = match status {
-        button::Status::Hovered => iced::Color::WHITE,
+        button::Status::Hovered => {
+            if is_light {
+                p.danger
+            } else {
+                iced::Color::WHITE
+            }
+        }
         _ => p.danger,
     };
     button::Style {
@@ -287,6 +389,10 @@ fn bar_btn_power(theme: &Theme, status: button::Status) -> button::Style {
 
 impl Bar {
     pub fn new(config: MsuiConfig, shell_events: ShellReceiver) -> Self {
+        let is_light = msui_core::parse_hex_color(&config.gui.background)
+            .map_or(false, |(r, g, b)| (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.45);
+        IS_LIGHT_BAR.store(is_light, std::sync::atomic::Ordering::Relaxed);
+
         let battery_monitor = BatteryMonitor::new();
         let mut system_monitor = SystemMonitor::new();
         let brightness_monitor = BrightnessMonitor::new();
@@ -372,6 +478,9 @@ impl Bar {
                             if self.last_config_mtime.map_or(true, |last| mtime > last) {
                                 self.last_config_mtime = Some(mtime);
                                 self.config = MsuiConfig::load_or_default();
+                                let is_light = msui_core::parse_hex_color(&self.config.gui.background)
+                                    .map_or(false, |(r, g, b)| (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.45);
+                                IS_LIGHT_BAR.store(is_light, std::sync::atomic::Ordering::Relaxed);
                             }
                         }
                     }
@@ -1031,6 +1140,8 @@ impl Bar {
         // Universal GUI background and border configuration
         let gui = &self.config.gui;
         let (r, g, b) = parse_hex_color(&gui.background).unwrap_or((18.0 / 255.0, 18.0 / 255.0, 24.0 / 255.0));
+        let is_light = (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.45;
+        IS_LIGHT_BAR.store(is_light, std::sync::atomic::Ordering::Relaxed);
         let (br_r, br_g, br_b) = parse_hex_color(&gui.border_color).unwrap_or((147.0 / 255.0, 51.0 / 255.0, 234.0 / 255.0));
         let border_enabled = gui.border_enabled;
         let border_opacity = gui.border_opacity;

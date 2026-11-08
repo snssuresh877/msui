@@ -52,7 +52,8 @@ impl Quantizer {
             entry.3 += px.b as u64;
         }
 
-        let mut clusters: Vec<QuantizedColor> = Vec::new();
+        let mut raw_clusters: Vec<(Srgb, Hct, usize)> = Vec::new();
+        let mut max_chroma: f64 = 0.0;
 
         for (_key, (count, r_sum, g_sum, b_sum)) in bins {
             if count == 0 {
@@ -65,17 +66,45 @@ impl Quantizer {
             let srgb = Srgb::new(avg_r, avg_g, avg_b);
             let hct = Hct::from_srgb(srgb);
 
-            // Filter out near-pure-black, near-pure-white, and muddy grays
-            let is_too_dark = hct.tone < 12.0;
-            let is_too_bright = hct.tone > 92.0;
-            let is_gray = hct.chroma < 12.0;
+            // Filter out extreme pitch-black, bleached white, and dull muddy grays
+            let is_too_dark = hct.tone < 14.0;
+            let is_too_bright = hct.tone > 90.0;
+            let is_gray = hct.chroma < 10.0;
 
             if is_too_dark || is_too_bright || is_gray {
                 continue;
             }
 
-            // Material ranking formula: Score = sqrt(Count) * (Chroma + 12.0)
-            let score = (count as f64).sqrt() * (hct.chroma + 12.0);
+            if hct.chroma > max_chroma {
+                max_chroma = hct.chroma;
+            }
+
+            raw_clusters.push((srgb, hct, count));
+        }
+
+        // If high-chroma candidates exist (>= 22.0), discard dull muddy background candidates (< 16.0)
+        let min_chroma = if max_chroma >= 22.0 { 16.0 } else { 10.0 };
+
+        let mut clusters: Vec<QuantizedColor> = Vec::new();
+
+        for (srgb, hct, count) in raw_clusters {
+            if hct.chroma < min_chroma {
+                continue;
+            }
+
+            // Material 3 CAM16 Vibrancy Scoring:
+            // Count has diminishing returns (logarithmic) so vast dark backgrounds don't swamp accents.
+            let count_weight = (count as f64).ln_1p();
+            // Chroma receives non-linear amplification (powf 1.6)
+            let chroma_weight = (hct.chroma / 10.0).powf(1.6);
+            // Sweet spot tone factor (tones 25..=78 represent vivid readable accents)
+            let tone_factor = if hct.tone >= 25.0 && hct.tone <= 78.0 {
+                1.2
+            } else {
+                0.85
+            };
+
+            let score = count_weight * chroma_weight * tone_factor;
 
             clusters.push(QuantizedColor {
                 color: srgb,
@@ -127,5 +156,20 @@ mod tests {
         let best = Quantizer::find_dominant_accent(&pixels);
         // The cyan hue is approximately 190-210 deg
         assert!(best.chroma > 20.0);
+    }
+
+    #[test]
+    fn test_real_wallpaper_vibrant_extraction() {
+        let path = std::path::Path::new("/home/m/Pictures/Wallpapers/deer_and_sunset.jpg");
+        if path.exists() {
+            if let Ok(img) = image::open(path) {
+                let thumb = img.thumbnail_exact(128, 128).to_rgba8();
+                let pixels: Vec<Srgb> = thumb.pixels().map(|p| Srgb::new(p[0], p[1], p[2])).collect();
+                let best = Quantizer::find_dominant_accent(&pixels);
+                // Deer and sunset has a vibrant warm orange sunset (Hue 50..80, Chroma > 40)
+                assert!(best.chroma > 40.0, "Expected vibrant chroma, got {:.1}", best.chroma);
+                assert!(best.hue >= 40.0 && best.hue <= 90.0, "Expected warm hue, got {:.1}", best.hue);
+            }
+        }
     }
 }
