@@ -210,6 +210,12 @@ pub struct GuiConfig {
     /// Subcard subtle border toggle (default: true)
     #[serde(default = "default_true")]
     pub subcard_border_enabled: bool,
+    /// UI typography font family (default: "JetBrainsMono Nerd Font")
+    #[serde(default = "default_gui_font_family")]
+    pub font_family: String,
+    /// Window animation speed preset: "fast", "default", "smooth" (default: "default")
+    #[serde(default = "default_gui_animation_speed")]
+    pub animation_speed: String,
 }
 
 fn default_gui_background() -> String { "#121218".into() }
@@ -219,6 +225,8 @@ fn default_gui_border_opacity() -> f32 { 0.45 }
 fn default_gui_border_width() -> f32 { 1.5 }
 fn default_gui_corner_radius() -> f32 { 18.0 }
 fn default_gui_subcard_opacity() -> f32 { 0.05 }
+fn default_gui_font_family() -> String { "JetBrainsMono Nerd Font".into() }
+fn default_gui_animation_speed() -> String { "default".into() }
 
 impl Default for GuiConfig {
     fn default() -> Self {
@@ -232,6 +240,8 @@ impl Default for GuiConfig {
             corner_radius: default_gui_corner_radius(),
             subcard_opacity: default_gui_subcard_opacity(),
             subcard_border_enabled: true,
+            font_family: default_gui_font_family(),
+            animation_speed: default_gui_animation_speed(),
         }
     }
 }

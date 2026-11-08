@@ -7,7 +7,7 @@ use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
 use crate::modal_style::default_modal_card_style;
-use msui_core::SystemControl;
+use msui_core::{SystemControl, ThemeManager};
 
 pub fn run_power_menu() -> Result<(), iced_exwlshell::Error> {
     application(
@@ -16,7 +16,7 @@ pub fn run_power_menu() -> Result<(), iced_exwlshell::Error> {
         PowerMenu::update,
         PowerMenu::view,
     )
-    .theme(iced::Theme::CatppuccinMocha)
+    .theme(ThemeManager::current_theme())
     .default_font(iced::Font {
         family: iced::font::Family::Name("JetBrainsMono Nerd Font"),
         ..iced::Font::DEFAULT
@@ -170,8 +170,8 @@ impl PowerMenu {
     pub fn view(&self) -> Element<'_, Message> {
         let header = text("Power & Session")
             .size(16)
-            .style(|_theme: &iced::Theme| text::Style {
-                color: Some(iced::Color::from_rgba(0.92, 0.94, 0.98, 0.95)),
+            .style(|theme: &iced::Theme| text::Style {
+                color: Some(theme.palette().text),
             });
 
         let lock_card = Self::power_card("󰌾", "Lock", "[L]", Message::Lock);
@@ -217,8 +217,11 @@ impl PowerMenu {
         let label_text = text(label).size(14);
         let shortcut_text = text(shortcut)
             .size(11)
-            .style(|_theme: &iced::Theme| text::Style {
-                color: Some(iced::Color::from_rgba(0.80, 0.84, 0.95, 0.60)),
+            .style(|theme: &iced::Theme| {
+                let p = theme.palette();
+                text::Style {
+                    color: Some(iced::Color::from_rgba(p.text.r, p.text.g, p.text.b, 0.60)),
+                }
             });
 
         let col = column![icon_text, label_text, shortcut_text]
@@ -287,7 +290,7 @@ fn power_card_style(theme: &iced::Theme, status: iced::widget::button::Status) -
 
     iced::widget::button::Style {
         background: Some(bg.into()),
-        text_color: iced::Color::WHITE,
+        text_color: p.text,
         border,
         ..Default::default()
     }

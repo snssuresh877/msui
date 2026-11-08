@@ -4,14 +4,14 @@ use iced::keyboard::key::Named;
 use iced::keyboard::{Event as KeyboardEvent, Key, Modifiers};
 use iced::widget::operation::{focus, snap_to, RelativeOffset};
 use iced::widget::{button, column, container, image, row, scrollable, space, svg, text, text_input};
-use iced::{Alignment, Element, Event, Font, Length, Task as Command, Theme, event};
+use iced::{Alignment, Element, Event, Font, Length, Task as Command, event};
 use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
 use msui_core::{
     find_icon_for_class, scan_desktop_apps, DesktopApp, HyprlandClient, HyprlandIpc, MsuiConfig,
-    TrayItem,
+    ThemeManager, TrayItem,
 };
 use crate::modal_style::modal_card_style;
 use std::path::PathBuf;
@@ -31,7 +31,7 @@ pub fn run_app_drawer(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
         AppDrawer::update,
         AppDrawer::view,
     )
-    .theme(Theme::CatppuccinMocha)
+    .theme(ThemeManager::current_theme())
     .default_font(Font {
         family: iced::font::Family::Name("JetBrainsMono Nerd Font"),
         ..Font::DEFAULT

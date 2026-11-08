@@ -1,10 +1,10 @@
 use iced::widget::{container, image, space};
-use iced::{ContentFit, Element, Length, Task as Command, Theme};
+use iced::{ContentFit, Element, Length, Task as Command};
 use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::{LayerShellSettings, StartMode};
-use msui_core::WallpaperManager;
+use msui_core::{ThemeManager, WallpaperManager};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -21,7 +21,7 @@ pub fn run_wallpaper_daemon() -> Result<(), iced_exwlshell::Error> {
         WallpaperDaemon::update,
         WallpaperDaemon::view,
     )
-    .theme(Theme::CatppuccinMocha)
+    .theme(ThemeManager::current_theme())
     .layer_settings(LayerShellSettings {
         size: LayerSize::FILL,
         anchor: Anchor::Top | Anchor::Bottom | Anchor::Left | Anchor::Right,

@@ -2,13 +2,13 @@ use iced::keyboard::key::Named;
 use iced::keyboard::{Event as KeyboardEvent, Key};
 use iced::widget::operation::focus;
 use iced::widget::{button, column, container, row, scrollable, space, text, text_input};
-use iced::{event, Alignment, Element, Event, Font, Length, Task as Command, Theme};
+use iced::{event, Alignment, Element, Event, Font, Length, Task as Command};
 use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
 use crate::modal_style::{default_modal_card_style, default_subcard_style};
-use msui_core::{IpcClient, IpcCommand, Notification, GLOBAL_NOTIFICATIONS};
+use msui_core::{IpcClient, IpcCommand, Notification, ThemeManager, GLOBAL_NOTIFICATIONS};
 use std::sync::LazyLock;
 
 static INPUT_ID: LazyLock<iced::widget::Id> = LazyLock::new(iced::widget::Id::unique);
@@ -20,7 +20,7 @@ pub fn run_notification_center() -> Result<(), iced_exwlshell::Error> {
         NotificationCenter::update,
         NotificationCenter::view,
     )
-    .theme(Theme::CatppuccinMocha)
+    .theme(ThemeManager::current_theme())
     .default_font(Font {
         family: iced::font::Family::Name("JetBrainsMono Nerd Font"),
         ..Font::DEFAULT

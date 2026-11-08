@@ -10,7 +10,7 @@ use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
 use msui_core::{
     AudioInfo, AudioMonitor, BatteryMonitor, ColorEngine, ColorSchemeMode,
-    CorePalette, DndManager, MsuiConfig, PowerProfile, PowerProfileManager, SemanticTokens,
+    CorePalette, DndManager, IpcClient, IpcCommand, MsuiConfig, PowerProfile, PowerProfileManager, SemanticTokens,
     SystemServiceInfo, SystemServiceManager, ThemeManager, WallpaperManager, PRESETS,
 };
 use std::process::Command as StdCommand;
@@ -115,6 +115,7 @@ pub enum SettingsMessage {
     ToggleAudioMute,
     LaunchPavucontrol,
     SetAnimationSpeed(&'static str),
+    SetFontFamily(String),
     SetDockPosition(String),
     SetDockSize(u32),
     SetWeatherUnit(String),
@@ -755,6 +756,8 @@ impl SettingsPanel {
                 let _ = StdCommand::new("pavucontrol").spawn();
             }
             SettingsMessage::SetAnimationSpeed(speed) => {
+                self.config.gui.animation_speed = speed.to_string();
+                let _ = self.config.save_to_default_path();
                 let speed_val = match speed {
                     "fast" => "windows, 1, 3, default",
                     "smooth" => "windows, 1, 7, default",
@@ -763,6 +766,11 @@ impl SettingsPanel {
                 let _ = StdCommand::new("hyprctl")
                     .args(["keyword", "animation", speed_val])
                     .spawn();
+            }
+            SettingsMessage::SetFontFamily(font) => {
+                self.config.gui.font_family = font;
+                let _ = self.config.save_to_default_path();
+                let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
             }
             SettingsMessage::SetDockPosition(pos) => {
                 self.status_feedback = Some(format!("Dock position set to {}", pos));
@@ -1705,17 +1713,19 @@ impl SettingsPanel {
             "System typography, UI scale factor, and window animation timing",
         );
 
+        let cur_speed = self.config.gui.animation_speed.as_str();
         let anim_chips = row![
-            self.chip_button("Snappy (0.15s)", false, SettingsMessage::SetAnimationSpeed("fast")),
-            self.chip_button("Balanced (0.25s)", true, SettingsMessage::SetAnimationSpeed("default")),
-            self.chip_button("Gentle & Smooth (0.40s)", false, SettingsMessage::SetAnimationSpeed("smooth")),
+            self.chip_button("Snappy (0.15s)", cur_speed == "fast", SettingsMessage::SetAnimationSpeed("fast")),
+            self.chip_button("Balanced (0.25s)", cur_speed == "default" || cur_speed.is_empty(), SettingsMessage::SetAnimationSpeed("default")),
+            self.chip_button("Gentle & Smooth (0.40s)", cur_speed == "smooth", SettingsMessage::SetAnimationSpeed("smooth")),
         ]
         .spacing(8);
 
+        let cur_font = self.config.gui.font_family.as_str();
         let font_chips = row![
-            self.chip_button("JetBrainsMono Nerd Font (Default)", true, SettingsMessage::Ignored),
-            self.chip_button("FiraCode Nerd Font", false, SettingsMessage::Ignored),
-            self.chip_button("Inter Display", false, SettingsMessage::Ignored),
+            self.chip_button("JetBrainsMono Nerd Font (Default)", cur_font == "JetBrainsMono Nerd Font" || cur_font.is_empty(), SettingsMessage::SetFontFamily("JetBrainsMono Nerd Font".into())),
+            self.chip_button("FiraCode Nerd Font", cur_font == "FiraCode Nerd Font", SettingsMessage::SetFontFamily("FiraCode Nerd Font".into())),
+            self.chip_button("Inter Display", cur_font == "Inter Display", SettingsMessage::SetFontFamily("Inter Display".into())),
         ]
         .spacing(8);
 
@@ -2348,7 +2358,7 @@ impl SettingsPanel {
         );
 
         let show_for_section = column![
-            text("Show for").size(13).color(Color::WHITE),
+            text("Show for").size(13).color(self.text_primary()),
             self.setting_toggle_row("Volume", self.osd_volume, SettingsMessage::ToggleOsdVolume),
             self.setting_toggle_row("Media volume", self.osd_media_vol, SettingsMessage::ToggleOsdMediaVol),
             self.setting_toggle_row("Brightness", self.osd_brightness, SettingsMessage::ToggleOsdBrightness),
@@ -2360,8 +2370,8 @@ impl SettingsPanel {
         let main_col = column![
             header,
             column![
-                text("Position").size(12).color(Color::from_rgba(1.0, 1.0, 1.0, 0.80)),
-                text("Bottom Center").size(10).color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)),
+                text("Position").size(12).color(self.text_primary()),
+                text("Bottom Center").size(10).color(self.text_muted()),
                 pos_chips,
             ]
             .spacing(4),
@@ -2379,6 +2389,7 @@ impl SettingsPanel {
 
     /// System Services Tab
     fn view_services_tab(&self) -> Element<'_, SettingsMessage> {
+        let is_light = self.is_light_theme();
         let header = self.tab_header(
             "System Services & Daemons",
             "Control background services and hardware radios to reduce idle RAM and save battery.",
@@ -2393,17 +2404,17 @@ impl SettingsPanel {
                 column![
                     text("Active Background Services")
                         .size(11)
-                        .color(Color::from_rgba(1.0, 1.0, 1.0, 0.60)),
+                        .color(self.text_muted()),
                     text(format!("{} of {} Running", active_count, self.services.len()))
                         .size(15)
-                        .color(Color::WHITE),
+                        .color(self.text_primary()),
                 ]
                 .spacing(2),
                 space().width(Length::Fill),
                 column![
                     text("RAM Consumed by Daemons")
                         .size(11)
-                        .color(Color::from_rgba(1.0, 1.0, 1.0, 0.60)),
+                        .color(self.text_muted()),
                     text(format!("{} MB in use", total_ram_mb))
                         .size(15)
                         .color(Color::from_rgb8(167, 139, 250)),
@@ -2443,10 +2454,10 @@ impl SettingsPanel {
             .align_y(Alignment::Center)
             .padding(12),
         )
-        .style(|_t| container::Style {
-            background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.04).into()),
+        .style(move |_t| container::Style {
+            background: Some(if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.03).into() } else { Color::from_rgba(1.0, 1.0, 1.0, 0.04).into() }),
             border: Border {
-                color: Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                color: if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.08) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.08) },
                 width: 1.0,
                 radius: 12.0.into(),
             },
@@ -2459,11 +2470,13 @@ impl SettingsPanel {
             let id_clone = svc.id.clone();
             let is_on = svc.is_active;
 
-            let icon_view = container(text(&svc.icon).size(18).color(Color::WHITE))
+            let icon_view = container(text(&svc.icon).size(18).color(if is_on { Color::from_rgb8(139, 92, 246) } else { self.text_primary() }))
                 .padding([8, 10])
                 .style(move |_t| container::Style {
                     background: Some(if is_on {
                         Color::from_rgba(139.0 / 255.0, 92.0 / 255.0, 246.0 / 255.0, 0.25).into()
+                    } else if is_light {
+                        Color::from_rgba(0.0, 0.0, 0.0, 0.04).into()
                     } else {
                         Color::from_rgba(1.0, 1.0, 1.0, 0.05).into()
                     }),
@@ -2498,10 +2511,10 @@ impl SettingsPanel {
                 } else {
                     "Stopped (0 MB)".to_string()
                 };
-                container(text(txt).size(10).color(Color::from_rgba(1.0, 1.0, 1.0, 0.50)))
+                container(text(txt).size(10).color(self.text_muted()))
                     .padding([2, 8])
-                    .style(|_t| container::Style {
-                        background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.06).into()),
+                    .style(move |_t| container::Style {
+                        background: Some(if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.05).into() } else { Color::from_rgba(1.0, 1.0, 1.0, 0.06).into() }),
                         border: Border {
                             radius: 8.0.into(),
                             ..Default::default()
@@ -2511,11 +2524,11 @@ impl SettingsPanel {
             };
 
             let details = column![
-                row![text(&svc.name).size(13).color(Color::WHITE), space().width(8), status_badge]
+                row![text(&svc.name).size(13).color(self.text_primary()), space().width(8), status_badge]
                     .align_y(Alignment::Center),
                 text(&svc.description)
                     .size(10)
-                    .color(Color::from_rgba(1.0, 1.0, 1.0, 0.45)),
+                    .color(self.text_muted()),
             ]
             .spacing(3);
 
@@ -2531,18 +2544,20 @@ impl SettingsPanel {
             .style(move |_t, status| {
                 let bg = match status {
                     iced::widget::button::Status::Hovered => {
-                        Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+                        if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.05) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.06) }
                     }
                     iced::widget::button::Status::Pressed => {
-                        Color::from_rgba(1.0, 1.0, 1.0, 0.09)
+                        if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.08) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.09) }
                     }
-                    _ => Color::from_rgba(1.0, 1.0, 1.0, 0.03),
+                    _ => if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.02) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.03) },
                 };
                 iced::widget::button::Style {
                     background: Some(bg.into()),
                     border: Border {
                         color: if is_on {
                             Color::from_rgba(139.0 / 255.0, 92.0 / 255.0, 246.0 / 255.0, 0.35)
+                        } else if is_light {
+                            Color::from_rgba(0.0, 0.0, 0.0, 0.06)
                         } else {
                             Color::from_rgba(1.0, 1.0, 1.0, 0.06)
                         },
@@ -2680,11 +2695,13 @@ impl SettingsPanel {
         is_on: bool,
         msg: SettingsMessage,
     ) -> Element<'_, SettingsMessage> {
+        let is_light = self.is_light_theme();
+        let label_color = self.text_primary();
         let toggle = self.toggle_indicator(is_on);
 
         button(
             row![
-                text(label).size(12).color(Color::WHITE),
+                text(label).size(12).color(label_color),
                 space().width(Length::Fill),
                 toggle,
             ]
@@ -2695,18 +2712,20 @@ impl SettingsPanel {
         .style(move |_t, status| {
             let bg = match status {
                 iced::widget::button::Status::Hovered => {
-                    Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+                    if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.06) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.06) }
                 }
                 iced::widget::button::Status::Pressed => {
-                    Color::from_rgba(1.0, 1.0, 1.0, 0.09)
+                    if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.09) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.09) }
                 }
-                _ => Color::from_rgba(1.0, 1.0, 1.0, 0.03),
+                _ => if is_light { Color::from_rgba(0.0, 0.0, 0.0, 0.02) } else { Color::from_rgba(1.0, 1.0, 1.0, 0.03) },
             };
             iced::widget::button::Style {
                 background: Some(bg.into()),
                 border: Border {
                     color: if is_on {
                         Color::from_rgba(139.0 / 255.0, 92.0 / 255.0, 246.0 / 255.0, 0.35)
+                    } else if is_light {
+                        Color::from_rgba(0.0, 0.0, 0.0, 0.06)
                     } else {
                         Color::from_rgba(1.0, 1.0, 1.0, 0.06)
                     },

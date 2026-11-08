@@ -1671,6 +1671,7 @@ pub fn run_daemon(config: MsuiConfig) -> anyhow::Result<()> {
     let (shell_broadcast, shell_events) = shell::channel();
 
     let cfg_clone = config.clone();
+    let font_family_name: &'static str = Box::leak(config.gui.font_family.clone().into_boxed_str());
 
     let res = daemon(
         move || UnifiedShell::new(cfg_clone.clone(), shell_events.clone()),
@@ -1684,7 +1685,7 @@ pub fn run_daemon(config: MsuiConfig) -> anyhow::Result<()> {
         text_color: theme.palette().text,
     })
     .default_font(Font {
-        family: iced::font::Family::Name("JetBrainsMono Nerd Font"),
+        family: iced::font::Family::Name(font_family_name),
         ..Font::DEFAULT
     })
     .subscription(UnifiedShell::subscription)

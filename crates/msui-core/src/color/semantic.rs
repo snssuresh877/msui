@@ -15,6 +15,13 @@ impl ColorSchemeMode {
     pub fn is_dark(&self) -> bool {
         matches!(self, Self::Dark)
     }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Dark => "dark",
+            Self::Light => "light",
+        }
+    }
 }
 
 /// A complete set of semantic color tokens in hex format (#rrggbb).

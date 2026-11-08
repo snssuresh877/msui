@@ -127,8 +127,35 @@ impl ThemeManager {
     }
 
     pub fn current_theme() -> Theme {
+        let cfg = crate::config::MsuiConfig::load_or_default();
+        if cfg.color.mode == "dynamic" {
+            let tokens = crate::color::ColorEngine::current_tokens();
+            let p_bg = crate::config::parse_hex_color(&tokens.background).unwrap_or((0.1, 0.1, 0.1));
+            let p_fg = crate::config::parse_hex_color(&tokens.on_background).unwrap_or((0.9, 0.9, 0.9));
+            let p_pri = crate::config::parse_hex_color(&tokens.primary).unwrap_or((0.5, 0.3, 0.9));
+            let p_err = crate::config::parse_hex_color(&tokens.error).unwrap_or((0.8, 0.2, 0.2));
+
+            let palette = iced::theme::Palette {
+                background: iced::Color::from_rgb(p_bg.0, p_bg.1, p_bg.2),
+                text: iced::Color::from_rgb(p_fg.0, p_fg.1, p_fg.2),
+                primary: iced::Color::from_rgb(p_pri.0, p_pri.1, p_pri.2),
+                success: iced::Color::from_rgb8(34, 197, 94),
+                danger: iced::Color::from_rgb(p_err.0, p_err.1, p_err.2),
+                warning: iced::Color::from_rgb8(234, 179, 8),
+            };
+            return Theme::custom(format!("msui-{}", tokens.mode.as_str()), palette);
+        }
+
         let name = Self::current_theme_name();
-        Self::to_iced_theme(&name)
+        if cfg.color.scheme == "light" {
+            match name.to_lowercase().replace(' ', "-").replace('_', "-").as_str() {
+                "gruvbox-dark" | "gruvbox-light" => Theme::GruvboxLight,
+                "tokyo-night" | "tokyo-night-storm" | "tokyo-night-light" => Theme::TokyoNightLight,
+                _ => Theme::CatppuccinLatte,
+            }
+        } else {
+            Self::to_iced_theme(&name)
+        }
     }
 
     pub fn set_theme(name: &str) -> bool {

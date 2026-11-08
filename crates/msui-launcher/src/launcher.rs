@@ -4,13 +4,13 @@ use iced::keyboard::key::Named;
 use iced::keyboard::{Event as KeyboardEvent, Key};
 use iced::widget::operation::{focus, snap_to, RelativeOffset};
 use iced::widget::{button, column, container, image, row, scrollable, space, svg, text, text_input};
-use iced::{Alignment, Element, Event, Font, Length, Task as Command, Theme, event};
+use iced::{Alignment, Element, Event, Font, Length, Task as Command, event};
 use iced_exwlshell::actions::ExwlShellCustomActionWithId;
 use iced_exwlshell::layershell::application;
 use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
 use crate::modal_style::modal_card_style;
-use msui_core::{DesktopApp, MsuiConfig, scan_desktop_apps};
+use msui_core::{scan_desktop_apps, DesktopApp, MsuiConfig, ThemeManager};
 use std::sync::LazyLock;
 
 static INPUT_ID: LazyLock<iced::widget::Id> = LazyLock::new(iced::widget::Id::unique);
@@ -27,7 +27,7 @@ pub fn run_launcher(config: MsuiConfig) -> Result<(), iced_exwlshell::Error> {
         Launcher::update,
         Launcher::view,
     )
-    .theme(Theme::CatppuccinMocha)
+    .theme(ThemeManager::current_theme())
     .default_font(Font {
         family: iced::font::Family::Name("JetBrainsMono Nerd Font"),
         ..Font::DEFAULT

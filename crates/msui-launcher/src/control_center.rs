@@ -39,17 +39,18 @@ fn toggle_tile_custom_style(active: bool, is_danger: bool, is_frosted: bool) -> 
                 ..Default::default()
             }
         } else if is_frosted {
+            let is_light = (0.2126 * p.background.r + 0.7152 * p.background.g + 0.0722 * p.background.b) > 0.45;
             let bg = match status {
-                iced::widget::button::Status::Hovered => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.14),
-                iced::widget::button::Status::Pressed => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.20),
-                _ => iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08),
+                iced::widget::button::Status::Hovered => if is_light { iced::Color::from_rgba(0.0, 0.0, 0.0, 0.08) } else { iced::Color::from_rgba(1.0, 1.0, 1.0, 0.14) },
+                iced::widget::button::Status::Pressed => if is_light { iced::Color::from_rgba(0.0, 0.0, 0.0, 0.12) } else { iced::Color::from_rgba(1.0, 1.0, 1.0, 0.20) },
+                _ => if is_light { iced::Color::from_rgba(0.0, 0.0, 0.0, 0.04) } else { iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08) },
             };
             let mut border = iced::border::rounded(10);
             border.width = 1.0;
-            border.color = iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08);
+            border.color = if is_light { iced::Color::from_rgba(0.0, 0.0, 0.0, 0.08) } else { iced::Color::from_rgba(1.0, 1.0, 1.0, 0.08) };
             iced::widget::button::Style {
                 background: Some(bg.into()),
-                text_color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.90),
+                text_color: if is_light { iced::Color::from_rgba(0.12, 0.12, 0.18, 0.90) } else { iced::Color::from_rgba(1.0, 1.0, 1.0, 0.90) },
                 border,
                 ..Default::default()
             }

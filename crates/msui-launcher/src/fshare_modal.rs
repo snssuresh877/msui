@@ -366,7 +366,7 @@ impl FShareModal {
     }
 
     pub fn theme(&self) -> iced::Theme {
-        iced::Theme::CatppuccinMocha
+        msui_core::ThemeManager::current_theme()
     }
 
     pub fn subscription(&self) -> iced::Subscription<Message> {
