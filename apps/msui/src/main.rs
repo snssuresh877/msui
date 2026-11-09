@@ -1145,7 +1145,8 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 Some("send") => {
-                    if let Some(target_file_str) = args.get(3) {
+                    let mut file_paths: Vec<std::path::PathBuf> = Vec::new();
+                    for target_file_str in args.iter().skip(3) {
                         let path = if let Some(stripped) = target_file_str.strip_prefix("~/") {
                             if let Some(home) = std::env::var_os("HOME") {
                                 std::path::PathBuf::from(home).join(stripped)
@@ -1160,73 +1161,85 @@ fn main() -> anyhow::Result<()> {
                             eprintln!("Error: File '{}' does not exist.", target_file_str);
                             std::process::exit(1);
                         }
+                        file_paths.push(path);
+                    }
 
-                        let local_ip = match msui_core::fshare::get_local_ip() {
-                            Some(ip) => ip,
-                            None => {
-                                eprintln!("Error: Could not detect active Wi-Fi LAN IP.");
-                                std::process::exit(1);
-                            }
-                        };
-
-                        let token = msui_core::fshare::generate_token();
-                        let pin = msui_core::fshare::generate_pin();
-                        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-
-                        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
-                        rt.block_on(async move {
-                            let handle = msui_core::fshare::FShareServer::start_send(
-                                path.clone(),
-                                local_ip.clone(),
-                                token.clone(),
-                                pin.clone(),
-                                tx,
-                            ).await?;
-
-                            let url = format!("http://{}:{}/d/{}", local_ip, handle.port, token);
-                            println!("========================================");
-                            println!("  msUI FShare - File Sharing Server");
-                            println!("========================================");
-                            println!("Sharing File: {}", path.display());
-                            println!("Direct URL:   {}", url);
-                            println!("PIN Code:     {}", pin);
-                            println!();
-                            if let Ok(qr) = msui_core::fshare::generate_qr_terminal(&url) {
-                                println!("{}", qr);
-                            }
-                            println!("Scan QR code with phone camera or open the URL.");
-                            println!("Press Ctrl+C to terminate.");
-                            println!("========================================");
-
-                            while let Some(ev) = rx.recv().await {
-                                match ev {
-                                    msui_core::fshare::FShareEvent::ClientConnected { peer_ip } => {
-                                        println!("📱 Phone connected from {}", peer_ip);
-                                    }
-                                    msui_core::fshare::FShareEvent::Progress { transferred_bytes, total_bytes, speed_mbps } => {
-                                        let pct = if total_bytes > 0 { (transferred_bytes as f32 / total_bytes as f32) * 100.0 } else { 0.0 };
-                                        print!("\rTransferring: {:.1}% ({:.1} MB/s)...", pct, speed_mbps);
-                                        let _ = std::io::Write::flush(&mut std::io::stdout());
-                                    }
-                                    msui_core::fshare::FShareEvent::FileSent { filename, size_bytes } => {
-                                        println!("\n✅ Successfully sent '{}' ({:.2} MB)!", filename, size_bytes as f64 / (1024.0 * 1024.0));
-                                        msui_core::fshare::log_transfer("Sent", &filename, size_bytes);
-                                        break;
-                                    }
-                                    msui_core::fshare::FShareEvent::Error(e) => {
-                                        eprintln!("\n❌ Transfer error: {}", e);
-                                        break;
-                                    }
-                                    _ => {}
-                                }
-                            }
-                            handle.stop();
-                            Ok::<(), anyhow::Error>(())
-                        })?;
-                    } else {
-                        eprintln!("Usage: msui fshare send <file-path>");
+                    if file_paths.is_empty() {
+                        eprintln!("Usage: msui fshare send <file-path> [file-path-2 ...]");
                         std::process::exit(1);
                     }
+
+                    let local_ip = match msui_core::fshare::get_local_ip() {
+                        Some(ip) => ip,
+                        None => {
+                            eprintln!("Error: Could not detect active Wi-Fi LAN IP.");
+                            std::process::exit(1);
+                        }
+                    };
+
+                    let token = msui_core::fshare::generate_token();
+                    let pin = msui_core::fshare::generate_pin();
+                    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+
+                    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+                    rt.block_on(async move {
+                        let handle = msui_core::fshare::FShareServer::start_send(
+                            file_paths.clone(),
+                            local_ip.clone(),
+                            token.clone(),
+                            pin.clone(),
+                            tx,
+                        ).await?;
+
+                        let url = format!("http://{}:{}/d/{}", local_ip, handle.port, token);
+                        println!("========================================");
+                        println!("  msUI FShare - File Sharing Server");
+                        println!("========================================");
+                        if file_paths.len() == 1 {
+                            println!("Sharing File: {}", file_paths[0].display());
+                        } else {
+                            println!("Sharing {} Files:", file_paths.len());
+                            for f in &file_paths {
+                                println!("  - {}", f.display());
+                            }
+                        }
+                        println!("Direct URL:   {}", url);
+                        println!("PIN Code:     {}", pin);
+                        println!();
+                        if let Ok(qr) = msui_core::fshare::generate_qr_terminal(&url) {
+                            println!("{}", qr);
+                        }
+                        println!("Scan QR code with phone camera or open the URL.");
+                        println!("Press Ctrl+C to terminate.");
+                        println!("========================================");
+
+                        while let Some(ev) = rx.recv().await {
+                            match ev {
+                                msui_core::fshare::FShareEvent::ClientConnected { peer_ip } => {
+                                    println!("📱 Phone connected from {}", peer_ip);
+                                }
+                                msui_core::fshare::FShareEvent::Progress { transferred_bytes, total_bytes, speed_mbps } => {
+                                    let pct = if total_bytes > 0 { (transferred_bytes as f32 / total_bytes as f32) * 100.0 } else { 0.0 };
+                                    print!("\rTransferring: {:.1}% ({:.1} MB/s)...", pct, speed_mbps);
+                                    let _ = std::io::Write::flush(&mut std::io::stdout());
+                                }
+                                msui_core::fshare::FShareEvent::FileSent { filename, size_bytes } => {
+                                    println!("\n✅ Successfully sent '{}' ({:.2} MB)!", filename, size_bytes as f64 / (1024.0 * 1024.0));
+                                    msui_core::fshare::log_transfer("Sent", &filename, size_bytes);
+                                    if file_paths.len() <= 1 {
+                                        break;
+                                    }
+                                }
+                                msui_core::fshare::FShareEvent::Error(e) => {
+                                    eprintln!("\n❌ Transfer error: {}", e);
+                                    break;
+                                }
+                                _ => {}
+                            }
+                        }
+                        handle.stop();
+                        Ok::<(), anyhow::Error>(())
+                    })?;
                 }
                 Some("receive") | Some("recv") => {
                     let save_dir = msui_core::fshare::default_save_dir();
@@ -1292,11 +1305,30 @@ fn main() -> anyhow::Result<()> {
                     })?;
                 }
                 _ => {
-                    if try_ipc_toggle("fshare") {
-                        return Ok(());
+                    let mut initial_files = Vec::new();
+                    for arg in args.iter().skip(2) {
+                        let p = if let Some(stripped) = arg.strip_prefix("~/") {
+                            if let Some(home) = std::env::var_os("HOME") {
+                                std::path::PathBuf::from(home).join(stripped)
+                            } else {
+                                std::path::PathBuf::from(arg)
+                            }
+                        } else {
+                            std::path::PathBuf::from(arg)
+                        };
+                        if p.exists() {
+                            initial_files.push(p);
+                        }
                     }
-                    tracing::info!("Starting msUI FShare Hub...");
-                    if let Err(e) = msui_launcher::run_fshare_modal() {
+
+                    if initial_files.is_empty() {
+                        if try_ipc_toggle("fshare") {
+                            return Ok(());
+                        }
+                    }
+
+                    tracing::info!("Starting msUI FShare Hub with {} initial file(s)...", initial_files.len());
+                    if let Err(e) = msui_launcher::run_fshare_modal(initial_files) {
                         tracing::error!("msUI FShare exited with error: {:?}", e);
                     }
                 }

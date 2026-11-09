@@ -21,9 +21,10 @@ use tokio::sync::mpsc;
 
 static INPUT_ID: LazyLock<iced::widget::Id> = LazyLock::new(iced::widget::Id::unique);
 
-pub fn run_fshare_modal() -> Result<(), iced_exwlshell::Error> {
+pub fn run_fshare_modal(initial_files: Vec<PathBuf>) -> Result<(), iced_exwlshell::Error> {
+    let files_clone = initial_files.clone();
     application(
-        FShareModal::new,
+        move || FShareModal::new(files_clone.clone()),
         FShareModal::namespace,
         FShareModal::update,
         FShareModal::view,
@@ -81,7 +82,7 @@ pub struct FShareModal {
     browse_current_dir: PathBuf,
     browse_entries: Vec<DirEntryItem>,
     send_path_input: String,
-    active_file: Option<PathBuf>,
+    selected_files: Vec<PathBuf>,
     qr_svg_data: Option<String>,
     active_url: String,
     active_pin: String,
@@ -105,7 +106,9 @@ pub enum Message {
     NavigateBrowseDir(PathBuf),
     BrowseDirUp,
     PathInputChanged(String),
-    PickFileAndSend(PathBuf),
+    ToggleFileSelection(PathBuf),
+    SingleFileShare(PathBuf),
+    ClearSelection,
     StartSendSelected,
     StartReceive,
     StopServer,
@@ -279,31 +282,39 @@ fn scan_recent_files() -> Vec<QuickFile> {
 }
 
 impl FShareModal {
-    pub fn new() -> (Self, Command<Message>) {
-        Self::new_internal(true)
+    pub fn new(initial_files: Vec<PathBuf>) -> (Self, Command<Message>) {
+        Self::new_internal(true, initial_files)
     }
 
     pub fn new_embedded() -> (Self, Command<Message>) {
-        Self::new_internal(false)
+        Self::new_internal(false, Vec::new())
     }
 
-    fn new_internal(is_standalone: bool) -> (Self, Command<Message>) {
+    fn new_internal(is_standalone: bool, initial_files: Vec<PathBuf>) -> (Self, Command<Message>) {
         let history = load_transfer_history();
         let quick_files = scan_recent_files();
         let home_dir = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"));
         let browse_entries = scan_dir(&home_dir);
 
-        let modal = Self {
+        let initial_status = if initial_files.is_empty() {
+            "Select file(s) to generate a sharing link & QR code.".to_string()
+        } else if initial_files.len() == 1 {
+            format!("Preparing to share '{}'...", initial_files[0].file_name().unwrap_or_default().to_string_lossy())
+        } else {
+            format!("Preparing to share {} files...", initial_files.len())
+        };
+
+        let mut modal = Self {
             active_tab: FShareTab::Send,
             send_mode: SendTabMode::Recent,
             browse_current_dir: home_dir,
             browse_entries,
             send_path_input: String::new(),
-            active_file: None,
+            selected_files: initial_files,
             qr_svg_data: None,
             active_url: String::new(),
             active_pin: String::new(),
-            status_text: "Select a file to generate a sharing link & QR code.".to_string(),
+            status_text: initial_status,
             progress_percent: 0.0,
             speed_mbps: 0.0,
             is_busy: false,
@@ -315,17 +326,20 @@ impl FShareModal {
             should_close: false,
         };
 
-        (
-            modal,
-            Command::batch([
-                focus(INPUT_ID.clone()),
-                Command::perform(tokio::time::sleep(std::time::Duration::from_millis(20)), |_| Message::EnsureFocus),
-                Command::perform(tokio::time::sleep(std::time::Duration::from_millis(50)), |_| Message::EnsureFocus),
-                Command::perform(tokio::time::sleep(std::time::Duration::from_millis(100)), |_| Message::EnsureFocus),
-                Command::perform(tokio::time::sleep(std::time::Duration::from_millis(180)), |_| Message::EnsureFocus),
-                Command::perform(tokio::time::sleep(std::time::Duration::from_millis(300)), |_| Message::EnsureFocus),
-            ]),
-        )
+        let mut cmds = vec![
+            focus(INPUT_ID.clone()),
+            Command::perform(tokio::time::sleep(std::time::Duration::from_millis(20)), |_| Message::EnsureFocus),
+            Command::perform(tokio::time::sleep(std::time::Duration::from_millis(50)), |_| Message::EnsureFocus),
+            Command::perform(tokio::time::sleep(std::time::Duration::from_millis(100)), |_| Message::EnsureFocus),
+            Command::perform(tokio::time::sleep(std::time::Duration::from_millis(180)), |_| Message::EnsureFocus),
+            Command::perform(tokio::time::sleep(std::time::Duration::from_millis(300)), |_| Message::EnsureFocus),
+        ];
+
+        if !modal.selected_files.is_empty() {
+            cmds.push(modal.start_send_server());
+        }
+
+        (modal, Command::batch(cmds))
     }
 
     pub fn should_close(&self) -> bool {
@@ -341,6 +355,7 @@ impl FShareModal {
         self.progress_percent = 0.0;
         self.speed_mbps = 0.0;
         self.is_busy = false;
+        self.selected_files.clear();
         self.history = load_transfer_history();
         self.quick_files = scan_recent_files();
         self.selected_category = None;
@@ -453,31 +468,55 @@ impl FShareModal {
                 self.send_path_input = path;
                 Command::none()
             }
-            Message::PickFileAndSend(path) => {
-                self.send_path_input = path.to_string_lossy().to_string();
-                self.active_file = Some(path);
+            Message::ToggleFileSelection(path) => {
+                if let Some(pos) = self.selected_files.iter().position(|p| p == &path) {
+                    self.selected_files.remove(pos);
+                } else {
+                    self.selected_files.push(path);
+                }
+                if self.selected_files.is_empty() {
+                    self.status_text = "Select files to share or click Browse.".to_string();
+                } else {
+                    self.status_text = format!("{} file(s) selected.", self.selected_files.len());
+                }
+                Command::none()
+            }
+            Message::SingleFileShare(path) => {
+                self.selected_files = vec![path];
                 self.start_send_server()
+            }
+            Message::ClearSelection => {
+                self.selected_files.clear();
+                self.send_path_input.clear();
+                self.status_text = "Selection cleared.".to_string();
+                Command::none()
             }
             Message::StartSendSelected => {
                 let p = expand_tilde(&self.send_path_input);
                 if p.exists() {
                     if p.is_file() {
-                        self.active_file = Some(p);
-                        self.start_send_server()
+                        if !self.selected_files.contains(&p) {
+                            self.selected_files.push(p);
+                        }
+                        return self.start_send_server();
                     } else if p.is_dir() {
                         self.send_mode = SendTabMode::Browse;
                         self.browse_current_dir = p.clone();
                         self.browse_entries = scan_dir(&p);
                         self.status_text = format!("Browsing: {}", p.display());
-                        Command::none()
+                        return Command::none();
                     } else {
                         self.status_text = format!("Invalid file: {}", self.send_path_input);
-                        Command::none()
+                        return Command::none();
                     }
-                } else {
-                    self.status_text = format!("File does not exist: {}", self.send_path_input);
-                    Command::none()
                 }
+
+                if !self.selected_files.is_empty() {
+                    return self.start_send_server();
+                }
+
+                self.status_text = "Please select or enter valid file(s) to send.".to_string();
+                Command::none()
             }
             Message::StartReceive => {
                 self.start_receive_server()
@@ -589,13 +628,16 @@ impl FShareModal {
     }
 
     fn start_send_server(&mut self) -> Command<Message> {
-        let file = match &self.active_file {
-            Some(f) if f.exists() => f.clone(),
-            _ => {
-                self.status_text = "Please specify a valid file to send.".to_string();
-                return Command::none();
-            }
-        };
+        if self.selected_files.is_empty() {
+            self.status_text = "Please specify valid file(s) to send.".to_string();
+            return Command::none();
+        }
+
+        self.selected_files.retain(|f| f.exists());
+        if self.selected_files.is_empty() {
+            self.status_text = "Selected file(s) do not exist.".to_string();
+            return Command::none();
+        }
 
         if let Some(h) = self.server_handle.take() {
             h.stop();
@@ -612,11 +654,11 @@ impl FShareModal {
         let token = generate_token();
         let pin = generate_pin();
 
-        self.status_text = "Starting direct Wi-Fi micro-server...".to_string();
+        self.status_text = format!("Starting micro-server for {} file(s)...", self.selected_files.len());
         self.progress_percent = 0.0;
         self.speed_mbps = 0.0;
 
-        let f_clone = file.clone();
+        let files_clone = self.selected_files.clone();
         let ip_clone = local_ip.clone();
         let t_clone = token.clone();
         let p_clone = pin.clone();
@@ -625,7 +667,7 @@ impl FShareModal {
             iced::stream::channel(100, |mut output: iced::futures::channel::mpsc::Sender<Message>| async move {
                 use iced::futures::SinkExt;
                 let (tx, mut rx) = mpsc::unbounded_channel();
-                match FShareServer::start_send(f_clone, ip_clone, t_clone, p_clone, tx).await {
+                match FShareServer::start_send(files_clone, ip_clone, t_clone, p_clone, tx).await {
                     Ok(handle) => {
                         let _ = output.send(Message::ServerStarted(handle)).await;
                         while let Some(event) = rx.recv().await {
@@ -791,31 +833,82 @@ impl FShareModal {
                 ..Default::default()
             });
 
-            let file_desc = if let Some(f) = &self.active_file {
+            let file_desc = if self.selected_files.len() == 1 {
+                let f = &self.selected_files[0];
                 let name = f.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
                 let size_mb = std::fs::metadata(f).map(|m| m.len() as f64 / (1024.0 * 1024.0)).unwrap_or(0.0);
                 format!("File: {} ({:.2} MB)", name, size_mb)
+            } else if self.selected_files.len() > 1 {
+                let count = self.selected_files.len();
+                let total_bytes: u64 = self.selected_files.iter().map(|f| std::fs::metadata(f).map(|m| m.len()).unwrap_or(0)).sum();
+                let size_mb = total_bytes as f64 / (1024.0 * 1024.0);
+                format!("Files: {} items ({:.2} MB total)", count, size_mb)
             } else {
                 "Ready to download".to_string()
             };
 
-            let details = column![
+            let mut details_col = column![
                 text(file_desc).size(15).color([1.0, 1.0, 1.0]),
-                text(format!("URL: {}", self.active_url)).size(13).color([0.54, 0.71, 0.98]),
-                text(format!("PIN: {}", self.active_pin)).size(13).color([0.65, 0.89, 0.63]),
-                row![
-                    button(text("📋 Copy Link").size(13)).padding([6, 12]).on_press(Message::CopyUrl),
-                    button(text("⏹ Stop").size(13)).padding([6, 12]).on_press(Message::StopServer),
-                ]
-                .spacing(8),
-            ]
-            .spacing(10);
+            ].spacing(6);
 
-            row![qr_widget, details].spacing(20).align_y(Alignment::Center).into()
+            if self.selected_files.len() > 1 {
+                details_col = details_col.push(
+                    text("📦 All as Zip or individual downloads on phone").size(11).color([0.68, 0.70, 0.78])
+                );
+            }
+
+            details_col = details_col.push(text(format!("URL: {}", self.active_url)).size(13).color([0.54, 0.71, 0.98]))
+                .push(text(format!("PIN: {}", self.active_pin)).size(13).color([0.65, 0.89, 0.63]))
+                .push(
+                    row![
+                        button(text("📋 Copy Link").size(13)).padding([6, 12]).on_press(Message::CopyUrl),
+                        button(text("⏹ Stop").size(13)).padding([6, 12]).on_press(Message::StopServer),
+                    ]
+                    .spacing(8)
+                );
+
+            row![qr_widget, details_col].spacing(20).align_y(Alignment::Center).into()
         } else {
-            match self.send_mode {
+            let files_view = match self.send_mode {
                 SendTabMode::Recent => self.view_recent_files(),
                 SendTabMode::Browse => self.view_directory_browser(),
+            };
+
+            if !self.selected_files.is_empty() {
+                let total_sel_bytes: u64 = self.selected_files.iter().map(|f| std::fs::metadata(f).map(|m| m.len()).unwrap_or(0)).sum();
+                let total_sel_mb = total_sel_bytes as f64 / (1024.0 * 1024.0);
+                let sel_bar = container(
+                    row![
+                        text(format!("✓ {} file(s) selected ({:.2} MB)", self.selected_files.len(), total_sel_mb))
+                            .size(13)
+                            .color([0.54, 0.71, 0.98]),
+                        space().width(Length::Fill),
+                        button(text("✕ Clear").size(11).color([0.95, 0.55, 0.60]))
+                            .padding([4, 10])
+                            .style(|_, _| button::Style {
+                                background: Some(iced::Color::from_rgb(0.25, 0.15, 0.18).into()),
+                                border: iced::border::rounded(8),
+                                ..Default::default()
+                            })
+                            .on_press(Message::ClearSelection),
+                        button(text(format!("🚀 Share {} Files (⏎)", self.selected_files.len())).size(12))
+                            .padding([6, 14])
+                            .style(button::primary)
+                            .on_press(Message::StartSendSelected),
+                    ]
+                    .spacing(10)
+                    .align_y(Alignment::Center),
+                )
+                .padding([6, 12])
+                .style(|_| container::Style {
+                    background: Some(iced::Color::from_rgb(0.12, 0.15, 0.22).into()),
+                    border: iced::border::rounded(10),
+                    ..Default::default()
+                });
+
+                column![sel_bar, files_view].spacing(10).into()
+            } else {
+                files_view
             }
         };
 
@@ -905,25 +998,49 @@ impl FShareModal {
                     _ => [0.98, 0.89, 0.62],
                 };
 
+                let is_sel = self.selected_files.contains(&qf.path);
+                let (bg, border_color) = if is_sel {
+                    (iced::Color::from_rgb(0.20, 0.25, 0.38), iced::Color::from_rgb(0.54, 0.71, 0.98))
+                } else {
+                    (iced::Color::from_rgb(0.16, 0.16, 0.23), iced::Color::TRANSPARENT)
+                };
+                let sel_badge = if is_sel {
+                    text("✓ Selected").size(11).color([0.54, 0.71, 0.98])
+                } else {
+                    text("+ Select").size(11).color([0.55, 0.57, 0.68])
+                };
+
                 let item = button(
                     row![
+                        sel_badge,
                         text(qf.icon).size(15),
                         text(&qf.name).size(12).color([0.90, 0.92, 0.98]).width(Length::Fill),
                         text(qf.category).size(10).color(cat_color),
                         text(&qf.size_str).size(11).color([0.65, 0.67, 0.78]),
-                        text("Share ⏎").size(11).color([0.54, 0.71, 0.98]),
+                        button(text("Share ⚡").size(10).color([0.54, 0.71, 0.98]))
+                            .padding([2, 8])
+                            .style(|_, _| button::Style {
+                                background: Some(iced::Color::from_rgb(0.12, 0.12, 0.18).into()),
+                                border: iced::border::rounded(6),
+                                ..Default::default()
+                            })
+                            .on_press(Message::SingleFileShare(qf.path.clone())),
                     ]
                     .spacing(10)
                     .align_y(Alignment::Center),
                 )
                 .width(Length::Fill)
                 .padding([6, 10])
-                .style(|_, _| button::Style {
-                    background: Some(iced::Color::from_rgb(0.16, 0.16, 0.23).into()),
-                    border: iced::border::rounded(8),
+                .style(move |_, _| button::Style {
+                    background: Some(bg.into()),
+                    border: iced::Border {
+                        color: border_color,
+                        width: if is_sel { 1.0 } else { 0.0 },
+                        radius: 8.0.into(),
+                    },
                     ..Default::default()
                 })
-                .on_press(Message::PickFileAndSend(qf.path.clone()));
+                .on_press(Message::ToggleFileSelection(qf.path.clone()));
 
                 files_col = files_col.push(item);
             }
@@ -1016,24 +1133,48 @@ impl FShareModal {
 
                     entries_col = entries_col.push(folder_row);
                 } else {
+                    let is_sel = self.selected_files.contains(&entry.path);
+                    let (bg, border_color) = if is_sel {
+                        (iced::Color::from_rgb(0.20, 0.25, 0.38), iced::Color::from_rgb(0.54, 0.71, 0.98))
+                    } else {
+                        (iced::Color::from_rgb(0.14, 0.14, 0.20), iced::Color::TRANSPARENT)
+                    };
+                    let sel_badge = if is_sel {
+                        text("✓ Selected").size(11).color([0.54, 0.71, 0.98])
+                    } else {
+                        text("+ Select").size(11).color([0.55, 0.57, 0.68])
+                    };
+
                     let file_row = button(
                         row![
+                            sel_badge,
                             text(entry.icon).size(15),
                             text(&entry.name).size(12).color([0.90, 0.92, 0.98]).width(Length::Fill),
                             text(&entry.size_str).size(11).color([0.65, 0.67, 0.78]),
-                            text("Share ⏎").size(11).color([0.54, 0.71, 0.98]),
+                            button(text("Share ⚡").size(10).color([0.54, 0.71, 0.98]))
+                                .padding([2, 8])
+                                .style(|_, _| button::Style {
+                                    background: Some(iced::Color::from_rgb(0.12, 0.12, 0.18).into()),
+                                    border: iced::border::rounded(6),
+                                    ..Default::default()
+                                })
+                                .on_press(Message::SingleFileShare(entry.path.clone())),
                         ]
                         .spacing(10)
                         .align_y(Alignment::Center),
                     )
                     .width(Length::Fill)
                     .padding([6, 10])
-                    .style(|_, _| button::Style {
-                        background: Some(iced::Color::from_rgb(0.14, 0.14, 0.20).into()),
-                        border: iced::border::rounded(8),
+                    .style(move |_, _| button::Style {
+                        background: Some(bg.into()),
+                        border: iced::Border {
+                            color: border_color,
+                            width: if is_sel { 1.0 } else { 0.0 },
+                            radius: 8.0.into(),
+                        },
                         ..Default::default()
                     })
-                    .on_press(Message::PickFileAndSend(entry.path.clone()));
+                    .on_press(Message::ToggleFileSelection(entry.path.clone()));
 
                     entries_col = entries_col.push(file_row);
                 }

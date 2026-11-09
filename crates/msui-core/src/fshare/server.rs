@@ -6,7 +6,9 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
-use super::web_assets::{render_download_page, render_upload_page};
+use super::web_assets::{
+    render_download_page, render_multi_download_page, render_upload_page, urlencoding_encode,
+};
 use super::{sanitize_filename, FShareEvent};
 
 #[derive(Debug, Clone)]
@@ -39,16 +41,21 @@ async fn bind_listener() -> anyhow::Result<TcpListener> {
 pub struct FShareServer;
 
 impl FShareServer {
-    /// Start server for Send mode (hosting a specific file)
+    /// Start server for Send mode (hosting one or more files)
     pub async fn start_send(
-        file_path: PathBuf,
+        file_paths: Vec<PathBuf>,
         local_ip: String,
         token: String,
         pin: String,
         event_tx: mpsc::UnboundedSender<FShareEvent>,
     ) -> anyhow::Result<FShareServerHandle> {
-        if !file_path.exists() {
-            anyhow::bail!("File not found: {:?}", file_path);
+        if file_paths.is_empty() {
+            anyhow::bail!("No files provided to share");
+        }
+        for f in &file_paths {
+            if !f.exists() {
+                anyhow::bail!("File not found: {:?}", f);
+            }
         }
 
         let listener = bind_listener().await?;
@@ -69,7 +76,7 @@ impl FShareServer {
             pin: pin.clone(),
         });
 
-        let file_path_clone = file_path.clone();
+        let file_paths_clone = file_paths.clone();
         let token_clone = token.clone();
         let shutdown_loop = shutdown.clone();
 
@@ -86,13 +93,13 @@ impl FShareServer {
                         match accept_res {
                             Ok((stream, peer_addr)) => {
                                 let peer_ip = peer_addr.ip().to_string();
-                                let file_path = file_path_clone.clone();
+                                let file_paths = file_paths_clone.clone();
                                 let token = token_clone.clone();
                                 let event_tx = event_tx.clone();
 
                                 tokio::spawn(async move {
                                     let _ = event_tx.send(FShareEvent::ClientConnected { peer_ip });
-                                    if let Err(e) = handle_send_connection(stream, &file_path, &token, event_tx.clone()).await {
+                                    if let Err(e) = handle_send_connection(stream, &file_paths, &token, event_tx.clone()).await {
                                         error!("FShare send connection error: {:?}", e);
                                     }
                                 });
@@ -195,12 +202,74 @@ impl FShareServer {
     }
 }
 
+async fn stream_file_response(
+    stream: &mut TcpStream,
+    file_path: &Path,
+    filename: &str,
+    is_head: bool,
+    event_tx: mpsc::UnboundedSender<FShareEvent>,
+) -> anyhow::Result<()> {
+    let metadata = tokio::fs::metadata(file_path).await?;
+    let total_bytes = metadata.len();
+
+    let header = format!(
+        "HTTP/1.1 200 OK\r\n\
+        Content-Type: application/octet-stream\r\n\
+        Content-Disposition: attachment; filename=\"{}\"; filename*=UTF-8''{}\r\n\
+        Content-Length: {}\r\n\
+        Access-Control-Allow-Origin: *\r\n\
+        Accept-Ranges: none\r\n\
+        Connection: close\r\n\r\n",
+        filename, urlencoding_encode(filename), total_bytes
+    );
+    stream.write_all(header.as_bytes()).await?;
+    if is_head {
+        return Ok(());
+    }
+
+    let mut file = tokio::fs::File::open(file_path).await?;
+    let mut buffer = [0u8; 65536];
+    let mut sent: u64 = 0;
+    let start_time = std::time::Instant::now();
+
+    loop {
+        let read_bytes = file.read(&mut buffer).await?;
+        if read_bytes == 0 {
+            break;
+        }
+        stream.write_all(&buffer[..read_bytes]).await?;
+        sent += read_bytes as u64;
+
+        let elapsed = start_time.elapsed().as_secs_f32().max(0.001);
+        let speed_mbps = (sent as f32 / (1024.0 * 1024.0)) / elapsed;
+
+        let _ = event_tx.send(FShareEvent::Progress {
+            transferred_bytes: sent,
+            total_bytes,
+            speed_mbps,
+        });
+    }
+    stream.flush().await?;
+
+    let _ = event_tx.send(FShareEvent::FileSent {
+        filename: filename.to_string(),
+        size_bytes: total_bytes,
+    });
+
+    Ok(())
+}
+
 async fn handle_send_connection(
     mut stream: TcpStream,
-    file_path: &Path,
+    file_paths: &[PathBuf],
     token: &str,
     event_tx: mpsc::UnboundedSender<FShareEvent>,
 ) -> anyhow::Result<()> {
+    if file_paths.is_empty() {
+        send_404(&mut stream).await?;
+        return Ok(());
+    }
+
     let mut header_buf = vec![0u8; 4096];
     let n = stream.read(&mut header_buf).await?;
     if n == 0 {
@@ -231,11 +300,6 @@ async fn handle_send_connection(
         return Ok(());
     }
 
-    let filename = file_path
-        .file_name()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| "file".to_string());
-
     if path_clean == "/favicon.ico" {
         let resp = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
         stream.write_all(resp.as_bytes()).await?;
@@ -244,71 +308,117 @@ async fn handle_send_connection(
 
     let download_page_path = format!("/d/{}", token);
     let download_file_prefix = format!("/dl/{}/", token);
+    let is_multi = file_paths.len() > 1;
 
     if path_clean == download_page_path {
-        let size = std::fs::metadata(file_path)?.len();
-        let dl_url = format!("/dl/{}/{}", token, urlencoding_encode(&filename));
-        let html = render_download_page(&filename, size, &dl_url);
-        if method == "HEAD" {
-            let header = format!(
-                "HTTP/1.1 200 OK\r\n\
-                Content-Type: text/html; charset=utf-8\r\n\
-                Content-Length: {}\r\n\
-                Access-Control-Allow-Origin: *\r\n\
-                Connection: close\r\n\r\n",
-                html.len()
-            );
-            stream.write_all(header.as_bytes()).await?;
-        } else {
-            send_html(&mut stream, &html).await?;
-        }
-    } else if path.starts_with(&download_file_prefix) {
-        let metadata = tokio::fs::metadata(file_path).await?;
-        let total_bytes = metadata.len();
-        let mut file = tokio::fs::File::open(file_path).await?;
-
-        let header = format!(
-            "HTTP/1.1 200 OK\r\n\
-            Content-Type: application/octet-stream\r\n\
-            Content-Disposition: attachment; filename=\"{}\"; filename*=UTF-8''{}\r\n\
-            Content-Length: {}\r\n\
-            Access-Control-Allow-Origin: *\r\n\
-            Accept-Ranges: none\r\n\
-            Connection: close\r\n\r\n",
-            filename, urlencoding_encode(&filename), total_bytes
-        );
-        stream.write_all(header.as_bytes()).await?;
-        if method == "HEAD" {
-            return Ok(());
-        }
-
-        let mut buffer = [0u8; 65536];
-        let mut sent: u64 = 0;
-        let start_time = std::time::Instant::now();
-
-        loop {
-            let read_bytes = file.read(&mut buffer).await?;
-            if read_bytes == 0 {
-                break;
+        if is_multi {
+            let mut files_info = Vec::new();
+            let mut total_size: u64 = 0;
+            for f in file_paths {
+                let size = std::fs::metadata(f).map(|m| m.len()).unwrap_or(0);
+                let name = f.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string());
+                total_size += size;
+                files_info.push((name, size));
             }
-            stream.write_all(&buffer[..read_bytes]).await?;
-            sent += read_bytes as u64;
+            let zip_dl_path = format!("/dl/{}/all.zip", token);
+            let html = render_multi_download_page(&files_info, total_size, &zip_dl_path, token);
 
-            let elapsed = start_time.elapsed().as_secs_f32().max(0.001);
-            let speed_mbps = (sent as f32 / (1024.0 * 1024.0)) / elapsed;
-
-            let _ = event_tx.send(FShareEvent::Progress {
-                transferred_bytes: sent,
-                total_bytes,
-                speed_mbps,
-            });
+            if method == "HEAD" {
+                let header = format!(
+                    "HTTP/1.1 200 OK\r\n\
+                    Content-Type: text/html; charset=utf-8\r\n\
+                    Content-Length: {}\r\n\
+                    Access-Control-Allow-Origin: *\r\n\
+                    Connection: close\r\n\r\n",
+                    html.len()
+                );
+                stream.write_all(header.as_bytes()).await?;
+            } else {
+                send_html(&mut stream, &html).await?;
+            }
+        } else {
+            let file_path = &file_paths[0];
+            let filename = file_path
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| "file".to_string());
+            let size = std::fs::metadata(file_path).map(|m| m.len()).unwrap_or(0);
+            let dl_url = format!("/dl/{}/{}", token, urlencoding_encode(&filename));
+            let html = render_download_page(&filename, size, &dl_url);
+            if method == "HEAD" {
+                let header = format!(
+                    "HTTP/1.1 200 OK\r\n\
+                    Content-Type: text/html; charset=utf-8\r\n\
+                    Content-Length: {}\r\n\
+                    Access-Control-Allow-Origin: *\r\n\
+                    Connection: close\r\n\r\n",
+                    html.len()
+                );
+                stream.write_all(header.as_bytes()).await?;
+            } else {
+                send_html(&mut stream, &html).await?;
+            }
         }
-        stream.flush().await?;
+    } else if let Some(rest) = path_clean.strip_prefix(&download_file_prefix) {
+        if rest == "all.zip" {
+            let temp_dir = std::env::temp_dir();
+            let zip_name = format!("msui_fshare_{}_{}.zip", token, std::process::id());
+            let zip_path = temp_dir.join(&zip_name);
 
-        let _ = event_tx.send(FShareEvent::FileSent {
-            filename,
-            size_bytes: total_bytes,
-        });
+            let mut cmd = std::process::Command::new("zip");
+            cmd.arg("-j").arg("-q").arg(&zip_path);
+            for f in file_paths {
+                cmd.arg(f);
+            }
+
+            match cmd.status() {
+                Ok(status) if status.success() => {
+                    let zip_download_name = format!("msui_fshare_{}_files.zip", file_paths.len());
+                    let res = stream_file_response(&mut stream, &zip_path, &zip_download_name, method == "HEAD", event_tx).await;
+                    let _ = std::fs::remove_file(&zip_path);
+                    res?;
+                }
+                _ => {
+                    error!("Failed to generate zip bundle for FShare download");
+                    send_404(&mut stream).await?;
+                }
+            }
+        } else if let Some((idx_str, _fname_part)) = rest.split_once('/') {
+            if let Ok(idx) = idx_str.parse::<usize>() {
+                if idx < file_paths.len() {
+                    let target_file = &file_paths[idx];
+                    let fname = target_file
+                        .file_name()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_else(|| format!("file_{}", idx));
+                    stream_file_response(&mut stream, target_file, &fname, method == "HEAD", event_tx).await?;
+                    return Ok(());
+                }
+            }
+            send_404(&mut stream).await?;
+        } else {
+            // Single file or direct match by filename
+            let decoded_rest = urlencoding_decode(rest);
+            let matched_file = file_paths.iter().find(|f| {
+                if let Some(f_name) = f.file_name() {
+                    let f_str = f_name.to_string_lossy();
+                    f_str == rest || f_str == decoded_rest || urlencoding_encode(&f_str) == rest
+                } else {
+                    false
+                }
+            });
+
+            if let Some(f) = matched_file {
+                let fname = f.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string());
+                stream_file_response(&mut stream, f, &fname, method == "HEAD", event_tx).await?;
+            } else if file_paths.len() == 1 {
+                let f = &file_paths[0];
+                let fname = f.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string());
+                stream_file_response(&mut stream, f, &fname, method == "HEAD", event_tx).await?;
+            } else {
+                send_404(&mut stream).await?;
+            }
+        }
     } else {
         send_404(&mut stream).await?;
     }
@@ -493,18 +603,6 @@ async fn send_404(stream: &mut TcpStream) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn urlencoding_encode(s: &str) -> String {
-    let mut out = String::new();
-    for b in s.bytes() {
-        if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.' || b == b'~' {
-            out.push(b as char);
-        } else {
-            out.push_str(&format!("%{:02X}", b));
-        }
-    }
-    out
-}
-
 fn urlencoding_decode(s: &str) -> String {
     let mut bytes = Vec::new();
     let mut chars = s.chars();
@@ -544,7 +642,7 @@ mod tests {
         let pin = "1234".to_string();
 
         let handle = FShareServer::start_send(
-            test_file.clone(),
+            vec![test_file.clone()],
             "127.0.0.1".into(),
             token.clone(),
             pin.clone(),
@@ -655,7 +753,7 @@ mod tests {
         let pin = "9999".to_string();
 
         let handle = FShareServer::start_send(
-            test_file.clone(),
+            vec![test_file.clone()],
             "127.0.0.1".into(),
             token.clone(),
             pin.clone(),
@@ -691,7 +789,54 @@ mod tests {
 
         handle.stop();
 
-        // 4. Test OPTIONS preflight on receive server
+        // 4. Test multi-file send server and zip download
+        let test_file2 = test_dir.join("photo2.png");
+        std::fs::write(&test_file2, b"FAKE_PNG_BINARY_DATA_2").unwrap();
+
+        let (tx_multi, _rx_multi) = mpsc::unbounded_channel();
+        let multi_token = "tokmulti".to_string();
+        let multi_handle = FShareServer::start_send(
+            vec![test_file.clone(), test_file2.clone()],
+            "127.0.0.1".into(),
+            multi_token.clone(),
+            "5678".into(),
+            tx_multi,
+        )
+        .await
+        .unwrap();
+
+        let mut s_multi = TcpStream::connect(format!("127.0.0.1:{}", multi_handle.port)).await.unwrap();
+        s_multi.write_all(format!("GET /d/{} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", multi_token).as_bytes()).await.unwrap();
+        let mut resp_multi = Vec::new();
+        s_multi.read_to_end(&mut resp_multi).await.unwrap();
+        let s_resp_multi = String::from_utf8_lossy(&resp_multi);
+        assert!(s_resp_multi.contains("HTTP/1.1 200 OK"));
+        assert!(s_resp_multi.contains("2 Files Shared"));
+        assert!(s_resp_multi.contains("Download All as Zip"));
+        assert!(s_resp_multi.contains("photo.png"));
+        assert!(s_resp_multi.contains("photo2.png"));
+
+        // Test downloading one individual file by index
+        let mut s_file0 = TcpStream::connect(format!("127.0.0.1:{}", multi_handle.port)).await.unwrap();
+        s_file0.write_all(format!("GET /dl/{}/0/photo.png HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", multi_token).as_bytes()).await.unwrap();
+        let mut resp_file0 = Vec::new();
+        s_file0.read_to_end(&mut resp_file0).await.unwrap();
+        let s_resp_file0 = String::from_utf8_lossy(&resp_file0);
+        assert!(s_resp_file0.contains("HTTP/1.1 200 OK"));
+        assert!(s_resp_file0.contains("FAKE_PNG_BINARY_DATA"));
+
+        // Test zip download
+        let mut s_zip = TcpStream::connect(format!("127.0.0.1:{}", multi_handle.port)).await.unwrap();
+        s_zip.write_all(format!("GET /dl/{}/all.zip HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", multi_token).as_bytes()).await.unwrap();
+        let mut resp_zip = Vec::new();
+        s_zip.read_to_end(&mut resp_zip).await.unwrap();
+        let s_resp_zip = String::from_utf8_lossy(&resp_zip);
+        assert!(s_resp_zip.contains("HTTP/1.1 200 OK"));
+        assert!(s_resp_zip.contains("Content-Type: application/octet-stream"));
+
+        multi_handle.stop();
+
+        // 5. Test OPTIONS preflight on receive server
         let (tx_recv, _rx_recv) = mpsc::unbounded_channel();
         let recv_handle = FShareServer::start_recv(
             test_dir.clone(),

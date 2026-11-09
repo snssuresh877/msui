@@ -94,6 +94,200 @@ pub fn render_download_page(filename: &str, size_bytes: u64, dl_path: &str) -> S
     )
 }
 
+pub fn urlencoding_encode(s: &str) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.' || b == b'~' {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{:02X}", b));
+        }
+    }
+    out
+}
+
+pub fn render_multi_download_page(
+    files: &[(String, u64)],
+    total_size_bytes: u64,
+    zip_dl_path: &str,
+    token: &str,
+) -> String {
+    let total_size_mb = total_size_bytes as f64 / (1024.0 * 1024.0);
+    let count = files.len();
+
+    let mut items_html = String::new();
+    for (idx, (name, size)) in files.iter().enumerate() {
+        let size_str = if *size < 1024 {
+            format!("{} B", size)
+        } else if *size < 1024 * 1024 {
+            format!("{:.1} KB", *size as f64 / 1024.0)
+        } else {
+            format!("{:.2} MB", *size as f64 / (1024.0 * 1024.0))
+        };
+
+        let encoded_name = urlencoding_encode(name);
+        let item_url = format!("/dl/{}/{}/{}", token, idx, encoded_name);
+
+        items_html.push_str(&format!(
+            r#"<div class="file-item">
+                <div class="file-info">
+                    <span class="file-name">{}</span>
+                    <span class="file-size">{}</span>
+                </div>
+                <a href="{}" class="item-dl" download="{}">Download</a>
+            </div>"#,
+            name, size_str, item_url, name
+        ));
+    }
+
+    format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>msUI FShare - {count} Files</title>
+    <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: #11111b;
+            color: #cdd6f4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }}
+        .card {{
+            background: #1e1e2e;
+            border: 1px solid #313244;
+            border-radius: 20px;
+            padding: 32px 24px;
+            width: 100%;
+            max-width: 480px;
+            text-align: center;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+        }}
+        .badge {{
+            display: inline-block;
+            background: rgba(137, 180, 250, 0.15);
+            color: #89b4fa;
+            padding: 6px 14px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            letter-spacing: 0.5px;
+        }}
+        .icon {{
+            font-size: 46px;
+            margin-bottom: 12px;
+        }}
+        h2 {{
+            font-size: 20px;
+            color: #ffffff;
+            margin-bottom: 6px;
+        }}
+        .meta {{
+            color: #a6adc8;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }}
+        .btn {{
+            display: block;
+            width: 100%;
+            background: #89b4fa;
+            color: #11111b;
+            text-decoration: none;
+            padding: 14px;
+            border-radius: 14px;
+            font-size: 15px;
+            font-weight: 700;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 14px rgba(137, 180, 250, 0.3);
+            margin-bottom: 20px;
+        }}
+        .btn:active {{
+            transform: scale(0.98);
+            background: #b4befe;
+        }}
+        .file-list {{
+            background: #181825;
+            border: 1px solid #313244;
+            border-radius: 14px;
+            max-height: 260px;
+            overflow-y: auto;
+            text-align: left;
+            margin-bottom: 16px;
+        }}
+        .file-item {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            border-bottom: 1px solid #262738;
+        }}
+        .file-item:last-child {{
+            border-bottom: none;
+        }}
+        .file-info {{
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding-right: 10px;
+        }}
+        .file-name {{
+            font-size: 14px;
+            color: #cdd6f4;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        .file-size {{
+            font-size: 12px;
+            color: #a6adc8;
+            margin-top: 2px;
+        }}
+        .item-dl {{
+            background: rgba(137, 180, 250, 0.15);
+            color: #89b4fa;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 8px;
+            flex-shrink: 0;
+            transition: background 0.15s;
+        }}
+        .item-dl:active {{
+            background: rgba(137, 180, 250, 0.35);
+        }}
+        .footer {{
+            margin-top: 14px;
+            font-size: 12px;
+            color: #6c7086;
+        }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <span class="badge">msUI FShare • Direct Wi-Fi</span>
+        <div class="icon">📦</div>
+        <h2>{count} Files Shared</h2>
+        <p class="meta">Total size: {total_size_mb:.2} MB</p>
+        <a href="{zip_dl_path}" class="btn" download="msui_fshare_{count}_files.zip">📥 Download All as Zip</a>
+        <div class="file-list">
+            {items_html}
+        </div>
+        <div class="footer">Transferred directly over local network. No cloud involved.</div>
+    </div>
+</body>
+</html>"#
+    )
+}
+
 pub fn render_upload_page(upload_path: &str) -> String {
     format!(
         r#"<!DOCTYPE html>
