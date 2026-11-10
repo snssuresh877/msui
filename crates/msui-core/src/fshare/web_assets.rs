@@ -1,33 +1,41 @@
 pub fn render_download_page(filename: &str, size_bytes: u64, dl_path: &str) -> String {
     let size_mb = size_bytes as f64 / (1024.0 * 1024.0);
     format!(
-        r#"<!DOCTYPE html>
+        r##"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#11111b">
     <title>msUI FShare - {filename}</title>
     <style>
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        html, body {{
+            width: 100%;
+            height: 100%;
+            min-height: 100vh;
+            min-height: 100dvh;
+        }}
         body {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background: #11111b;
+            background-color: #11111b;
             color: #cdd6f4;
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            padding: 20px;
+            padding: 16px;
         }}
         .card {{
-            background: #1e1e2e;
+            background-color: #1e1e2e;
             border: 1px solid #313244;
             border-radius: 20px;
-            padding: 36px 28px;
+            padding: 36px 24px;
             width: 100%;
             max-width: 440px;
             text-align: center;
-            box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+            box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+            margin: auto;
         }}
         .badge {{
             display: inline-block;
@@ -68,6 +76,8 @@ pub fn render_download_page(filename: &str, size_bytes: u64, dl_path: &str) -> S
             font-weight: 700;
             transition: all 0.2s ease;
             box-shadow: 0 4px 14px rgba(137, 180, 250, 0.3);
+            border: none;
+            cursor: pointer;
         }}
         .btn:active {{
             transform: scale(0.98);
@@ -86,11 +96,21 @@ pub fn render_download_page(filename: &str, size_bytes: u64, dl_path: &str) -> S
         <div class="icon">📦</div>
         <h2>{filename}</h2>
         <p class="meta">Size: {size_mb:.2} MB</p>
-        <a href="{dl_path}" class="btn" download="{filename}">Download to Device</a>
+        <a href="{dl_path}" class="btn" id="dl-btn" download="{filename}" onclick="handleClick()">Download to Device</a>
         <div class="footer">Transferred directly over local network. No cloud involved.</div>
     </div>
+    <script>
+        function handleClick() {{
+            const btn = document.getElementById('dl-btn');
+            btn.innerText = '⏳ Starting Download...';
+            btn.style.background = '#a6e3a1';
+            setTimeout(() => {{
+                btn.innerText = '✓ Download Triggered';
+            }}, 2000);
+        }}
+    </script>
 </body>
-</html>"#
+</html>"##
     )
 }
 
@@ -141,33 +161,41 @@ pub fn render_multi_download_page(
     }
 
     format!(
-        r#"<!DOCTYPE html>
+        r##"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#11111b">
     <title>msUI FShare - {count} Files</title>
     <style>
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        html, body {{
+            width: 100%;
+            height: 100%;
+            min-height: 100vh;
+            min-height: 100dvh;
+        }}
         body {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background: #11111b;
+            background-color: #11111b;
             color: #cdd6f4;
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            padding: 20px;
+            padding: 16px;
         }}
         .card {{
-            background: #1e1e2e;
+            background-color: #1e1e2e;
             border: 1px solid #313244;
             border-radius: 20px;
             padding: 32px 24px;
             width: 100%;
             max-width: 480px;
             text-align: center;
-            box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+            box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+            margin: auto;
         }}
         .badge {{
             display: inline-block;
@@ -207,6 +235,8 @@ pub fn render_multi_download_page(
             transition: all 0.2s ease;
             box-shadow: 0 4px 14px rgba(137, 180, 250, 0.3);
             margin-bottom: 20px;
+            border: none;
+            cursor: pointer;
         }}
         .btn:active {{
             transform: scale(0.98);
@@ -277,46 +307,64 @@ pub fn render_multi_download_page(
         <div class="icon">📦</div>
         <h2>{count} Files Shared</h2>
         <p class="meta">Total size: {total_size_mb:.2} MB</p>
-        <a href="{zip_dl_path}" class="btn" download="msui_fshare_{count}_files.zip">📥 Download All as Zip</a>
+        <a href="{zip_dl_path}" class="btn" id="zip-btn" download="msui_fshare_{count}_files.zip" onclick="handleZipClick()">📥 Download All as Zip</a>
         <div class="file-list">
             {items_html}
         </div>
         <div class="footer">Transferred directly over local network. No cloud involved.</div>
     </div>
+    <script>
+        function handleZipClick() {{
+            const btn = document.getElementById('zip-btn');
+            btn.innerText = '⏳ Packaging & Downloading Zip...';
+            btn.style.background = '#a6e3a1';
+            setTimeout(() => {{
+                btn.innerText = '✓ Zip Download Started';
+            }}, 2500);
+        }}
+    </script>
 </body>
-</html>"#
+</html>"##
     )
 }
 
 pub fn render_upload_page(upload_path: &str) -> String {
     format!(
-        r#"<!DOCTYPE html>
+        r##"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#11111b">
     <title>msUI FShare - Send to PC</title>
     <style>
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        html, body {{
+            width: 100%;
+            height: 100%;
+            min-height: 100vh;
+            min-height: 100dvh;
+        }}
         body {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background: #11111b;
+            background-color: #11111b;
             color: #cdd6f4;
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            padding: 20px;
+            padding: 16px;
         }}
         .card {{
-            background: #1e1e2e;
+            background-color: #1e1e2e;
             border: 1px solid #313244;
             border-radius: 20px;
-            padding: 36px 28px;
+            padding: 36px 24px;
             width: 100%;
             max-width: 440px;
             text-align: center;
-            box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+            box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+            margin: auto;
         }}
         .badge {{
             display: inline-block;
@@ -508,6 +556,6 @@ pub fn render_upload_page(upload_path: &str) -> String {
         }}
     </script>
 </body>
-</html>"#
+</html>"##
     )
 }

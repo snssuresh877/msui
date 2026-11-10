@@ -218,12 +218,17 @@ async fn stream_file_response(
         Content-Disposition: attachment; filename=\"{}\"; filename*=UTF-8''{}\r\n\
         Content-Length: {}\r\n\
         Access-Control-Allow-Origin: *\r\n\
+        Cache-Control: no-cache, no-store, must-revalidate\r\n\
+        Pragma: no-cache\r\n\
+        Expires: 0\r\n\
         Accept-Ranges: none\r\n\
         Connection: close\r\n\r\n",
         filename, urlencoding_encode(filename), total_bytes
     );
     stream.write_all(header.as_bytes()).await?;
     if is_head {
+        stream.flush().await?;
+        let _ = stream.shutdown().await;
         return Ok(());
     }
 
@@ -250,6 +255,7 @@ async fn stream_file_response(
         });
     }
     stream.flush().await?;
+    let _ = stream.shutdown().await;
 
     let _ = event_tx.send(FShareEvent::FileSent {
         filename: filename.to_string(),
@@ -271,8 +277,21 @@ async fn handle_send_connection(
     }
 
     let mut header_buf = vec![0u8; 4096];
-    let n = stream.read(&mut header_buf).await?;
-    if n == 0 {
+    let read_result = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        stream.read(&mut header_buf),
+    )
+    .await;
+
+    let n = match read_result {
+        Ok(Ok(n)) if n > 0 => n,
+        _ => return Ok(()),
+    };
+
+    // Detect TLS ClientHello handshake (first byte 0x16, followed by TLS version 0x03)
+    if header_buf[0] == 0x16 {
+        warn!("Client attempted HTTPS/TLS connection. FShare operates over plain HTTP.");
+        let _ = stream.shutdown().await;
         return Ok(());
     }
 
@@ -292,6 +311,8 @@ async fn handle_send_connection(
                     Content-Length: 0\r\n\
                     Connection: close\r\n\r\n";
         stream.write_all(resp.as_bytes()).await?;
+        stream.flush().await?;
+        let _ = stream.shutdown().await;
         return Ok(());
     }
 
@@ -303,63 +324,15 @@ async fn handle_send_connection(
     if path_clean == "/favicon.ico" {
         let resp = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
         stream.write_all(resp.as_bytes()).await?;
+        stream.flush().await?;
+        let _ = stream.shutdown().await;
         return Ok(());
     }
 
-    let download_page_path = format!("/d/{}", token);
     let download_file_prefix = format!("/dl/{}/", token);
-    let is_multi = file_paths.len() > 1;
 
-    if path_clean == download_page_path {
-        if is_multi {
-            let mut files_info = Vec::new();
-            let mut total_size: u64 = 0;
-            for f in file_paths {
-                let size = std::fs::metadata(f).map(|m| m.len()).unwrap_or(0);
-                let name = f.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string());
-                total_size += size;
-                files_info.push((name, size));
-            }
-            let zip_dl_path = format!("/dl/{}/all.zip", token);
-            let html = render_multi_download_page(&files_info, total_size, &zip_dl_path, token);
-
-            if method == "HEAD" {
-                let header = format!(
-                    "HTTP/1.1 200 OK\r\n\
-                    Content-Type: text/html; charset=utf-8\r\n\
-                    Content-Length: {}\r\n\
-                    Access-Control-Allow-Origin: *\r\n\
-                    Connection: close\r\n\r\n",
-                    html.len()
-                );
-                stream.write_all(header.as_bytes()).await?;
-            } else {
-                send_html(&mut stream, &html).await?;
-            }
-        } else {
-            let file_path = &file_paths[0];
-            let filename = file_path
-                .file_name()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| "file".to_string());
-            let size = std::fs::metadata(file_path).map(|m| m.len()).unwrap_or(0);
-            let dl_url = format!("/dl/{}/{}", token, urlencoding_encode(&filename));
-            let html = render_download_page(&filename, size, &dl_url);
-            if method == "HEAD" {
-                let header = format!(
-                    "HTTP/1.1 200 OK\r\n\
-                    Content-Type: text/html; charset=utf-8\r\n\
-                    Content-Length: {}\r\n\
-                    Access-Control-Allow-Origin: *\r\n\
-                    Connection: close\r\n\r\n",
-                    html.len()
-                );
-                stream.write_all(header.as_bytes()).await?;
-            } else {
-                send_html(&mut stream, &html).await?;
-            }
-        }
-    } else if let Some(rest) = path_clean.strip_prefix(&download_file_prefix) {
+    // If request is to download a file or all.zip:
+    if let Some(rest) = path_clean.strip_prefix(&download_file_prefix) {
         if rest == "all.zip" {
             let temp_dir = std::env::temp_dir();
             let zip_name = format!("msui_fshare_{}_{}.zip", token, std::process::id());
@@ -419,8 +392,72 @@ async fn handle_send_connection(
                 send_404(&mut stream).await?;
             }
         }
+    } else if path_clean.starts_with("/dl/") {
+        // Fallback for single file downloads
+        if file_paths.len() == 1 {
+            let f = &file_paths[0];
+            let fname = f.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string());
+            stream_file_response(&mut stream, f, &fname, method == "HEAD", event_tx).await?;
+        } else {
+            send_404(&mut stream).await?;
+        }
     } else {
-        send_404(&mut stream).await?;
+        // Any other GET/HEAD request (including /, /d, /d/, /download, /d/{token}) serves the download page!
+        let is_multi = file_paths.len() > 1;
+        if is_multi {
+            let mut files_info = Vec::new();
+            let mut total_size: u64 = 0;
+            for f in file_paths {
+                let size = std::fs::metadata(f).map(|m| m.len()).unwrap_or(0);
+                let name = f.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string());
+                total_size += size;
+                files_info.push((name, size));
+            }
+            let zip_dl_path = format!("/dl/{}/all.zip", token);
+            let html = render_multi_download_page(&files_info, total_size, &zip_dl_path, token);
+
+            if method == "HEAD" {
+                let header = format!(
+                    "HTTP/1.1 200 OK\r\n\
+                    Content-Type: text/html; charset=utf-8\r\n\
+                    Content-Length: {}\r\n\
+                    Access-Control-Allow-Origin: *\r\n\
+                    Cache-Control: no-cache, no-store, must-revalidate\r\n\
+                    Connection: close\r\n\r\n",
+                    html.len()
+                );
+                stream.write_all(header.as_bytes()).await?;
+                stream.flush().await?;
+                let _ = stream.shutdown().await;
+            } else {
+                send_html(&mut stream, &html).await?;
+            }
+        } else {
+            let file_path = &file_paths[0];
+            let filename = file_path
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| "file".to_string());
+            let size = std::fs::metadata(file_path).map(|m| m.len()).unwrap_or(0);
+            let dl_url = format!("/dl/{}/{}", token, urlencoding_encode(&filename));
+            let html = render_download_page(&filename, size, &dl_url);
+            if method == "HEAD" {
+                let header = format!(
+                    "HTTP/1.1 200 OK\r\n\
+                    Content-Type: text/html; charset=utf-8\r\n\
+                    Content-Length: {}\r\n\
+                    Access-Control-Allow-Origin: *\r\n\
+                    Cache-Control: no-cache, no-store, must-revalidate\r\n\
+                    Connection: close\r\n\r\n",
+                    html.len()
+                );
+                stream.write_all(header.as_bytes()).await?;
+                stream.flush().await?;
+                let _ = stream.shutdown().await;
+            } else {
+                send_html(&mut stream, &html).await?;
+            }
+        }
     }
 
     Ok(())
@@ -479,16 +516,20 @@ async fn handle_recv_connection(
                     Content-Length: 0\r\n\
                     Connection: close\r\n\r\n";
         stream.write_all(resp.as_bytes()).await?;
+        stream.flush().await?;
+        let _ = stream.shutdown().await;
         return Ok(());
     }
 
     if path_clean == "/favicon.ico" {
         let resp = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
         stream.write_all(resp.as_bytes()).await?;
+        stream.flush().await?;
+        let _ = stream.shutdown().await;
         return Ok(());
     }
 
-    if (method == "GET" || method == "HEAD") && path_clean == upload_page_path {
+    if (method == "GET" || method == "HEAD") && (path_clean == upload_page_path || !path_clean.starts_with("/upload/")) {
         let html = render_upload_page(&upload_endpoint);
         if method == "HEAD" {
             let header = format!(
@@ -496,10 +537,13 @@ async fn handle_recv_connection(
                 Content-Type: text/html; charset=utf-8\r\n\
                 Content-Length: {}\r\n\
                 Access-Control-Allow-Origin: *\r\n\
+                Cache-Control: no-cache, no-store, must-revalidate\r\n\
                 Connection: close\r\n\r\n",
                 html.len()
             );
             stream.write_all(header.as_bytes()).await?;
+            stream.flush().await?;
+            let _ = stream.shutdown().await;
         } else {
             send_html(&mut stream, &html).await?;
         }
@@ -566,6 +610,7 @@ async fn handle_recv_connection(
                     Connection: close\r\n\r\nOK";
         stream.write_all(resp.as_bytes()).await?;
         stream.flush().await?;
+        let _ = stream.shutdown().await;
     } else {
         send_404(&mut stream).await?;
     }
@@ -579,12 +624,17 @@ async fn send_html(stream: &mut TcpStream, html: &str) -> anyhow::Result<()> {
         "HTTP/1.1 200 OK\r\n\
         Content-Type: text/html; charset=utf-8\r\n\
         Content-Length: {}\r\n\
+        Access-Control-Allow-Origin: *\r\n\
+        Cache-Control: no-cache, no-store, must-revalidate\r\n\
+        Pragma: no-cache\r\n\
+        Expires: 0\r\n\
         Connection: close\r\n\r\n",
         bytes.len()
     );
     stream.write_all(header.as_bytes()).await?;
     stream.write_all(bytes).await?;
     stream.flush().await?;
+    let _ = stream.shutdown().await;
     Ok(())
 }
 
@@ -594,12 +644,14 @@ async fn send_404(stream: &mut TcpStream) -> anyhow::Result<()> {
         "HTTP/1.1 404 Not Found\r\n\
         Content-Type: text/plain\r\n\
         Content-Length: {}\r\n\
+        Access-Control-Allow-Origin: *\r\n\
         Connection: close\r\n\r\n",
         body.len()
     );
     stream.write_all(header.as_bytes()).await?;
     stream.write_all(body).await?;
     stream.flush().await?;
+    let _ = stream.shutdown().await;
     Ok(())
 }
 
@@ -857,6 +909,40 @@ mod tests {
         assert!(s_resp_opt.contains("Access-Control-Allow-Methods"));
 
         recv_handle.stop();
+
+        // 6. Test universal page routing and caching headers
+        let (tx_univ, _rx_univ) = mpsc::unbounded_channel();
+        let univ_token = "univtok123".to_string();
+        let univ_handle = FShareServer::start_send(
+            vec![test_file.clone()],
+            "127.0.0.1".into(),
+            univ_token.clone(),
+            "1111".into(),
+            tx_univ,
+        )
+        .await
+        .unwrap();
+
+        // Root / should serve download page
+        let mut s_root = TcpStream::connect(format!("127.0.0.1:{}", univ_handle.port)).await.unwrap();
+        s_root.write_all(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n").await.unwrap();
+        let mut resp_root = Vec::new();
+        s_root.read_to_end(&mut resp_root).await.unwrap();
+        let s_resp_root = String::from_utf8_lossy(&resp_root);
+        assert!(s_resp_root.contains("HTTP/1.1 200 OK"), "Root path / must return 200 OK");
+        assert!(s_resp_root.contains("Cache-Control: no-cache, no-store, must-revalidate"));
+        assert!(s_resp_root.contains("Access-Control-Allow-Origin: *"));
+        assert!(s_resp_root.contains("photo.png"));
+
+        // Path /d and /d/ should also serve download page
+        let mut s_d = TcpStream::connect(format!("127.0.0.1:{}", univ_handle.port)).await.unwrap();
+        s_d.write_all(b"GET /d HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n").await.unwrap();
+        let mut resp_d = Vec::new();
+        s_d.read_to_end(&mut resp_d).await.unwrap();
+        let s_resp_d = String::from_utf8_lossy(&resp_d);
+        assert!(s_resp_d.contains("HTTP/1.1 200 OK"), "/d must return 200 OK");
+
+        univ_handle.stop();
         let _ = std::fs::remove_dir_all(&test_dir);
     }
 }

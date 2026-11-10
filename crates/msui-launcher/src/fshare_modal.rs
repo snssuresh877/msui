@@ -11,9 +11,9 @@ use iced_exwlshell::reexport::{Anchor, KeyboardInteractivity, Layer, LayerSize};
 use iced_exwlshell::settings::LayerShellSettings;
 use crate::modal_style::default_modal_card_style;
 use msui_core::fshare::{
-    default_save_dir, generate_pin, generate_qr_svg, generate_token, get_local_ip,
-    load_transfer_history, log_transfer, FShareEvent, FShareServer, FShareServerHandle,
-    TransferHistoryEntry,
+    default_save_dir, generate_pin, generate_qr_svg, generate_token, get_active_wifi_ssid,
+    get_local_ip, load_transfer_history, log_transfer, FShareEvent, FShareServer,
+    FShareServerHandle, TransferHistoryEntry,
 };
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
@@ -94,6 +94,7 @@ pub struct FShareModal {
     quick_files: Vec<QuickFile>,
     selected_category: Option<&'static str>,
     server_handle: Option<FShareServerHandle>,
+    active_wifi_ssid: Option<String>,
     is_standalone: bool,
     should_close: bool,
 }
@@ -113,6 +114,7 @@ pub enum Message {
     StartReceive,
     StopServer,
     CopyUrl,
+    OpenBrowser,
     OpenDownloadsFolder,
     EnsureFocus,
     Close,
@@ -322,6 +324,7 @@ impl FShareModal {
             quick_files,
             selected_category: None,
             server_handle: None,
+            active_wifi_ssid: get_active_wifi_ssid(),
             is_standalone,
             should_close: false,
         };
@@ -540,6 +543,14 @@ impl FShareModal {
                 }
                 Command::none()
             }
+            Message::OpenBrowser => {
+                if !self.active_url.is_empty() {
+                    let _ = std::process::Command::new("xdg-open")
+                        .arg(&self.active_url)
+                        .spawn();
+                }
+                Command::none()
+            }
             Message::OpenDownloadsFolder => {
                 let dir = default_save_dir();
                 let _ = std::process::Command::new("xdg-open")
@@ -651,6 +662,7 @@ impl FShareModal {
             }
         };
 
+        self.active_wifi_ssid = get_active_wifi_ssid();
         let token = generate_token();
         let pin = generate_pin();
 
@@ -696,6 +708,7 @@ impl FShareModal {
             }
         };
 
+        self.active_wifi_ssid = get_active_wifi_ssid();
         let save_dir = default_save_dir();
         let token = generate_token();
         let pin = generate_pin();
@@ -828,7 +841,7 @@ impl FShareModal {
             )
             .padding(10)
             .style(|_| container::Style {
-                background: Some(iced::Color::from_rgb(0.09, 0.09, 0.15).into()),
+                background: Some(iced::Color::WHITE.into()),
                 border: iced::border::rounded(14),
                 ..Default::default()
             });
@@ -857,11 +870,26 @@ impl FShareModal {
                 );
             }
 
-            details_col = details_col.push(text(format!("URL: {}", self.active_url)).size(13).color([0.54, 0.71, 0.98]))
+            if let Some(ssid) = &self.active_wifi_ssid {
+                details_col = details_col.push(
+                    text(format!("📶 Wi-Fi: {} (Phone must be on this Wi-Fi)", ssid))
+                        .size(12)
+                        .color([0.97, 0.70, 0.40])
+                );
+            }
+
+            details_col = details_col
+                .push(text(format!("URL: {}", self.active_url)).size(13).color([0.54, 0.71, 0.98]))
                 .push(text(format!("PIN: {}", self.active_pin)).size(13).color([0.65, 0.89, 0.63]))
+                .push(
+                    text("💡 If stuck: Ensure phone is on same Wi-Fi (not 5G). If VPN is active on PC, pause it.")
+                        .size(11)
+                        .color([0.68, 0.70, 0.78])
+                )
                 .push(
                     row![
                         button(text("📋 Copy Link").size(13)).padding([6, 12]).on_press(Message::CopyUrl),
+                        button(text("🌐 Open on PC").size(13)).padding([6, 12]).on_press(Message::OpenBrowser),
                         button(text("⏹ Stop").size(13)).padding([6, 12]).on_press(Message::StopServer),
                     ]
                     .spacing(8)
@@ -1200,23 +1228,40 @@ impl FShareModal {
             )
             .padding(10)
             .style(|_| container::Style {
-                background: Some(iced::Color::from_rgb(0.09, 0.09, 0.15).into()),
+                background: Some(iced::Color::WHITE.into()),
                 border: iced::border::rounded(14),
                 ..Default::default()
             });
 
-            let details = column![
+            let mut details = column![
                 text("Scan with your phone camera to send files to this PC").size(14).color([1.0, 1.0, 1.0]),
-                text(format!("URL: {}", self.active_url)).size(13).color([0.54, 0.71, 0.98]),
-                text("Target Folder: ~/Downloads/msui-fshare/").size(12).color([0.68, 0.70, 0.78]),
-                row![
-                    button(text("📂 Open Folder").size(13)).padding([6, 12]).on_press(Message::OpenDownloadsFolder),
-                    button(text("📋 Copy Link").size(13)).padding([6, 12]).on_press(Message::CopyUrl),
-                    button(text("⏹ Stop").size(13)).padding([6, 12]).on_press(Message::StopServer),
-                ]
-                .spacing(8),
-            ]
-            .spacing(10);
+            ].spacing(6);
+
+            if let Some(ssid) = &self.active_wifi_ssid {
+                details = details.push(
+                    text(format!("📶 Wi-Fi: {} (Phone must be on this Wi-Fi)", ssid))
+                        .size(12)
+                        .color([0.97, 0.70, 0.40])
+                );
+            }
+
+            details = details
+                .push(text(format!("URL: {}", self.active_url)).size(13).color([0.54, 0.71, 0.98]))
+                .push(text("Target Folder: ~/Downloads/msui-fshare/").size(12).color([0.68, 0.70, 0.78]))
+                .push(
+                    text("💡 If stuck: Ensure phone is on same Wi-Fi (not 5G). If VPN is active on PC, pause it.")
+                        .size(11)
+                        .color([0.68, 0.70, 0.78])
+                )
+                .push(
+                    row![
+                        button(text("📂 Open Folder").size(13)).padding([6, 12]).on_press(Message::OpenDownloadsFolder),
+                        button(text("📋 Copy Link").size(13)).padding([6, 12]).on_press(Message::CopyUrl),
+                        button(text("🌐 Open on PC").size(13)).padding([6, 12]).on_press(Message::OpenBrowser),
+                        button(text("⏹ Stop").size(13)).padding([6, 12]).on_press(Message::StopServer),
+                    ]
+                    .spacing(8),
+                );
 
             row![qr_widget, details].spacing(20).align_y(Alignment::Center).into()
         } else {

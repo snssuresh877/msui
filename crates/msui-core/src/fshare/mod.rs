@@ -117,14 +117,35 @@ pub fn generate_pin() -> String {
     format!("{}", pin)
 }
 
-/// Generate vector SVG QR code in memory with Catppuccin dark styling
+/// Detect active connected Wi-Fi SSID
+pub fn get_active_wifi_ssid() -> Option<String> {
+    if let Ok(output) = std::process::Command::new("nmcli")
+        .args(["-t", "-f", "ACTIVE,SSID", "device", "wifi"])
+        .output()
+    {
+        if output.status.success() {
+            let text = String::from_utf8_lossy(&output.stdout);
+            for line in text.lines() {
+                if let Some(rest) = line.strip_prefix("yes:") {
+                    let ssid = rest.trim();
+                    if !ssid.is_empty() && ssid != "--" {
+                        return Some(ssid.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Generate vector SVG QR code in memory with high-contrast mobile-scanner-friendly styling
 pub fn generate_qr_svg(content: &str) -> Result<String, anyhow::Error> {
     let code = QrCode::new(content.as_bytes())?;
     let image = code
         .render::<svg::Color>()
         .min_dimensions(240, 240)
-        .dark_color(svg::Color("#cdd6f4"))  // Light Catppuccin Text for QR modules
-        .light_color(svg::Color("#181825")) // Dark Mantle background
+        .dark_color(svg::Color("#000000"))  // Dark modules for universal camera scanning
+        .light_color(svg::Color("#ffffff")) // Crisp white background & quiet zone (ISO/IEC standard)
         .build();
     Ok(image)
 }
