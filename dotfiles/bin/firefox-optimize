@@ -167,13 +167,17 @@ run_optimization() {
         cp "$TEMPLATE_USER_JS" "${p_dir}/user.js"
         updated_profiles+=("$p_name")
 
-        # Sync uBlock Origin and The Stream Detector into profile
+        # Sync essential extensions into profile (uBlock Origin, The Stream Detector, Download with aria2)
         mkdir -p "${p_dir}/extensions"
+        local aria2_xpi="${ext_cache_dir}/{708bb4c5-336d-4a30-9126-8bf5d773bb41}.xpi"
         if [[ -f "$ublock_xpi" ]]; then
             cp -u "$ublock_xpi" "${p_dir}/extensions/uBlock0@raymondhill.net.xpi" 2>/dev/null || cp "$ublock_xpi" "${p_dir}/extensions/uBlock0@raymondhill.net.xpi"
         fi
         if [[ -f "$stream_xpi" ]]; then
             cp -u "$stream_xpi" "${p_dir}/extensions/@m3u8link.xpi" 2>/dev/null || cp "$stream_xpi" "${p_dir}/extensions/@m3u8link.xpi"
+        fi
+        if [[ -f "$aria2_xpi" ]]; then
+            cp -u "$aria2_xpi" "${p_dir}/extensions/{708bb4c5-336d-4a30-9126-8bf5d773bb41}.xpi" 2>/dev/null || cp "$aria2_xpi" "${p_dir}/extensions/{708bb4c5-336d-4a30-9126-8bf5d773bb41}.xpi"
         fi
 
         # Purge bloat: remove legacy Video DownloadHelper if left behind
@@ -207,7 +211,7 @@ run_optimization() {
     echo -e "${C_BOLD}${C_GREEN}✓ Firefox optimized successfully!${C_RESET}"
     echo -e "  • ${C_BOLD}Hardware Acceleration:${C_RESET} AMD GPU VA-API + Wayland Zero-Copy DMA-BUF enabled"
     echo -e "  • ${C_BOLD}Memory Tuning:${C_RESET} Fission & tab preloading disabled, content processes capped (saves ~70% RAM)"
-    echo -e "  • ${C_BOLD}Essential Extensions:${C_RESET} uBlock Origin + The Stream Detector deployed across all profiles"
+    echo -e "  • ${C_BOLD}Essential Extensions:${C_RESET} uBlock Origin + The Stream Detector + Download with aria2 deployed"
     echo -e "  • ${C_BOLD}Privacy & Cleanliness:${C_RESET} Telemetry, Pocket, and sponsored suggestions disabled"
     echo -e "  • ${C_BOLD}Smooth Performance:${C_RESET} Session saving throttled to 5m, smooth scrolling active"
     echo -e "  • ${C_BOLD}Profiles Configured:${C_RESET} ${#updated_profiles[@]} profiles updated (${updated_profiles[*]})"
