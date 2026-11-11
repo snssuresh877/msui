@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# =============================================================================
+# Fast HLS / m3u8 Stream Downloader using yt-dlp & ffmpeg
+# Supports direct URL arguments or automatic clipboard detection (Wayland / wl-paste)
+# =============================================================================
+
+set -eo pipefail
+
+DOWNLOAD_DIR="${HOME}/Downloads"
+mkdir -p "$DOWNLOAD_DIR"
+
+URL="${1:-}"
+
+# If no URL passed as argument, attempt to read from Wayland clipboard
+if [[ -z "$URL" ]]; then
+    if command -v wl-paste >/dev/null 2>&1; then
+        CLIP="$(wl-paste 2>/dev/null || true)"
+        if [[ "$CLIP" =~ ^https?:// ]] || [[ "$CLIP" =~ yt-dlp ]]; then
+            URL="$CLIP"
+            echo "Detected stream in clipboard: ${URL:0:60}..."
+        fi
+    fi
+fi
+
+if [[ -z "$URL" ]]; then
+    echo "Usage: dl-stream [url_or_ytdlp_command]"
+    echo "Or simply copy the stream from The Stream Detector and run: dl-stream"
+    exit 1
+fi
+
+cd "$DOWNLOAD_DIR"
+
+# If user copied the full command from The Stream Detector (e.g. yt-dlp "https://..." --referer "..."):
+if [[ "$URL" =~ ^yt-dlp[[:space:]] ]]; then
+    echo "Executing copied command in ${DOWNLOAD_DIR}..."
+    eval "$URL"
+else
+    echo "Downloading stream with 8 parallel connections..."
+    yt-dlp \
+        -N 8 \
+        --concurrent-fragments 8 \
+        --progress \
+        --no-mtime \
+        -o "%(title)s_%(id)s.%(ext)s" \
+        "$URL"
+fi
+
+echo "✓ Download finished! File saved in: ${DOWNLOAD_DIR}"
+if command -v notify-send >/dev/null 2>&1; then
+    notify-send -u normal -i video-x-generic "Download Complete" "Video saved to ~/Downloads"
+fi
