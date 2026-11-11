@@ -98,11 +98,27 @@ cmd_restore() {
     fi
 }
 
+show_manual() {
+    local manual_file="${DOTFILES_DIR}/docs/firefox-extensions-manual.md"
+    if [[ -f "$manual_file" ]]; then
+        if command -v bat >/dev/null 2>&1; then
+            bat --style=plain --language=markdown "$manual_file"
+        elif command -v glow >/dev/null 2>&1; then
+            glow "$manual_file"
+        else
+            cat "$manual_file"
+        fi
+    else
+        echo -e "${C_RED}Manual not found at: ${manual_file}${C_RESET}"
+    fi
+}
+
 cmd_help() {
     echo -e "${C_BOLD}Firefox Simple Optimizer${C_RESET}
 Usage:
     firefox-optimize            Run full zero-friction optimization
     firefox-optimize --restore  Restore previous user.js backup
+    firefox-optimize --manual   View Firefox extensions & Aria2 setup manual
     firefox-optimize --help     Show this help"
 }
 
@@ -119,11 +135,12 @@ run_optimization() {
     local total_saved_bytes=0
     local dbs_compacted=0
 
-    # Ensure essential extensions (uBlock Origin + The Stream Detector) are prepared
+    # Ensure essential extensions (uBlock Origin, Stream Detector, Aria2 Integration) are prepared
     local ext_cache_dir="${DOTFILES_DIR}/firefox/extensions"
     mkdir -p "$ext_cache_dir"
     local ublock_xpi="${ext_cache_dir}/uBlock0@raymondhill.net.xpi"
     local stream_xpi="${ext_cache_dir}/@m3u8link.xpi"
+    local aria2_xpi="${ext_cache_dir}/{e2488817-3d73-4013-850d-b66c5e42d505}.xpi"
 
     # Auto-fetch or cache uBlock Origin if missing
     if [[ ! -f "$ublock_xpi" ]]; then
@@ -146,6 +163,18 @@ run_optimization() {
         elif command -v curl >/dev/null 2>&1; then
             echo -e "${C_GRAY}• Fetching latest The Stream Detector from Mozilla...${C_RESET}"
             curl -sL "https://addons.mozilla.org/firefox/downloads/latest/hls-stream-detector/latest.xpi" -o "$stream_xpi" 2>/dev/null || true
+        fi
+    fi
+
+    # Auto-fetch or cache Aria2 Integration if missing
+    if [[ ! -f "$aria2_xpi" ]]; then
+        local found_aria2=""
+        found_aria2=$(find "$FIREFOX_DIR" -maxdepth 3 -name "{e2488817-3d73-4013-850d-b66c5e42d505}.xpi" 2>/dev/null | head -n 1 || true)
+        if [[ -n "$found_aria2" && -f "$found_aria2" ]]; then
+            cp "$found_aria2" "$aria2_xpi"
+        elif command -v curl >/dev/null 2>&1; then
+            echo -e "${C_GRAY}• Fetching latest Aria2 Integration from Mozilla...${C_RESET}"
+            curl -sL "https://addons.mozilla.org/firefox/downloads/latest/aria2-integration/latest.xpi" -o "$aria2_xpi" 2>/dev/null || true
         fi
     fi
 
@@ -212,7 +241,7 @@ run_optimization() {
     echo -e "${C_BOLD}${C_GREEN}✓ Firefox optimized successfully!${C_RESET}"
     echo -e "  • ${C_BOLD}Hardware Acceleration:${C_RESET} AMD GPU VA-API + Wayland Zero-Copy DMA-BUF enabled"
     echo -e "  • ${C_BOLD}Memory Tuning:${C_RESET} Fission & tab preloading disabled, content processes capped (saves ~70% RAM)"
-    echo -e "  • ${C_BOLD}Essential Extensions:${C_RESET} uBlock Origin + The Stream Detector + Download with aria2 deployed"
+    echo -e "  • ${C_BOLD}Essential Extensions:${C_RESET} uBlock Origin + The Stream Detector + Aria2 Integration deployed"
     echo -e "  • ${C_BOLD}Privacy & Cleanliness:${C_RESET} Telemetry, Pocket, and sponsored suggestions disabled"
     echo -e "  • ${C_BOLD}Smooth Performance:${C_RESET} Session saving throttled to 5m, smooth scrolling active"
     echo -e "  • ${C_BOLD}Profiles Configured:${C_RESET} ${#updated_profiles[@]} profiles updated (${updated_profiles[*]})"
@@ -230,10 +259,13 @@ run_optimization() {
 
 # Dispatch
 case "${1:-}" in
+    -m|--manual|manual)
+        show_manual
+        ;;
     --restore|-r|restore)
         cmd_restore
         ;;
-    --help|-h|help)
+    -h|--help|help)
         cmd_help
         ;;
     *)

@@ -23,12 +23,13 @@ cd ~/Projects/msui
 ```
 
 The script will automatically:
-1. Install all required Arch packages (`hyprland`, `hypridle`, `hyprlock`, `xdg-desktop-portal-hyprland`, audio, bluetooth, fonts, etc.).
-2. Build or install the high-performance `msui` binary directly to `~/.local/bin/msui`.
+1. Install all required Arch packages (`hyprland`, `hypridle`, `hyprlock`, `xdg-desktop-portal-hyprland`, audio, bluetooth, fonts, aria2, yt-dlp, ffmpeg, etc.).
+2. Build or install the high-performance `msui` binary and CLI utilities (`dl-stream`, `firefox-optimize`, `vconv`, `systemcontrol`) directly to `~/.local/bin/`.
 3. Configure `PATH` across `.bashrc`, `.bash_profile`, `.profile`, and `fish`.
-4. Deploy all desktop configurations (`~/.config/hypr`, `~/.config/msui`, `kitty`, `foot`, `fish`, `btop`, etc.) while creating safety backups of existing configurations.
-5. Deploy wallpapers to `~/Pictures/Wallpapers/`.
-6. Set correct executable permissions on all desktop scripts.
+4. Deploy all desktop configurations (`~/.config/hypr`, `~/.config/msui`, `kitty`, `foot`, `fish`, `btop`, `aria2`, etc.) while creating safety backups of existing configurations.
+5. Deploy and enable `aria2.service` background RPC daemon on port 6800.
+6. Deploy wallpapers to `~/Pictures/Wallpapers/`.
+7. Set correct executable permissions on all desktop scripts.
 
 ---
 
@@ -62,6 +63,22 @@ After running `./install.sh`:
 2. **From Login Manager (SDDM / GDM / Ly)**:
    Select **Hyprland** and log in.
 3. msUI Status Bar, Wallpaper Daemon, and PolicyKit Agent will automatically start via Hyprland's `autostart.lua`.
+
+---
+
+## 🌐 Browser & Aria2 Extension Setup
+
+To deploy the low-RAM / AMD VA-API hardware accelerated profile and bundled extensions (**Aria2 Integration**, **The Stream Detector**, and **uBlock Origin**) across all Firefox profiles:
+
+```bash
+firefox-optimize
+```
+
+* **Aria2 Integration:** Connects directly to `http://127.0.0.1:6800/jsonrpc` with **zero** external scripts or NodeJS required. Right-click any link to download with Aria2.
+* **The Stream Detector:** Intercepts HLS (`.m3u8`) and DASH video streams for one-click downloading with `dl-stream`.
+* **uBlock Origin:** Cuts RAM and CPU usage on Wayland by stripping ads and trackers.
+
+For complete documentation, run `firefox-optimize --manual` or view [Firefox Extensions Manual](dotfiles/docs/firefox-extensions-manual.md).
 
 ---
 

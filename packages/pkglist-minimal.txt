@@ -35,3 +35,7 @@ openssl
 pkgconf
 zstd
 rsync
+aria2
+yt-dlp
+ffmpeg
+sqlite

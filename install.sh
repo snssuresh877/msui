@@ -130,6 +130,13 @@ install_msui_binary() {
   cp -f "$binary_path" "$HOME/.local/bin/msui"
   chmod +x "$HOME/.local/bin/msui"
 
+  # Also install bundled CLI utilities from dotfiles/bin
+  if [[ -d "$DOTFILES_DIR/bin" ]]; then
+    info "Installing custom CLI utilities (dl-stream, firefox-optimize, vconv, systemcontrol)..."
+    cp -f "$DOTFILES_DIR/bin/"* "$HOME/.local/bin/"
+    chmod +x "$HOME/.local/bin/"*
+  fi
+
   # Also link to ~/.cargo/bin if that directory exists
   if [[ -d "$HOME/.cargo/bin" ]]; then
     ln -sf "$HOME/.local/bin/msui" "$HOME/.cargo/bin/msui"
@@ -221,6 +228,23 @@ deploy_dotfiles() {
     find "$HOME/.config/hypr/scripts" -type f -name "*.sh" -exec chmod +x {} +
   fi
 
+  # Deploy systemd user services (Aria2 RPC daemon)
+  if [[ -d "$DOTFILES_DIR/systemd/user" ]]; then
+    info "Deploying systemd user services..."
+    mkdir -p "$HOME/.config/systemd/user"
+    cp -rf "$DOTFILES_DIR/systemd/user/"* "$HOME/.config/systemd/user/"
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl --user daemon-reload 2>/dev/null || true
+      systemctl --user enable aria2.service 2>/dev/null || true
+      info "Enabled aria2.service user daemon (port 6800)."
+    fi
+  fi
+
+  # Initialize Aria2 state file
+  if [[ -d "$HOME/.config/aria2" ]]; then
+    touch "$HOME/.config/aria2/session.dat"
+  fi
+
   if [[ -d "$backup_dir" ]]; then
     success "Previous configurations backed up to: $backup_dir"
   fi
@@ -288,15 +312,17 @@ main() {
   echo
   success "================================================================"
   success " Installation completed successfully!"
-  success " msUI binary: $HOME/.local/bin/msui"
+  success " msUI binary:    $HOME/.local/bin/msui"
+  success " CLI utilities:  $HOME/.local/bin/ (dl-stream, vconv, firefox-optimize)"
   success " Hyprland config: $HOME/.config/hypr"
-  success " msUI config: $HOME/.config/msui"
+  success " msUI config:     $HOME/.config/msui"
+  success " Aria2 service:   aria2.service enabled on 127.0.0.1:6800"
   success "================================================================"
   echo
-  info "To start your desktop session:"
-  echo "  1. If running inside a TTY:  exec Hyprland"
-  echo "  2. If already in Hyprland:   hyprctl reload"
-  echo "  3. To launch or test msUI:   msui bar"
+  info "Post-installation steps:"
+  echo "  1. Start desktop session:   exec Hyprland (TTY) or hyprctl reload"
+  echo "  2. Test msUI Status Bar:    msui bar"
+  echo "  3. Optimize Firefox & Exts: firefox-optimize (runs VA-API, low-RAM & adds Aria2/uBlock exts)"
   echo
 }
 
