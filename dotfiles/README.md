@@ -27,6 +27,7 @@ This directory contains configuration files for the **msUI** desktop environment
 
 | Command | Description |
 |---------|-------------|
+| `aria2-manual` | Instant terminal viewer for the Aria2 & aria2c complete practical manual. |
 | `dl-stream` | High-speed HLS (`.m3u8`) & video stream downloader. Automatically grabs stream links from Wayland clipboard and downloads with 8 parallel connections. |
 | `firefox-optimize` | One-shot Firefox performance, low-RAM (70% reduction), AMD GPU VA-API, SQLite vacuum, and automated extension installer (`uBlock Origin`, `Stream Detector`, `Aria2 Integration`). |
 | `vconv` | Simple video/audio converter & downscaler wrapper for FFmpeg (`vconv in.mp4 720p`, `vconv in.mkv mp4`, `vconv in.mp4 mp3`). |
@@ -40,6 +41,7 @@ Located in `dotfiles/firefox/extensions/`:
 
 ## Documentation & Guides
 
+- [Aria2 & aria2c Complete Practical Manual](docs/aria2-manual.md) — Practical guide for multi-connection downloads, torrenting, daemon management, and JSON-RPC automation. Accessible via terminal with `aria2-manual`.
 - [Firefox Extensions & Aria2 Download System Setup Guide](docs/firefox-extensions-manual.md) — Complete setup guide for browser extensions and background Aria2 RPC daemon. Accessible via terminal with `firefox-optimize --manual`.
 - [FFmpeg Complete Practical Manual](docs/ffmpeg-manual.md) — Practical guide for container conversion, resolution downscaling, AMD VA-API hardware acceleration, and audio extraction. Accessible via terminal with `vconv --manual`.
 - [yt-dlp Complete Practical Manual](docs/yt-dlp-manual.md) — Comprehensive cheat sheet for stream extraction, formats, audio, and speed tuning. Accessible via terminal with `dl-stream --manual`.
