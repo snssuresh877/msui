@@ -6,12 +6,24 @@
 // -----------------------------------------------------------------------------
 // 1. Process & Memory Management (Strict Low-RAM Limits)
 // -----------------------------------------------------------------------------
+// Disable Fission Site Isolation process explosion (drops background processes from 11+ down to 2-3)
+user_pref("fission.autostart", false);
+
 // Cap content processes to 1 (saves ~300-600 MB on multi-tab browsing)
 user_pref("dom.ipc.processCount", 1);
 user_pref("dom.ipc.processCount.webIsolated", 1);
 
 // Disable dummy background process pre-allocation on startup
 user_pref("dom.ipc.processPrelaunch.enabled", false);
+
+// Disable new tab preloading & background prerendering (prevents hidden RAM-hogging processes)
+user_pref("browser.newtab.preload", false);
+user_pref("browser.newtabpage.activity-stream.prerender", false);
+
+// Only restore tabs into RAM on demand when clicked (lazy restore)
+user_pref("browser.sessionstore.restore_on_demand", true);
+user_pref("browser.sessionstore.restore_tabs_lazily", true);
+user_pref("browser.sessionstore.restore_pinned_tabs_on_demand", true);
 
 // Merge internal about: pages into main process (saves ~60-100 MB)
 user_pref("browser.tabs.remote.separatePrivilegedContentProcess", false);
