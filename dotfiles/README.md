@@ -19,8 +19,8 @@ This directory contains configuration files for the **msUI** desktop environment
 | `nvim/` | `~/.config/nvim/` | Neovim Lua setup, plugins, and keymaps |
 | `Thunar/` | `~/.config/Thunar/` | Thunar file manager custom actions and accelerators |
 | `yazi/` | `~/.config/yazi/` | Yazi terminal file manager (git status, chmod, ripdrag plugins, universal Neovim opener) |
-| `yay/` | `~/.config/yay/` | Yay AUR helper preferences |
-| `bin/` | `~/.local/bin/` | Custom CLI utilities (`dl-stream`, `firefox-optimize`, `systemcontrol`) |
+| `systemd/` | `~/.config/systemd/user/` | Systemd user units (`aria2.service` background RPC daemon) |
+| `bin/` | `~/.local/bin/` | Custom CLI utilities (`dl-stream`, `firefox-optimize`, `systemcontrol`, `vconv`) |
 
 ## Custom Utilities
 

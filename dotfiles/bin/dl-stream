@@ -232,7 +232,7 @@ YTDLP_ARGS=(
 
 # Use aria2c if available for extra speed
 if command -v aria2c >/dev/null 2>&1; then
-    YTDLP_ARGS+=("--downloader" "aria2c" "--downloader-args" "aria2c:-s 8 -x 8 -k 1M -j 8")
+    YTDLP_ARGS+=("--downloader" "aria2c" "--downloader-args" "aria2c:-s 8 -x 8 -k 1M -j 8 --enable-rpc=false")
 fi
 
 if [[ "$AUDIO_MODE" -eq 1 ]]; then
