@@ -103,6 +103,7 @@ ${C_BOLD}USAGE:${C_RESET}
     ${C_GREEN}dl-stream <url> <filename>${C_RESET}        Download stream with a custom filename
     ${C_GREEN}dl-stream --audio [url]${C_RESET}           Extract and save as high-quality MP3 audio
     ${C_GREEN}dl-stream --check${C_RESET}                 Run full dependency and system checklist
+    ${C_GREEN}dl-stream --manual${C_RESET}                Show full yt-dlp cheat sheet & manual
     ${C_GREEN}dl-stream --help${C_RESET}                  Show this help reference
 
 ${C_BOLD}HOW TO USE WITH THE STREAM DETECTOR (FIREFOX):${C_RESET}
@@ -123,11 +124,31 @@ ${C_BOLD}COMMAND EXAMPLES:${C_RESET}
     # Download audio only:
     dl-stream -a \"https://example.com/stream/master.m3u8\"
 
+    # View full practical manual:
+    dl-stream --manual
+
     # Verify dependencies:
     dl-stream --check
 
 ${C_BOLD}DESTINATION:${C_RESET}
     All downloads are saved automatically into: ${C_BOLD}${DOWNLOAD_DIR}${C_RESET}"
+}
+
+show_manual() {
+    local script_dir
+    script_dir="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+    local manual_file="${script_dir}/../docs/yt-dlp-manual.md"
+    if [[ -f "$manual_file" ]]; then
+        if command -v bat >/dev/null 2>&1; then
+            bat --style=plain --language=markdown "$manual_file"
+        elif command -v glow >/dev/null 2>&1; then
+            glow "$manual_file"
+        else
+            cat "$manual_file"
+        fi
+    else
+        echo -e "${C_RED}Manual file not found at: ${manual_file}${C_RESET}"
+    fi
 }
 
 # -----------------------------------------------------------------------------
@@ -137,6 +158,10 @@ ${C_BOLD}DESTINATION:${C_RESET}
 case "${1:-}" in
     -h|--help|help)
         show_help
+        exit 0
+        ;;
+    -m|--manual|manual)
+        show_manual
         exit 0
         ;;
     -c|--check|check)

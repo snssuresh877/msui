@@ -29,6 +29,10 @@ This directory contains configuration files for the **msUI** desktop environment
 | `dl-stream` | High-speed HLS (`.m3u8`) & video stream downloader. Automatically grabs stream links from Wayland clipboard and downloads with 8 parallel connections. |
 | `firefox-optimize` | One-shot Firefox performance, low-RAM (70% reduction), AMD GPU VA-API, and SQLite database vacuum optimizer. |
 
+## Documentation & Guides
+
+- [yt-dlp Complete Practical Manual](docs/yt-dlp-manual.md) — Comprehensive cheat sheet for stream extraction, formats, audio, and speed tuning. Accessible via terminal with `dl-stream --manual`.
+
 ## Quick Restore / Installation
 
 To symlink or restore these dotfiles to `~/.config/`:
