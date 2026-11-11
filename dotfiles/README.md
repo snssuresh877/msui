@@ -20,6 +20,14 @@ This directory contains configuration files for the **msUI** desktop environment
 | `Thunar/` | `~/.config/Thunar/` | Thunar file manager custom actions and accelerators |
 | `yazi/` | `~/.config/yazi/` | Yazi terminal file manager (git status, chmod, ripdrag plugins, universal Neovim opener) |
 | `yay/` | `~/.config/yay/` | Yay AUR helper preferences |
+| `bin/` | `~/.local/bin/` | Custom CLI utilities (`dl-stream`, `firefox-optimize`, `systemcontrol`) |
+
+## Custom Utilities
+
+| Command | Description |
+|---------|-------------|
+| `dl-stream` | High-speed HLS (`.m3u8`) & video stream downloader. Automatically grabs stream links from Wayland clipboard and downloads with 8 parallel connections. |
+| `firefox-optimize` | One-shot Firefox performance, low-RAM (70% reduction), AMD GPU VA-API, and SQLite database vacuum optimizer. |
 
 ## Quick Restore / Installation
 
