@@ -28,9 +28,11 @@ This directory contains configuration files for the **msUI** desktop environment
 |---------|-------------|
 | `dl-stream` | High-speed HLS (`.m3u8`) & video stream downloader. Automatically grabs stream links from Wayland clipboard and downloads with 8 parallel connections. |
 | `firefox-optimize` | One-shot Firefox performance, low-RAM (70% reduction), AMD GPU VA-API, and SQLite database vacuum optimizer. |
+| `vconv` | Simple video/audio converter & downscaler wrapper for FFmpeg (`vconv in.mp4 720p`, `vconv in.mkv mp4`, `vconv in.mp4 mp3`). |
 
 ## Documentation & Guides
 
+- [FFmpeg Complete Practical Manual](docs/ffmpeg-manual.md) — Practical guide for container conversion, resolution downscaling, AMD VA-API hardware acceleration, and audio extraction. Accessible via terminal with `vconv --manual`.
 - [yt-dlp Complete Practical Manual](docs/yt-dlp-manual.md) — Comprehensive cheat sheet for stream extraction, formats, audio, and speed tuning. Accessible via terminal with `dl-stream --manual`.
 
 ## Quick Restore / Installation
