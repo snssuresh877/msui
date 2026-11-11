@@ -169,7 +169,7 @@ run_optimization() {
 
         # Sync essential extensions into profile (uBlock Origin, The Stream Detector, Download with aria2)
         mkdir -p "${p_dir}/extensions"
-        local aria2_xpi="${ext_cache_dir}/{708bb4c5-336d-4a30-9126-8bf5d773bb41}.xpi"
+        local aria2_xpi="${ext_cache_dir}/{e2488817-3d73-4013-850d-b66c5e42d505}.xpi"
         if [[ -f "$ublock_xpi" ]]; then
             cp -u "$ublock_xpi" "${p_dir}/extensions/uBlock0@raymondhill.net.xpi" 2>/dev/null || cp "$ublock_xpi" "${p_dir}/extensions/uBlock0@raymondhill.net.xpi"
         fi
@@ -177,11 +177,12 @@ run_optimization() {
             cp -u "$stream_xpi" "${p_dir}/extensions/@m3u8link.xpi" 2>/dev/null || cp "$stream_xpi" "${p_dir}/extensions/@m3u8link.xpi"
         fi
         if [[ -f "$aria2_xpi" ]]; then
-            cp -u "$aria2_xpi" "${p_dir}/extensions/{708bb4c5-336d-4a30-9126-8bf5d773bb41}.xpi" 2>/dev/null || cp "$aria2_xpi" "${p_dir}/extensions/{708bb4c5-336d-4a30-9126-8bf5d773bb41}.xpi"
+            cp -u "$aria2_xpi" "${p_dir}/extensions/{e2488817-3d73-4013-850d-b66c5e42d505}.xpi" 2>/dev/null || cp "$aria2_xpi" "${p_dir}/extensions/{e2488817-3d73-4013-850d-b66c5e42d505}.xpi"
         fi
 
-        # Purge bloat: remove legacy Video DownloadHelper if left behind
+        # Purge bloat: remove legacy Video DownloadHelper and InBasic native-client wrapper
         rm -f "${p_dir}/extensions/{b9db16a4-6edc-47ec-a1f4-b86292ed211d}.xpi"
+        rm -f "${p_dir}/extensions/{708bb4c5-336d-4a30-9126-8bf5d773bb41}.xpi"
 
         # 2. If Firefox is closed, vacuum and defragment profile databases
         if [[ $running -eq 0 ]]; then
