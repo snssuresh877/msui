@@ -135,3 +135,20 @@ user_pref("media.autoplay.blocking_policy", 2);
 
 // Disable annoying download animation notification
 user_pref("browser.download.animateNotifications", false);
+
+// -----------------------------------------------------------------------------
+// 7. Extra Responsiveness & Worker Trimming (Arch Linux / Low-RAM)
+// -----------------------------------------------------------------------------
+// Disable accessibility service (saves ~30-50 MB RAM and removes DOM hooks)
+user_pref("accessibility.force_disabled", 1);
+
+// Terminate idle website background service workers faster (frees idle tab RAM)
+user_pref("dom.serviceWorkers.idle_timeout", 15);
+user_pref("dom.serviceWorkers.idle_extended_timeout", 30);
+
+// Cap disk cache to 200 MB (prevents disk bloat and keeps profile databases lean)
+user_pref("browser.cache.disk.capacity", 204800);
+
+// Clean up temporary download files when Firefox exits
+user_pref("browser.helperApps.deleteTempFileOnExit", true);
+
