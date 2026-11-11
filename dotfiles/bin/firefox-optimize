@@ -164,7 +164,7 @@ run_optimization() {
     # 3. Print Concise Summary
     echo -e "${C_BOLD}${C_GREEN}✓ Firefox optimized successfully!${C_RESET}"
     echo -e "  • ${C_BOLD}Hardware Acceleration:${C_RESET} AMD GPU VA-API + Wayland Zero-Copy DMA-BUF enabled"
-    echo -e "  • ${C_BOLD}Memory Tuning:${C_RESET} Content process count capped (2) + tab memory auto-unloader"
+    echo -e "  • ${C_BOLD}Memory Tuning:${C_RESET} Content process capped (1) + prelaunch disabled + low-RAM caching"
     echo -e "  • ${C_BOLD}Privacy & Cleanliness:${C_RESET} Telemetry, Pocket, and sponsored suggestions disabled"
     echo -e "  • ${C_BOLD}Smooth Performance:${C_RESET} Session saving throttled to 5m, smooth scrolling active"
     echo -e "  • ${C_BOLD}Profiles Configured:${C_RESET} ${#updated_profiles[@]} profiles updated (${updated_profiles[*]})"
