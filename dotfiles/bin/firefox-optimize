@@ -119,7 +119,37 @@ run_optimization() {
     local total_saved_bytes=0
     local dbs_compacted=0
 
-    # 1. Update user.js in all profiles
+    # Ensure essential extensions (uBlock Origin + The Stream Detector) are prepared
+    local ext_cache_dir="${DOTFILES_DIR}/firefox/extensions"
+    mkdir -p "$ext_cache_dir"
+    local ublock_xpi="${ext_cache_dir}/uBlock0@raymondhill.net.xpi"
+    local stream_xpi="${ext_cache_dir}/@m3u8link.xpi"
+
+    # Auto-fetch or cache uBlock Origin if missing
+    if [[ ! -f "$ublock_xpi" ]]; then
+        local found_ublock=""
+        found_ublock=$(find "$FIREFOX_DIR" -maxdepth 3 -name "uBlock0@raymondhill.net.xpi" 2>/dev/null | head -n 1 || true)
+        if [[ -n "$found_ublock" && -f "$found_ublock" ]]; then
+            cp "$found_ublock" "$ublock_xpi"
+        elif command -v curl >/dev/null 2>&1; then
+            echo -e "${C_GRAY}• Fetching latest official uBlock Origin from Mozilla...${C_RESET}"
+            curl -sL "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi" -o "$ublock_xpi" 2>/dev/null || true
+        fi
+    fi
+
+    # Auto-fetch or cache The Stream Detector if missing
+    if [[ ! -f "$stream_xpi" ]]; then
+        local found_stream=""
+        found_stream=$(find "$FIREFOX_DIR" -maxdepth 3 -name "@m3u8link.xpi" 2>/dev/null | head -n 1 || true)
+        if [[ -n "$found_stream" && -f "$found_stream" ]]; then
+            cp "$found_stream" "$stream_xpi"
+        elif command -v curl >/dev/null 2>&1; then
+            echo -e "${C_GRAY}• Fetching latest The Stream Detector from Mozilla...${C_RESET}"
+            curl -sL "https://addons.mozilla.org/firefox/downloads/latest/hls-stream-detector/latest.xpi" -o "$stream_xpi" 2>/dev/null || true
+        fi
+    fi
+
+    # 1. Update user.js and extensions in all profiles
     while IFS= read -r p_dir; do
         [[ -d "$p_dir" ]] || continue
         local p_name="${p_dir##*/}"
@@ -136,6 +166,18 @@ run_optimization() {
         # Install latest optimized user.js
         cp "$TEMPLATE_USER_JS" "${p_dir}/user.js"
         updated_profiles+=("$p_name")
+
+        # Sync uBlock Origin and The Stream Detector into profile
+        mkdir -p "${p_dir}/extensions"
+        if [[ -f "$ublock_xpi" ]]; then
+            cp -u "$ublock_xpi" "${p_dir}/extensions/uBlock0@raymondhill.net.xpi" 2>/dev/null || cp "$ublock_xpi" "${p_dir}/extensions/uBlock0@raymondhill.net.xpi"
+        fi
+        if [[ -f "$stream_xpi" ]]; then
+            cp -u "$stream_xpi" "${p_dir}/extensions/@m3u8link.xpi" 2>/dev/null || cp "$stream_xpi" "${p_dir}/extensions/@m3u8link.xpi"
+        fi
+
+        # Purge bloat: remove legacy Video DownloadHelper if left behind
+        rm -f "${p_dir}/extensions/{b9db16a4-6edc-47ec-a1f4-b86292ed211d}.xpi"
 
         # 2. If Firefox is closed, vacuum and defragment profile databases
         if [[ $running -eq 0 ]]; then
@@ -165,6 +207,7 @@ run_optimization() {
     echo -e "${C_BOLD}${C_GREEN}✓ Firefox optimized successfully!${C_RESET}"
     echo -e "  • ${C_BOLD}Hardware Acceleration:${C_RESET} AMD GPU VA-API + Wayland Zero-Copy DMA-BUF enabled"
     echo -e "  • ${C_BOLD}Memory Tuning:${C_RESET} Fission & tab preloading disabled, content processes capped (saves ~70% RAM)"
+    echo -e "  • ${C_BOLD}Essential Extensions:${C_RESET} uBlock Origin + The Stream Detector deployed across all profiles"
     echo -e "  • ${C_BOLD}Privacy & Cleanliness:${C_RESET} Telemetry, Pocket, and sponsored suggestions disabled"
     echo -e "  • ${C_BOLD}Smooth Performance:${C_RESET} Session saving throttled to 5m, smooth scrolling active"
     echo -e "  • ${C_BOLD}Profiles Configured:${C_RESET} ${#updated_profiles[@]} profiles updated (${updated_profiles[*]})"
