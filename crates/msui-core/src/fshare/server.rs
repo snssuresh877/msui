@@ -228,7 +228,6 @@ async fn stream_file_response(
     stream.write_all(header.as_bytes()).await?;
     if is_head {
         stream.flush().await?;
-        let _ = stream.shutdown().await;
         return Ok(());
     }
 
@@ -255,7 +254,6 @@ async fn stream_file_response(
         });
     }
     stream.flush().await?;
-    let _ = stream.shutdown().await;
 
     let _ = event_tx.send(FShareEvent::FileSent {
         filename: filename.to_string(),
@@ -276,26 +274,38 @@ async fn handle_send_connection(
         return Ok(());
     }
 
-    let mut header_buf = vec![0u8; 4096];
-    let read_result = tokio::time::timeout(
-        std::time::Duration::from_secs(10),
-        stream.read(&mut header_buf),
-    )
-    .await;
+    // Read full HTTP request headers until \r\n\r\n (prevent unread bytes in TCP buffer triggering RST)
+    let mut header_buf = Vec::with_capacity(4096);
+    let mut temp = [0u8; 1024];
+    loop {
+        let read_result = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            stream.read(&mut temp),
+        )
+        .await;
 
-    let n = match read_result {
-        Ok(Ok(n)) if n > 0 => n,
-        _ => return Ok(()),
-    };
+        match read_result {
+            Ok(Ok(n)) if n > 0 => {
+                header_buf.extend_from_slice(&temp[..n]);
+                if header_buf.windows(4).any(|w| w == b"\r\n\r\n") || header_buf.len() >= 8192 {
+                    break;
+                }
+            }
+            _ => break,
+        }
+    }
+
+    if header_buf.is_empty() {
+        return Ok(());
+    }
 
     // Detect TLS ClientHello handshake (first byte 0x16, followed by TLS version 0x03)
     if header_buf[0] == 0x16 {
         warn!("Client attempted HTTPS/TLS connection. FShare operates over plain HTTP.");
-        let _ = stream.shutdown().await;
         return Ok(());
     }
 
-    let request_str = String::from_utf8_lossy(&header_buf[..n]);
+    let request_str = String::from_utf8_lossy(&header_buf);
     let first_line = request_str.lines().next().unwrap_or("");
     let mut parts = first_line.split_whitespace();
     let method = parts.next().unwrap_or("");
@@ -312,7 +322,6 @@ async fn handle_send_connection(
                     Connection: close\r\n\r\n";
         stream.write_all(resp.as_bytes()).await?;
         stream.flush().await?;
-        let _ = stream.shutdown().await;
         return Ok(());
     }
 
@@ -325,7 +334,6 @@ async fn handle_send_connection(
         let resp = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
         stream.write_all(resp.as_bytes()).await?;
         stream.flush().await?;
-        let _ = stream.shutdown().await;
         return Ok(());
     }
 
@@ -428,7 +436,6 @@ async fn handle_send_connection(
                 );
                 stream.write_all(header.as_bytes()).await?;
                 stream.flush().await?;
-                let _ = stream.shutdown().await;
             } else {
                 send_html(&mut stream, &html).await?;
             }
@@ -453,7 +460,6 @@ async fn handle_send_connection(
                 );
                 stream.write_all(header.as_bytes()).await?;
                 stream.flush().await?;
-                let _ = stream.shutdown().await;
             } else {
                 send_html(&mut stream, &html).await?;
             }
@@ -517,7 +523,6 @@ async fn handle_recv_connection(
                     Connection: close\r\n\r\n";
         stream.write_all(resp.as_bytes()).await?;
         stream.flush().await?;
-        let _ = stream.shutdown().await;
         return Ok(());
     }
 
@@ -525,7 +530,6 @@ async fn handle_recv_connection(
         let resp = "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
         stream.write_all(resp.as_bytes()).await?;
         stream.flush().await?;
-        let _ = stream.shutdown().await;
         return Ok(());
     }
 
@@ -543,7 +547,6 @@ async fn handle_recv_connection(
             );
             stream.write_all(header.as_bytes()).await?;
             stream.flush().await?;
-            let _ = stream.shutdown().await;
         } else {
             send_html(&mut stream, &html).await?;
         }
@@ -610,7 +613,6 @@ async fn handle_recv_connection(
                     Connection: close\r\n\r\nOK";
         stream.write_all(resp.as_bytes()).await?;
         stream.flush().await?;
-        let _ = stream.shutdown().await;
     } else {
         send_404(&mut stream).await?;
     }
@@ -634,7 +636,6 @@ async fn send_html(stream: &mut TcpStream, html: &str) -> anyhow::Result<()> {
     stream.write_all(header.as_bytes()).await?;
     stream.write_all(bytes).await?;
     stream.flush().await?;
-    let _ = stream.shutdown().await;
     Ok(())
 }
 
@@ -651,7 +652,6 @@ async fn send_404(stream: &mut TcpStream) -> anyhow::Result<()> {
     stream.write_all(header.as_bytes()).await?;
     stream.write_all(body).await?;
     stream.flush().await?;
-    let _ = stream.shutdown().await;
     Ok(())
 }
 
