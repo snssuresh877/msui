@@ -223,6 +223,22 @@ hl.window_rule({
 	rounding = 14,
 })
 
+-- Browser Extension Modals & Download Panels (e.g. Aria2 Integration Panel)
+hl.window_rule({
+	match = {
+		class = "^(firefox|google-chrome|chromium)$",
+		title = ".*(Extension:.*|Download Panel|Extension.*Modal).*",
+	},
+
+	float = true,
+	center = true,
+	size = {
+		640,
+		420,
+	},
+	rounding = 14,
+})
+
 -- File Manager (msUI Files, Strata, PCManFM, Nautilus & Thunar)
 hl.window_rule({
 	match = {
