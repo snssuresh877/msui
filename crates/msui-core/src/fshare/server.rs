@@ -17,12 +17,14 @@ pub struct FShareServerHandle {
     pub port: u16,
     pub token: String,
     pub pin: String,
-    shutdown_trigger: Arc<AtomicBool>,
+    shutdown_flag: Arc<AtomicBool>,
+    shutdown_notify: Arc<tokio::sync::Notify>,
 }
 
 impl FShareServerHandle {
     pub fn stop(&self) {
-        self.shutdown_trigger.store(true, Ordering::SeqCst);
+        self.shutdown_flag.store(true, Ordering::SeqCst);
+        self.shutdown_notify.notify_waiters();
     }
 }
 
@@ -60,14 +62,16 @@ impl FShareServer {
 
         let listener = bind_listener().await?;
         let port = listener.local_addr()?.port();
-        let shutdown = Arc::new(AtomicBool::new(false));
+        let shutdown_flag = Arc::new(AtomicBool::new(false));
+        let shutdown_notify = Arc::new(tokio::sync::Notify::new());
 
         let handle = FShareServerHandle {
             local_ip: local_ip.clone(),
             port,
             token: token.clone(),
             pin: pin.clone(),
-            shutdown_trigger: shutdown.clone(),
+            shutdown_flag: shutdown_flag.clone(),
+            shutdown_notify: shutdown_notify.clone(),
         };
 
         let share_url = format!("http://{}:{}/d/{}", local_ip, port, token);
@@ -78,17 +82,22 @@ impl FShareServer {
 
         let file_paths_clone = file_paths.clone();
         let token_clone = token.clone();
-        let shutdown_loop = shutdown.clone();
+        let flag_loop = shutdown_flag.clone();
+        let notify_loop = shutdown_notify.clone();
 
         tokio::spawn(async move {
             info!("FShare Send server listening on 0.0.0.0:{} (accessible at {}:{})", port, local_ip, port);
 
             loop {
-                if shutdown_loop.load(Ordering::SeqCst) {
+                if flag_loop.load(Ordering::SeqCst) {
                     break;
                 }
 
                 tokio::select! {
+                    _ = notify_loop.notified() => {
+                        info!("FShare Send server received stop signal; closing listener immediately.");
+                        break;
+                    }
                     accept_res = listener.accept() => {
                         match accept_res {
                             Ok((stream, peer_addr)) => {
@@ -137,14 +146,16 @@ impl FShareServer {
 
         let listener = bind_listener().await?;
         let port = listener.local_addr()?.port();
-        let shutdown = Arc::new(AtomicBool::new(false));
+        let shutdown_flag = Arc::new(AtomicBool::new(false));
+        let shutdown_notify = Arc::new(tokio::sync::Notify::new());
 
         let handle = FShareServerHandle {
             local_ip: local_ip.clone(),
             port,
             token: token.clone(),
             pin: pin.clone(),
-            shutdown_trigger: shutdown.clone(),
+            shutdown_flag: shutdown_flag.clone(),
+            shutdown_notify: shutdown_notify.clone(),
         };
 
         let share_url = format!("http://{}:{}/r/{}", local_ip, port, token);
@@ -155,17 +166,22 @@ impl FShareServer {
 
         let save_dir_clone = save_dir.clone();
         let token_clone = token.clone();
-        let shutdown_loop = shutdown.clone();
+        let flag_loop = shutdown_flag.clone();
+        let notify_loop = shutdown_notify.clone();
 
         tokio::spawn(async move {
             info!("FShare Receive server listening on {}:{}", local_ip, port);
 
             loop {
-                if shutdown_loop.load(Ordering::SeqCst) {
+                if flag_loop.load(Ordering::SeqCst) {
                     break;
                 }
 
                 tokio::select! {
+                    _ = notify_loop.notified() => {
+                        info!("FShare Receive server received stop signal; closing listener immediately.");
+                        break;
+                    }
                     accept_res = listener.accept() => {
                         match accept_res {
                             Ok((stream, peer_addr)) => {
