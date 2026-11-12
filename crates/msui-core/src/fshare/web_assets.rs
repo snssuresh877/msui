@@ -559,3 +559,139 @@ pub fn render_upload_page(upload_path: &str) -> String {
 </html>"##
     )
 }
+
+pub fn render_pin_page(error_msg: Option<&str>) -> String {
+    let err_html = if let Some(err) = error_msg {
+        format!(
+            r#"<div style="background: rgba(243, 139, 168, 0.15); border: 1px solid #f38ba8; color: #f38ba8; padding: 12px; border-radius: 12px; margin-bottom: 20px; font-size: 14px; font-weight: 500;">{}</div>"#,
+            err
+        )
+    } else {
+        String::new()
+    };
+
+    format!(
+        r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#11111b">
+    <title>msUI FShare - PIN Verification</title>
+    <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        html, body {{
+            width: 100%;
+            height: 100%;
+            min-height: 100vh;
+            min-height: 100dvh;
+        }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #11111b;
+            color: #cdd6f4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }}
+        .card {{
+            background-color: #1e1e2e;
+            border: 1px solid #313244;
+            border-radius: 20px;
+            padding: 36px 24px;
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+            box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+            margin: auto;
+        }}
+        .badge {{
+            display: inline-block;
+            background: rgba(137, 180, 250, 0.15);
+            color: #89b4fa;
+            padding: 6px 14px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            letter-spacing: 0.5px;
+        }}
+        .icon {{
+            font-size: 52px;
+            margin-bottom: 16px;
+        }}
+        h2 {{
+            font-size: 20px;
+            color: #ffffff;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }}
+        .meta {{
+            color: #a6adc8;
+            font-size: 14px;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }}
+        .pin-input {{
+            width: 100%;
+            background: #181825;
+            border: 2px solid #313244;
+            color: #cdd6f4;
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 24px;
+            text-align: center;
+            letter-spacing: 8px;
+            font-weight: 700;
+            outline: none;
+            margin-bottom: 20px;
+            transition: border-color 0.2s;
+        }}
+        .pin-input:focus {{
+            border-color: #89b4fa;
+        }}
+        .btn {{
+            display: block;
+            width: 100%;
+            background: #89b4fa;
+            color: #11111b;
+            text-decoration: none;
+            padding: 16px;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 700;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 14px rgba(137, 180, 250, 0.3);
+            border: none;
+            cursor: pointer;
+        }}
+        .btn:active {{
+            transform: scale(0.98);
+            background: #b4befe;
+        }}
+        .footer {{
+            margin-top: 24px;
+            font-size: 12px;
+            color: #6c7086;
+        }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <span class="badge">msUI FShare • Direct Wi-Fi</span>
+        <div class="icon">🔒</div>
+        <h2>PIN Verification</h2>
+        <p class="meta">Enter the 4-digit PIN displayed on your computer screen to access this file share.</p>
+        {err_html}
+        <form method="GET" action="/">
+            <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" name="pin" class="pin-input" placeholder="••••" autofocus required>
+            <button type="submit" class="btn">Unlock File Transfer</button>
+        </form>
+        <div class="footer">Transferred directly over local network. End-to-end local security.</div>
+    </div>
+</body>
+</html>"##
+    )
+}

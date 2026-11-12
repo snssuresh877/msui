@@ -14,8 +14,10 @@ pub mod fshare;
 pub mod wallpaper;
 pub mod service;
 pub mod color;
+pub mod ai;
 
-pub use clipboard::{ClipboardEntry, ClipboardStore, GLOBAL_CLIPBOARD, watcher::start_clipboard_watcher};
+pub use ai::{AiConfig, LlamaRuntime, MemorySentinel, MemoryStatus, ModelInfo, ModelStore, RuntimeStatus};
+pub use clipboard::{is_password_hint_active, ClipboardEntry, ClipboardStore, GLOBAL_CLIPBOARD, watcher::start_clipboard_watcher};
 pub use compositor::{HyprlandClient, HyprlandEvent, HyprlandIpc, HyprlandWorkspaceRef};
 pub use config::{parse_hex_color, BarConfig, ColorConfig, GuiConfig, LauncherConfig, MsuiConfig};
 pub use desktop::{find_icon_for_class, invalidate_desktop_cache, scan_desktop_apps, DesktopApp};
@@ -302,6 +304,13 @@ mod tests {
 
         let cmd = IpcCommand::parse("ping");
         assert_eq!(cmd, IpcCommand::Ping);
+
+        let text = "Hello\nWorld from Wayland! 🦀";
+        let clip_cmd = IpcCommand::ClipboardAdd(text.to_string());
+        let wire = clip_cmd.to_wire();
+        assert!(wire.starts_with("clip-add "));
+        let parsed = IpcCommand::parse(&wire);
+        assert_eq!(parsed, clip_cmd);
     }
 
     #[test]
@@ -323,6 +332,39 @@ mod tests {
         assert_eq!(parsed.id, "protonvpn");
         assert_eq!(parsed.title, "Proton VPN");
         assert_eq!(parsed.service, "org.kde.StatusNotifierItem-123-1");
+    }
+
+    #[test]
+    fn test_ipc_socket_path() {
+        let path = get_socket_path();
+        assert!(path.to_string_lossy().contains("msui"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_cache_file_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp_dir = std::env::temp_dir().join("msui-test-cache-perms");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        // Test clipboard store save permissions (0600)
+        let clip_path = temp_dir.join("clipboard_test.json");
+        let mut clip_store = ClipboardStore::new_with_path(Some(clip_path.clone()));
+        clip_store.add("Secret clipboard text".to_string());
+        let meta = std::fs::metadata(&clip_path).expect("clipboard file should exist");
+        let mode = meta.permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "clipboard cache file mode must be 0600");
+
+        // Test notification store save permissions (0600)
+        let notif_path = temp_dir.join("notif_test.json");
+        let mut notif_store = NotificationStore::new_with_path(Some(notif_path.clone()));
+        notif_store.add("TestApp".into(), None, "Title".into(), "Secret".into(), vec![], 5000);
+        let meta = std::fs::metadata(&notif_path).expect("notif file should exist");
+        let mode = meta.permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "notification cache file mode must be 0600");
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }
 

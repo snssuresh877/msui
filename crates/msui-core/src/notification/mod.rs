@@ -96,6 +96,18 @@ impl NotificationStore {
         }
     }
 
+    pub fn new_with_path(cache_path: Option<PathBuf>) -> Self {
+        let (sender, _) = broadcast::channel(32);
+        let mut store = Self {
+            next_id: 1,
+            history: VecDeque::with_capacity(100),
+            sender,
+            cache_path,
+        };
+        store.load();
+        store
+    }
+
     pub fn load(&mut self) {
         if let Some(path) = &self.cache_path {
             if path.exists() {
@@ -113,10 +125,31 @@ impl NotificationStore {
         if let Some(path) = &self.cache_path {
             if let Some(parent) = path.parent() {
                 let _ = fs::create_dir_all(parent);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o700));
+                }
             }
             let list: Vec<&Notification> = self.history.iter().collect();
             if let Ok(json) = serde_json::to_string_pretty(&list) {
-                let _ = fs::write(path, json);
+                #[cfg(unix)]
+                {
+                    use std::fs::OpenOptions;
+                    use std::io::Write;
+                    use std::os::unix::fs::OpenOptionsExt;
+                    let mut options = OpenOptions::new();
+                    options.write(true).create(true).truncate(true).mode(0o600);
+                    if let Ok(mut file) = options.open(path) {
+                        let _ = file.write_all(json.as_bytes());
+                        use std::os::unix::fs::PermissionsExt;
+                        let _ = fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = fs::write(path, json);
+                }
             }
         }
     }

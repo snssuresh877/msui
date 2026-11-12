@@ -2,15 +2,15 @@
 # ==============================================================================
 # msUI AI Interactive Terminal Chat
 # ==============================================================================
-# Runs inside floating foot window, connected to local Ollama inference engine.
+# Runs inside floating foot window, connected to local llama-server engine.
 # Features:
+#   - Direct integration with native msUI Local AI (llama-server)
 #   - ArtCraft / VectorCraft shortcuts and tips
 #   - Memory cleanup prompt upon exiting
 # ==============================================================================
 
 set -uo pipefail
 
-MODEL="qwen2.5-coder:1.5b"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ANSI Color codes matching msUI theme
@@ -25,17 +25,54 @@ RESET="\033[0m"
 
 clear
 echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${PURPLE}║${RESET}  ${CYAN}${BOLD}🤖 msUI Local AI Assistant${RESET} ${GRAY}(On-Demand, 0 MB Boot RAM)${RESET}             ${PURPLE}║${RESET}"
+echo -e "${PURPLE}║${RESET}  ${CYAN}${BOLD}🤖 msUI Local AI Assistant${RESET} ${GRAY}(Native llama.cpp, 0 MB Boot RAM)${RESET}     ${PURPLE}║${RESET}"
 echo -e "${PURPLE}╠══════════════════════════════════════════════════════════════════════╣${RESET}"
-echo -e "${PURPLE}║${RESET}  ${GREEN}• Model:${RESET}    ${BOLD}${MODEL}${RESET} (Qwen 2.5 Coder 1.5B)                           ${PURPLE}║${RESET}"
-echo -e "${PURPLE}║${RESET}  ${GREEN}• Engine:${RESET}   http://127.0.0.1:11434 (OpenAI-compatible)               ${PURPLE}║${RESET}"
+echo -e "${PURPLE}║${RESET}  ${GREEN}• Engine:${RESET}   http://127.0.0.1:8080/v1 (OpenAI-compatible)             ${PURPLE}║${RESET}"
+echo -e "${PURPLE}║${RESET}  ${GREEN}• Context:${RESET}  2048 tokens, 4-bit KV Cache (Quantized)                   ${PURPLE}║${RESET}"
 echo -e "${PURPLE}║${RESET}  ${GREEN}• ArtCraft:${RESET} Ready for VectorCraft MCP & JSON-RPC automation           ${PURPLE}║${RESET}"
-echo -e "${PURPLE}║${RESET}  ${YELLOW}• Commands:${RESET} Type ${BOLD}/bye${RESET} or ${BOLD}Ctrl+D${RESET} to finish chat session                 ${PURPLE}║${RESET}"
+echo -e "${PURPLE}║${RESET}  ${YELLOW}• Commands:${RESET} Type ${BOLD}exit${RESET}, ${BOLD}/bye${RESET}, or ${BOLD}Ctrl+D${RESET} to finish chat session            ${PURPLE}║${RESET}"
 echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════════════╝${RESET}"
 echo ""
 
-# Run the model interactively
-ollama run "${MODEL}"
+# Ensure runtime is started
+if ! msui ai status 2>/dev/null | grep -q "RUNNING"; then
+    echo -e "${YELLOW}Starting Local AI runtime (llama-server)...${RESET}"
+    msui ai start
+    echo ""
+fi
+
+# Interactive chat loop
+while true; do
+    echo -ne "${CYAN}${BOLD}msui-ai ❯ ${RESET}"
+    if ! IFS= read -r user_input; then
+        echo ""
+        break
+    fi
+
+    trimmed=$(echo "${user_input}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    if [[ -z "${trimmed}" ]]; then
+        continue
+    fi
+
+    if [[ "${trimmed}" == "/bye" || "${trimmed}" == "exit" || "${trimmed}" == "quit" || "${trimmed}" == ":q" ]]; then
+        break
+    fi
+
+    if [[ "${trimmed}" == "/status" ]]; then
+        msui ai status
+        echo ""
+        continue
+    fi
+
+    if [[ "${trimmed}" == "/clear" ]]; then
+        clear
+        continue
+    fi
+
+    # Query via msui ai chat
+    msui ai chat "${user_input}"
+    echo ""
+done
 
 echo ""
 echo -e "${CYAN}Chat session closed.${RESET}"
@@ -47,6 +84,6 @@ if [[ "${choice,,}" =~ ^(n|no)$ ]]; then
     sleep 1
 else
     echo -e "${YELLOW}Freeing RAM and stopping engine...${RESET}"
-    "${SCRIPT_DIR}/ai-control.sh" stop
+    msui ai stop
     sleep 0.8
 fi

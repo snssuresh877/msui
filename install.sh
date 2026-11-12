@@ -266,6 +266,19 @@ deploy_wallpapers() {
 }
 
 # ------------------------------------------------------------------------------
+# 6. Configure UFW Firewall
+# ------------------------------------------------------------------------------
+setup_firewall() {
+  local fw_script="$DOTFILES_DIR/ufw/setup-firewall.sh"
+  if [[ -f "$fw_script" ]]; then
+    info "Running automated UFW firewall setup..."
+    bash "$fw_script"
+  else
+    warn "Firewall setup script not found at $fw_script. Skipping."
+  fi
+}
+
+# ------------------------------------------------------------------------------
 # Main Flow
 # ------------------------------------------------------------------------------
 main() {
@@ -278,9 +291,10 @@ main() {
       --configs-only) action="configs" ;;
       --packages-minimal) action="pkgs-min" ;;
       --packages-full) action="pkgs-full" ;;
+      --firewall) action="firewall" ;;
       --all) action="all" ;;
       *)
-        echo "Usage: $0 [--all | --bin-only | --configs-only | --packages-minimal | --packages-full]"
+        echo "Usage: $0 [--all | --bin-only | --configs-only | --packages-minimal | --packages-full | --firewall]"
         exit 0
         ;;
     esac
@@ -300,12 +314,16 @@ main() {
       deploy_dotfiles "true"
       deploy_wallpapers
       ;;
+    firewall)
+      setup_firewall
+      ;;
     all)
       info "Starting full installation..."
       install_system_packages "minimal"
       install_msui_binary
       deploy_dotfiles "true"
       deploy_wallpapers
+      setup_firewall
       ;;
   esac
 
@@ -313,16 +331,18 @@ main() {
   success "================================================================"
   success " Installation completed successfully!"
   success " msUI binary:    $HOME/.local/bin/msui"
-  success " CLI utilities:  $HOME/.local/bin/ (dl-stream, vconv, firefox-optimize)"
+  success " CLI utilities:  $HOME/.local/bin/ (dl-stream, vconv, firefox-optimize, firewall-manual)"
   success " Hyprland config: $HOME/.config/hypr"
   success " msUI config:     $HOME/.config/msui"
   success " Aria2 service:   aria2.service enabled on 127.0.0.1:6800"
+  success " UFW Firewall:    Hardened & active (incoming blocked, LAN file-sharing allowed)"
   success "================================================================"
   echo
   info "Post-installation steps:"
   echo "  1. Start desktop session:   exec Hyprland (TTY) or hyprctl reload"
   echo "  2. Test msUI Status Bar:    msui bar"
   echo "  3. Optimize Firefox & Exts: firefox-optimize (runs VA-API, low-RAM & adds Aria2/uBlock exts)"
+  echo "  4. Firewall & Security:     firewall-manual (or run 'firewall-setup' to re-apply)"
   echo
 }
 

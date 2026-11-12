@@ -46,6 +46,16 @@ impl ClipboardStore {
         }
     }
 
+    pub fn new_with_path(cache_path: Option<PathBuf>) -> Self {
+        let mut store = Self {
+            next_id: 1,
+            entries: Vec::with_capacity(100),
+            cache_path,
+        };
+        store.load();
+        store
+    }
+
     pub fn add(&mut self, text: String) -> bool {
         let trimmed = text.trim();
         if trimmed.is_empty() {
@@ -119,6 +129,9 @@ impl ClipboardStore {
     }
 
     pub fn read_system() -> Option<String> {
+        if is_password_hint_active() {
+            return None;
+        }
         let out = Command::new("wl-paste")
             .arg("-n")
             .output()
@@ -147,9 +160,30 @@ impl ClipboardStore {
         let Some(path) = &self.cache_path else { return; };
         if let Some(parent) = path.parent() {
             let _ = fs::create_dir_all(parent);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o700));
+            }
         }
         if let Ok(json) = serde_json::to_string_pretty(&self.entries) {
-            let _ = fs::write(path, json);
+            #[cfg(unix)]
+            {
+                use std::fs::OpenOptions;
+                use std::io::Write;
+                use std::os::unix::fs::OpenOptionsExt;
+                let mut options = OpenOptions::new();
+                options.write(true).create(true).truncate(true).mode(0o600);
+                if let Ok(mut file) = options.open(path) {
+                    let _ = file.write_all(json.as_bytes());
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = fs::write(path, json);
+            }
         }
     }
 }
@@ -162,4 +196,16 @@ fn dirs_cache_path() -> Option<PathBuf> {
         return Some(PathBuf::from(home).join(".cache").join("msui").join("clipboard_history.json"));
     }
     None
+}
+
+/// Checks if the Wayland selection offers the `x-kde-passwordManagerHint` MIME type,
+/// indicating that the copied content is a password or secret that should not be stored.
+pub fn is_password_hint_active() -> bool {
+    if let Ok(out) = Command::new("wl-paste").arg("-l").output() {
+        if out.status.success() {
+            let types = String::from_utf8_lossy(&out.stdout);
+            return types.contains("x-kde-passwordManagerHint");
+        }
+    }
+    false
 }

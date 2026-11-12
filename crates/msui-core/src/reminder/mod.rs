@@ -77,9 +77,15 @@ impl ReminderManager {
         } else if let Ok(home) = std::env::var("HOME") {
             PathBuf::from(home).join(".config").join("msui")
         } else {
-            PathBuf::from("/tmp/msui")
+            let uid = unsafe { libc::getuid() };
+            PathBuf::from(format!("/tmp/msui-runtime-{}", uid))
         };
         let _ = fs::create_dir_all(&base);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&base, std::fs::Permissions::from_mode(0o700));
+        }
         base.join("reminders.json")
     }
 
@@ -125,7 +131,23 @@ impl ReminderManager {
     fn save_unlocked(reminders: &[ReminderItem]) {
         let path = Self::storage_path();
         if let Ok(json_str) = serde_json::to_string_pretty(reminders) {
-            let _ = fs::write(&path, json_str);
+            #[cfg(unix)]
+            {
+                use std::fs::OpenOptions;
+                use std::io::Write;
+                use std::os::unix::fs::OpenOptionsExt;
+                let mut options = OpenOptions::new();
+                options.write(true).create(true).truncate(true).mode(0o600);
+                if let Ok(mut file) = options.open(&path) {
+                    let _ = file.write_all(json_str.as_bytes());
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                let _ = fs::write(&path, json_str);
+            }
             let mtime = fs::metadata(&path).ok().and_then(|m| m.modified().ok());
             if let Ok(mut cache) = REMINDER_CACHE.lock() {
                 cache.last_mtime = mtime;

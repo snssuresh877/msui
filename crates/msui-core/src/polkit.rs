@@ -213,7 +213,7 @@ impl PolkitAgent {
             }
         }
 
-        // Fallback: Spawn msui-polkit elevation dialog
+        // Fallback: Spawn msui-polkit elevation dialog with cookie securely passed via stdin
         let bin = env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("msui"));
         let mut cmd = tokio::process::Command::new(bin);
         cmd.arg("polkit-dialog");
@@ -221,13 +221,22 @@ impl PolkitAgent {
         cmd.arg("--message").arg(&message);
         cmd.arg("--icon").arg(&icon_name);
         cmd.arg("--user").arg(&target_user);
-        cmd.arg("--cookie").arg(&cookie);
         cmd.arg("--command").arg(&command);
+        cmd.stdin(std::process::Stdio::piped());
 
         match cmd.spawn() {
             Ok(mut child) => {
                 if let Some(pid) = child.id() {
                     self.active_child_pid.store(pid, Ordering::SeqCst);
+                }
+
+                if let Some(mut stdin) = child.stdin.take() {
+                    use tokio::io::AsyncWriteExt;
+                    let cookie_bytes = cookie.into_bytes();
+                    tokio::spawn(async move {
+                        let _ = stdin.write_all(&cookie_bytes).await;
+                        let _ = stdin.flush().await;
+                    });
                 }
 
                 let status = child.wait().await;

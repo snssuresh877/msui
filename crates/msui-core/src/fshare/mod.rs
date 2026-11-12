@@ -101,18 +101,41 @@ pub fn get_local_ip() -> Option<String> {
 
 /// Generate a 128-bit cryptographically secure random session token (32 hex characters)
 pub fn generate_token() -> String {
+    let mut bytes = [0u8; 16];
+    if let Ok(mut f) = std::fs::File::open("/dev/urandom") {
+        use std::io::Read;
+        if f.read_exact(&mut bytes).is_ok() {
+            let mut hex = String::with_capacity(32);
+            for b in bytes {
+                use std::fmt::Write;
+                let _ = write!(hex, "{:02x}", b);
+            }
+            return hex;
+        }
+    }
+
+    // High-resolution clock & process entropy fallback if /dev/urandom is unavailable
     use std::time::{SystemTime, UNIX_EPOCH};
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     let pid = std::process::id() as u128;
-    // Combine fast high-resolution clock entropy with random seed
     let rand_val: u128 = (now ^ (pid << 64)) ^ 0x9e3779b97f4a7c15;
     format!("{:032x}", rand_val)
 }
 
 /// Generate a 4-digit human verification PIN
 pub fn generate_pin() -> String {
+    let mut bytes = [0u8; 2];
+    if let Ok(mut f) = std::fs::File::open("/dev/urandom") {
+        use std::io::Read;
+        if f.read_exact(&mut bytes).is_ok() {
+            let val = u16::from_ne_bytes(bytes) as u32;
+            let pin = (val % 9000) + 1000;
+            return format!("{}", pin);
+        }
+    }
+
     use std::time::{SystemTime, UNIX_EPOCH};
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     let pin = (now % 9000) + 1000;
     format!("{}", pin)
 }

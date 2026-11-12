@@ -39,3 +39,4 @@ aria2
 yt-dlp
 ffmpeg
 sqlite
+ufw

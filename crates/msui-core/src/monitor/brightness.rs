@@ -29,12 +29,11 @@ impl BrightnessMonitor {
             return None;
         }
 
-        if let Ok(entries) = fs::read_dir(base) {
-            for entry in entries.flatten() {
-                return Some(entry.path());
-            }
-        }
-        None
+        fs::read_dir(base)
+            .ok()?
+            .flatten()
+            .next()
+            .map(|entry| entry.path())
     }
 
     pub fn read(&self) -> Option<BrightnessInfo> {

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# =============================================================================
+# firewall-setup - Run the msUI UFW Firewall Setup & Hardening Script
+# =============================================================================
+
+set -eo pipefail
+
+SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+SETUP_SCRIPT="${SCRIPT_DIR}/../ufw/setup-firewall.sh"
+
+if [[ ! -f "$SETUP_SCRIPT" ]]; then
+    # Fallback to standard installation paths
+    if [[ -f "${HOME}/Projects/msui/dotfiles/ufw/setup-firewall.sh" ]]; then
+        SETUP_SCRIPT="${HOME}/Projects/msui/dotfiles/ufw/setup-firewall.sh"
+    elif [[ -f "${HOME}/msui/dotfiles/ufw/setup-firewall.sh" ]]; then
+        SETUP_SCRIPT="${HOME}/msui/dotfiles/ufw/setup-firewall.sh"
+    fi
+fi
+
+if [[ -f "$SETUP_SCRIPT" ]]; then
+    exec "$SETUP_SCRIPT" "$@"
+else
+    echo "Error: Firewall setup script not found at: ${SETUP_SCRIPT}" >&2
+    exit 1
+fi

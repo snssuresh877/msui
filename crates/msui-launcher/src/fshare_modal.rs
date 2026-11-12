@@ -1247,6 +1247,7 @@ impl FShareModal {
 
             details = details
                 .push(text(format!("URL: {}", self.active_url)).size(13).color([0.54, 0.71, 0.98]))
+                .push(text(format!("PIN: {}", self.active_pin)).size(13).color([0.65, 0.89, 0.63]))
                 .push(text("Target Folder: ~/Downloads/msui-fshare/").size(12).color([0.68, 0.70, 0.78]))
                 .push(
                     text("💡 If stuck: Ensure phone is on same Wi-Fi (not 5G). If VPN is active on PC, pause it.")

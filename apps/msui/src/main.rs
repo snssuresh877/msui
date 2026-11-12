@@ -1,7 +1,10 @@
 mod daemon;
 
 use msui_core::ipc::{IpcClient, IpcCommand};
-use msui_core::{MsuiConfig, ReminderManager, ThemeManager, WallpaperManager};
+use msui_core::{
+    AiConfig, LlamaRuntime, MemorySentinel, ModelStore, MsuiConfig, ReminderManager, ThemeManager,
+    WallpaperManager,
+};
 use std::env;
 use std::path::Path;
 
@@ -122,7 +125,27 @@ impl ModalManager {
                     let _ = msui_core::emit_notification_closed(id, reason).await;
                 });
             }
-            IpcCommand::Ping | IpcCommand::Osd { .. } | IpcCommand::ReloadConfig | IpcCommand::Unknown(_) => {}
+            IpcCommand::Ping | IpcCommand::Osd { .. } | IpcCommand::ReloadConfig | IpcCommand::ClipboardAdd(_) | IpcCommand::Unknown(_) => {}
+        }
+    }
+}
+
+fn handle_clipboard_ingest() {
+    use std::io::Read;
+    let mut input = String::new();
+    if std::io::stdin().read_to_string(&mut input).is_ok() {
+        if input.trim().is_empty() {
+            return;
+        }
+        // Check if password manager hint is active; if so, skip storing
+        if msui_core::is_password_hint_active() {
+            return;
+        }
+        // Attempt sending via IPC to running msUI daemon
+        if msui_core::IpcClient::send_blocking(&msui_core::IpcCommand::ClipboardAdd(input.clone())).is_err() {
+            // Fallback: update local clipboard store directly
+            let mut store = msui_core::GLOBAL_CLIPBOARD.lock().unwrap();
+            store.add(input);
         }
     }
 }
@@ -226,7 +249,15 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        "clipboard-ingest" => {
+            handle_clipboard_ingest();
+            return Ok(());
+        }
         "clipboard" => {
+            if args.get(2).map(|s| s.as_str()) == Some("ingest") {
+                handle_clipboard_ingest();
+                return Ok(());
+            }
             if try_ipc_toggle("clipboard") {
                 return Ok(());
             }
@@ -317,8 +348,20 @@ fn main() -> anyhow::Result<()> {
                 }
                 Some("connect") => {
                     if let Some(ssid) = args.get(3) {
-                        let password = args.get(4).map(|s| s.as_str());
-                        match msui_core::NetworkMonitor::connect_wifi(ssid, password) {
+                        let mut password = args.get(4).map(|s| s.to_string());
+                        if password.is_none() {
+                            use std::io::{IsTerminal, Read};
+                            if !std::io::stdin().is_terminal() {
+                                let mut stdin_pass = String::new();
+                                if std::io::stdin().read_to_string(&mut stdin_pass).is_ok() {
+                                    let trimmed = stdin_pass.trim_end_matches(&['\r', '\n'][..]);
+                                    if !trimmed.is_empty() {
+                                        password = Some(trimmed.to_string());
+                                    }
+                                }
+                            }
+                        }
+                        match msui_core::NetworkMonitor::connect_wifi(ssid, password.as_deref()) {
                             Ok(()) => println!("Connected to \"{}\"", ssid),
                             Err(e) => {
                                 eprintln!("Connection error: {}", e);
@@ -1444,6 +1487,16 @@ fn main() -> anyhow::Result<()> {
                 i += 1;
             }
 
+            if cookie.is_empty() {
+                use std::io::{IsTerminal, Read};
+                if !std::io::stdin().is_terminal() {
+                    let mut stdin_cookie = String::new();
+                    if std::io::stdin().read_to_string(&mut stdin_cookie).is_ok() {
+                        cookie = stdin_cookie.trim_end_matches(&['\r', '\n'][..]).to_string();
+                    }
+                }
+            }
+
             let dialog_args = msui_launcher::PolkitDialogArgs {
                 action_id,
                 message,
@@ -1742,6 +1795,9 @@ fn main() -> anyhow::Result<()> {
             let status = cmd.status()?;
             std::process::exit(status.code().unwrap_or(0));
         }
+        "ai" => {
+            handle_ai_command(&args)?;
+        }
         "--help" | "-h" | "help" => {
             print_help();
         }
@@ -1755,6 +1811,269 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
+    Ok(())
+}
+
+fn handle_ai_command(args: &[String]) -> anyhow::Result<()> {
+    let sub = args.get(2).map(|s| s.as_str()).unwrap_or("status");
+    match sub {
+        "status" => {
+            let status = LlamaRuntime::get_status();
+            let mem = MemorySentinel::read_memory_status().ok();
+            let models = ModelStore::list_models();
+            let cfg = AiConfig::load();
+
+            println!("\x1b[1;36m==================================================\x1b[0m");
+            println!("\x1b[1;36m              msUI Local AI Manager               \x1b[0m");
+            println!("\x1b[1;36m==================================================\x1b[0m");
+            if status.is_running {
+                println!("  Status:       \x1b[1;32m● RUNNING\x1b[0m");
+                println!("  PID:          {}", status.pid.unwrap_or(0));
+                println!("  Active Model: \x1b[1m{}\x1b[0m", status.model_name.as_deref().unwrap_or("unknown"));
+                println!("  API Endpoint: \x1b[4m{}\x1b[0m", status.api_url);
+                if let Some(ram) = status.ram_usage_mb {
+                    println!("  Process RAM:  {:.1} MB", ram);
+                }
+                if let Some(ref st) = status.started_at {
+                    println!("  Started At:   {}", st);
+                }
+            } else {
+                println!("  Status:       \x1b[1;30m○ STOPPED (0 MB RAM)\x1b[0m");
+                println!("  Configured:   Port {}, Context {} tokens, {} CPU threads", cfg.port, cfg.context_size, cfg.cpu_threads);
+            }
+
+            println!("\x1b[1mSystem Memory:\x1b[0m");
+            if let Some(m) = mem {
+                println!("  Available:    {:.2} GB / {:.2} GB total", m.available_mb as f64 / 1024.0, m.total_mb as f64 / 1024.0);
+                println!("  Swap (ZRAM):  {:.2} GB free / {:.2} GB total", m.swap_free_mb as f64 / 1024.0, m.swap_total_mb as f64 / 1024.0);
+            }
+
+            println!("\x1b[1mInstalled Models ({}):\x1b[0m", models.len());
+            if models.is_empty() {
+                println!("  No .gguf models found in ~/.local/share/msui/ai/models/");
+            } else {
+                for m in &models {
+                    println!("  • \x1b[1m{}\x1b[0m ({}, {})", m.name, m.size_human, m.quantization);
+                }
+            }
+            println!("\x1b[1;36m==================================================\x1b[0m");
+        }
+        "start" => {
+            let model_name = args.get(3).map(|s| s.as_str());
+            println!("Starting msUI Local AI runtime (llama-server)...");
+            match LlamaRuntime::start(model_name) {
+                Ok(status) => {
+                    println!("\x1b[1;32m[✔] Local AI started successfully!\x1b[0m");
+                    println!("  Model:    {}", status.model_name.as_deref().unwrap_or(""));
+                    println!("  Endpoint: {}/v1", status.api_url);
+                    println!("  PID:      {}", status.pid.unwrap_or(0));
+                }
+                Err(e) => {
+                    eprintln!("\x1b[1;31m[✘] Failed to start Local AI:\x1b[0m {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        "stop" => {
+            println!("Stopping msUI Local AI runtime...");
+            if let Err(e) = LlamaRuntime::stop() {
+                eprintln!("Error stopping: {}", e);
+            } else {
+                println!("\x1b[1;32m[✔] Local AI stopped. 100% RAM reclaimed (0 MB footprint).\x1b[0m");
+            }
+        }
+        "restart" => {
+            let model_name = args.get(3).map(|s| s.as_str());
+            let _ = LlamaRuntime::stop();
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            match LlamaRuntime::start(model_name) {
+                Ok(status) => {
+                    println!("\x1b[1;32m[✔] Local AI restarted on {}\x1b[0m", status.api_url);
+                }
+                Err(e) => {
+                    eprintln!("Failed to restart: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        "models" | "list" => {
+            let models = ModelStore::list_models();
+            if models.is_empty() {
+                println!("No models installed in ~/.local/share/msui/ai/models/");
+                println!("To add a model, copy any .gguf file into ~/.local/share/msui/ai/models/ or run: msui ai pull <preset>");
+            } else {
+                println!("{:<25} {:<10} {:<10} {:<20}", "NAME", "SIZE", "QUANT", "MODIFIED");
+                println!("{:-<70}", "");
+                for m in models {
+                    println!("{:<25} {:<10} {:<10} {:<20}", m.name, m.size_human, m.quantization, m.modified);
+                }
+            }
+        }
+        "delete" | "rm" => {
+            if let Some(name) = args.get(3) {
+                match ModelStore::delete_model(name) {
+                    Ok(true) => println!("\x1b[1;32m[✔] Model '{}' deleted.\x1b[0m", name),
+                    Ok(false) => eprintln!("\x1b[1;31m[✘] Model '{}' not found.\x1b[0m", name),
+                    Err(e) => eprintln!("\x1b[1;31m[✘] Failed to delete: {}\x1b[0m", e),
+                }
+            } else {
+                eprintln!("Usage: msui ai delete <model-name>");
+            }
+        }
+        "chat" | "prompt" => {
+            use std::io::{IsTerminal, Read, Write};
+            let mut piped_input = String::new();
+            if !std::io::stdin().is_terminal() {
+                let _ = std::io::stdin().read_to_string(&mut piped_input);
+            }
+            let cli_prompt = if args.len() > 3 {
+                args[3..].join(" ")
+            } else {
+                String::new()
+            };
+
+            let query = match (piped_input.trim(), cli_prompt.trim()) {
+                ("", "") => {
+                    eprintln!("Usage: msui ai chat \"Your question here\" or pipe text via stdin");
+                    return Ok(());
+                }
+                (piped, "") => piped.to_string(),
+                ("", prompt) => prompt.to_string(),
+                (piped, prompt) => format!("{}\n\nContext / Input:\n```\n{}\n```", prompt, piped),
+            };
+
+            let status = LlamaRuntime::get_status();
+            if !status.is_running {
+                println!("Local AI runtime not running. Launching on-demand...");
+                if let Err(e) = LlamaRuntime::start(None) {
+                    eprintln!("Failed to launch AI engine: {}", e);
+                    std::process::exit(1);
+                }
+            }
+            let cfg = AiConfig::load();
+            let wait_start = std::time::Instant::now();
+            while !LlamaRuntime::check_health(&cfg.host, cfg.port) {
+                if wait_start.elapsed() > std::time::Duration::from_secs(10) {
+                    eprintln!("AI server is not ready to serve queries. Check logs at ~/.local/share/msui/ai/logs/llama-server.log");
+                    std::process::exit(1);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(250));
+            }
+
+            let url = format!("http://{}:{}/v1/chat/completions", cfg.host, cfg.port);
+            let payload = serde_json::json!({
+                "messages": [
+                    {"role": "system", "content": "You are a helpful, concise Linux and programming assistant."},
+                    {"role": "user", "content": query}
+                ],
+                "temperature": 0.2,
+                "max_tokens": 1024
+            });
+            let payload_bytes = serde_json::to_vec(&payload)?;
+
+            // CWE-214 remediation: stream payload via stdin pipe rather than -d CLI argument
+            let mut child = std::process::Command::new("curl")
+                .arg("-s")
+                .arg("-X")
+                .arg("POST")
+                .arg(&url)
+                .arg("-H")
+                .arg("Content-Type: application/json")
+                .arg("--data-binary")
+                .arg("@-")
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn()?;
+
+            if let Some(mut stdin) = child.stdin.take() {
+                stdin.write_all(&payload_bytes)?;
+            }
+
+            let output = child.wait_with_output()?;
+            if output.status.success() {
+                LlamaRuntime::record_activity();
+
+                if let Ok(res_json) = serde_json::from_slice::<serde_json::Value>(&output.stdout) {
+                    if let Some(err_msg) = res_json["error"]["message"].as_str() {
+                        eprintln!("AI Error: {}", err_msg);
+                        return Ok(());
+                    }
+                    if let Some(content) = res_json["choices"][0]["message"]["content"].as_str() {
+                        println!("\n{}", content);
+                        return Ok(());
+                    }
+                }
+                println!("{}", String::from_utf8_lossy(&output.stdout));
+            } else {
+                eprintln!("Query failed: {}", String::from_utf8_lossy(&output.stderr));
+            }
+        }
+        "pull" | "download" => {
+            let target = match args.get(3).map(|s| s.as_str()) {
+                Some(t) => t,
+                None => {
+                    println!("Usage: msui ai pull <url-or-preset>");
+                    println!("Presets:");
+                    println!("  qwen-0.5b   Qwen2.5-Coder-0.5B-Instruct-Q4_K_M (380 MB, ultra-light)");
+                    println!("  qwen-1.5b   Qwen2.5-Coder-1.5B-Instruct-Q4_K_M (980 MB, recommended for 8GB RAM)");
+                    println!("  qwen-3b     Qwen2.5-Coder-3B-Instruct-Q4_K_M (1.9 GB)");
+                    println!("Or pass any direct Hugging Face .gguf download link.");
+                    return Ok(());
+                }
+            };
+
+            let (url, filename) = match target {
+                "qwen-0.5b" => (
+                    "https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+                    "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+                ),
+                "qwen-1.5b" => (
+                    "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+                    "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+                ),
+                "qwen-3b" => (
+                    "https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+                    "qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+                ),
+                direct_url => {
+                    let fname = direct_url.rsplit('/').next().unwrap_or("model.gguf");
+                    (direct_url, fname)
+                }
+            };
+
+            let dest_dir = ModelStore::models_dir();
+            let _ = std::fs::create_dir_all(&dest_dir);
+            let dest_file = dest_dir.join(filename);
+            println!("\x1b[1;36mDownloading model to: {}\x1b[0m", dest_file.display());
+
+            let mut cmd = if std::process::Command::new("aria2c").arg("--version").output().is_ok() {
+                let mut c = std::process::Command::new("aria2c");
+                c.args(["--enable-rpc=false", "-s", "8", "-x", "8", "-c", "-d", dest_dir.to_str().unwrap(), "-o", filename, url]);
+                c
+            } else {
+                let mut c = std::process::Command::new("curl");
+                c.args(["-L", "--fail", "--progress-bar", "-C", "-", "-o", dest_file.to_str().unwrap(), url]);
+                c
+            };
+
+            let status = cmd.status()?;
+            if status.success() {
+                println!("\x1b[1;32m[✔] Model downloaded successfully!\x1b[0m");
+                let mut cfg = AiConfig::load();
+                if cfg.default_model.is_none() {
+                    cfg.default_model = Some(dest_file.file_stem().unwrap().to_str().unwrap().to_string());
+                    let _ = cfg.save();
+                }
+            } else {
+                eprintln!("\x1b[1;31m[✘] Download failed.\x1b[0m");
+            }
+        }
+        other => {
+            eprintln!("Unknown AI subcommand: '{}'.\nUsage: msui ai [status|start|stop|restart|models|pull|delete|chat <prompt>]", other);
+            std::process::exit(1);
+        }
+    }
     Ok(())
 }
 
@@ -1784,6 +2103,7 @@ fn print_help() {
           bg            Run the native Wayland background wallpaper daemon\n  \
           theme         Open the Theme switcher overlay (or pass theme name)\n  \
           fshare        Open the msUI FShare local Wi-Fi & QR code file sharing hub (or 'history')\n  \
+          ai            Local AI Manager powered by llama.cpp (status|start|stop|restart|models|delete|chat)\n  \
           power         Open the Power & Session menu overlay\n  \
           polkit        Run the native D-Bus PolicyKit 1 authentication agent daemon\n  \
           toggle        Toggle a modal overlay via instant IPC socket (e.g. 'msui toggle launcher')\n  \

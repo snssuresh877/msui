@@ -12,8 +12,17 @@ pub fn get_socket_path() -> PathBuf {
     if let Ok(runtime_dir) = env::var("XDG_RUNTIME_DIR") {
         PathBuf::from(runtime_dir).join("msui.sock")
     } else {
-        let user = env::var("USER").unwrap_or_else(|_| "user".to_string());
-        PathBuf::from(format!("/tmp/msui-{}.sock", user))
+        let uid = unsafe { libc::getuid() };
+        let dir = PathBuf::from(format!("/tmp/msui-runtime-{}", uid));
+        if !dir.exists() {
+            let _ = std::fs::create_dir_all(&dir);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+            }
+        }
+        dir.join("msui.sock")
     }
 }
 
@@ -31,7 +40,27 @@ pub enum IpcCommand {
     Osd { kind: String, action: String },
     ReloadConfig,
     Ping,
+    ClipboardAdd(String),
     Unknown(String),
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        use std::fmt::Write;
+        let _ = write!(s, "{:02x}", b);
+    }
+    s
+}
+
+fn decode_hex(s: &str) -> Option<Vec<u8>> {
+    if s.len() % 2 != 0 {
+        return None;
+    }
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).ok())
+        .collect()
 }
 
 impl IpcCommand {
@@ -53,6 +82,17 @@ impl IpcCommand {
                 kind: kind.to_string(),
                 action: action.to_string(),
             },
+            ["clip-add", hex] => {
+                if let Some(bytes) = decode_hex(hex) {
+                    if let Ok(text) = String::from_utf8(bytes) {
+                        IpcCommand::ClipboardAdd(text)
+                    } else {
+                        IpcCommand::Unknown(s.trim().to_string())
+                    }
+                } else {
+                    IpcCommand::Unknown(s.trim().to_string())
+                }
+            }
             ["notif-action", id_str, action] => {
                 if let Ok(id) = id_str.parse::<u32>() {
                     IpcCommand::NotificationAction {
@@ -92,6 +132,7 @@ impl IpcCommand {
             IpcCommand::NotificationClose { id, reason } => {
                 format!("notif-close {} {}", id, reason)
             }
+            IpcCommand::ClipboardAdd(text) => format!("clip-add {}", encode_hex(text.as_bytes())),
             IpcCommand::Ping => "ping".to_string(),
             IpcCommand::Unknown(cmd) => cmd.clone(),
         }
@@ -157,6 +198,11 @@ impl IpcServer {
         }
 
         let listener = UnixListener::bind(&self.socket_path)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&self.socket_path, std::fs::Permissions::from_mode(0o600));
+        }
         info!("msUI IPC socket listening on {:?}", self.socket_path);
         self.is_running.store(true, Ordering::SeqCst);
 
@@ -175,6 +221,14 @@ impl IpcServer {
                             let cmd = IpcCommand::parse(&line);
                             let resp = match &cmd {
                                 IpcCommand::Ping => "PONG\n".to_string(),
+                                IpcCommand::ClipboardAdd(text) => {
+                                    {
+                                        let mut store = crate::clipboard::GLOBAL_CLIPBOARD.lock().unwrap();
+                                        store.add(text.clone());
+                                    }
+                                    let _ = tx_clone.send(cmd.clone()).await;
+                                    "OK\n".to_string()
+                                }
                                 other => {
                                     if let Err(e) = tx_clone.send(other.clone()).await {
                                         error!("Failed to dispatch IPC command: {:?}", e);

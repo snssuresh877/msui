@@ -11,8 +11,7 @@ import socket
 import urllib.request
 import urllib.error
 
-OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
-MODEL = "qwen2.5-coder:1.5b"
+API_URL = "http://127.0.0.1:8080/v1/chat/completions"
 VECTORCRAFT_PORT = 7979
 
 SYSTEM_PROMPT = """You are an AI assistant controlling VectorCraft (an open-source vector graphics design application).
@@ -46,21 +45,24 @@ def send_to_vectorcraft(command_json: dict) -> dict:
 
 def prompt_ai(user_input: str) -> str:
     payload = {
-        "model": MODEL,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_input}
         ],
-        "stream": False
+        "temperature": 0.2,
+        "max_tokens": 1024
     }
     req = urllib.request.Request(
-        OLLAMA_URL,
+        API_URL,
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"}
     )
     with urllib.request.urlopen(req, timeout=120.0) as resp:
         result = json.loads(resp.read().decode("utf-8"))
-        return result.get("message", {}).get("content", "").strip()
+        choices = result.get("choices", [])
+        if choices:
+            return choices[0].get("message", {}).get("content", "").strip()
+        return ""
 
 def main():
     if len(sys.argv) < 2:
@@ -68,13 +70,13 @@ def main():
         sys.exit(1)
 
     prompt = " ".join(sys.argv[1:])
-    print(f"🤖 Querying {MODEL} for: '{prompt}'...")
+    print(f"🤖 Querying local AI engine for: '{prompt}'...")
 
     try:
         ai_reply = prompt_ai(prompt)
     except Exception as e:
         print(f"❌ Error communicating with local AI engine: {e}")
-        print("Ensure local AI engine is running: ~/.config/hypr/scripts/ai/ai-control.sh start")
+        print("Ensure local AI engine is running: msui ai start")
         sys.exit(1)
 
     print("\n📦 AI Generated VectorCraft Command:")

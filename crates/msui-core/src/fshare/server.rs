@@ -7,9 +7,10 @@ use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
 use super::web_assets::{
-    render_download_page, render_multi_download_page, render_upload_page, urlencoding_encode,
+    render_download_page, render_multi_download_page, render_pin_page, render_upload_page,
+    urlencoding_encode,
 };
-use super::{sanitize_filename, FShareEvent};
+use super::{generate_token, sanitize_filename, FShareEvent};
 
 #[derive(Debug, Clone)]
 pub struct FShareServerHandle {
@@ -82,6 +83,7 @@ impl FShareServer {
 
         let file_paths_clone = file_paths.clone();
         let token_clone = token.clone();
+        let pin_clone = pin.clone();
         let flag_loop = shutdown_flag.clone();
         let notify_loop = shutdown_notify.clone();
 
@@ -104,11 +106,12 @@ impl FShareServer {
                                 let peer_ip = peer_addr.ip().to_string();
                                 let file_paths = file_paths_clone.clone();
                                 let token = token_clone.clone();
+                                let pin = pin_clone.clone();
                                 let event_tx = event_tx.clone();
 
                                 tokio::spawn(async move {
                                     let _ = event_tx.send(FShareEvent::ClientConnected { peer_ip });
-                                    if let Err(e) = handle_send_connection(stream, &file_paths, &token, event_tx.clone()).await {
+                                    if let Err(e) = handle_send_connection(stream, &file_paths, &token, &pin, event_tx.clone()).await {
                                         error!("FShare send connection error: {:?}", e);
                                     }
                                 });
@@ -166,6 +169,7 @@ impl FShareServer {
 
         let save_dir_clone = save_dir.clone();
         let token_clone = token.clone();
+        let pin_clone = pin.clone();
         let flag_loop = shutdown_flag.clone();
         let notify_loop = shutdown_notify.clone();
 
@@ -188,11 +192,12 @@ impl FShareServer {
                                 let peer_ip = peer_addr.ip().to_string();
                                 let save_dir = save_dir_clone.clone();
                                 let token = token_clone.clone();
+                                let pin = pin_clone.clone();
                                 let event_tx = event_tx.clone();
 
                                 tokio::spawn(async move {
                                     let _ = event_tx.send(FShareEvent::ClientConnected { peer_ip });
-                                    if let Err(e) = handle_recv_connection(stream, &save_dir, &token, event_tx).await {
+                                    if let Err(e) = handle_recv_connection(stream, &save_dir, &token, &pin, event_tx).await {
                                         error!("FShare recv connection error: {:?}", e);
                                     }
                                 });
@@ -283,6 +288,7 @@ async fn handle_send_connection(
     mut stream: TcpStream,
     file_paths: &[PathBuf],
     token: &str,
+    pin: &str,
     event_tx: mpsc::UnboundedSender<FShareEvent>,
 ) -> anyhow::Result<()> {
     if file_paths.is_empty() {
@@ -327,7 +333,29 @@ async fn handle_send_connection(
     let method = parts.next().unwrap_or("");
     let path = parts.next().unwrap_or("");
 
-    let path_clean = path.split('?').next().unwrap_or("").trim_end_matches('/');
+    let mut header_pin: Option<String> = None;
+    for line in request_str.lines().skip(1) {
+        let lower = line.to_lowercase();
+        if let Some(val) = lower.strip_prefix("x-pin:") {
+            header_pin = Some(val.trim().to_string());
+            break;
+        }
+    }
+
+    let (path_part, query_part) = match path.split_once('?') {
+        Some((p, q)) => (p, q),
+        None => (path, ""),
+    };
+    let path_clean = path_part.trim_end_matches('/');
+
+    let mut query_pin: Option<String> = None;
+    for pair in query_part.split('&') {
+        if let Some(val) = pair.strip_prefix("pin=") {
+            query_pin = Some(urlencoding_decode(val));
+            break;
+        }
+    }
+    let provided_pin = query_pin.or(header_pin);
 
     if method == "OPTIONS" {
         let resp = "HTTP/1.1 204 No Content\r\n\
@@ -359,7 +387,8 @@ async fn handle_send_connection(
     if let Some(rest) = path_clean.strip_prefix(&download_file_prefix) {
         if rest == "all.zip" {
             let temp_dir = std::env::temp_dir();
-            let zip_name = format!("msui_fshare_{}_{}.zip", token, std::process::id());
+            let rand_suffix = generate_token();
+            let zip_name = format!("msui_fshare_{}_{}_{}.zip", token, std::process::id(), &rand_suffix[..8]);
             let zip_path = temp_dir.join(&zip_name);
 
             let mut cmd = std::process::Command::new("zip");
@@ -372,11 +401,12 @@ async fn handle_send_connection(
                 Ok(status) if status.success() => {
                     let zip_download_name = format!("msui_fshare_{}_files.zip", file_paths.len());
                     let res = stream_file_response(&mut stream, &zip_path, &zip_download_name, method == "HEAD", event_tx).await;
-                    let _ = std::fs::remove_file(&zip_path);
+                    let _ = tokio::fs::remove_file(&zip_path).await;
                     res?;
                 }
                 _ => {
                     error!("Failed to generate zip bundle for FShare download");
+                    let _ = tokio::fs::remove_file(&zip_path).await;
                     send_404(&mut stream).await?;
                 }
             }
@@ -417,71 +447,106 @@ async fn handle_send_connection(
             }
         }
     } else if path_clean.starts_with("/dl/") {
-        // Fallback for single file downloads
-        if file_paths.len() == 1 {
-            let f = &file_paths[0];
-            let fname = f.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string());
-            stream_file_response(&mut stream, f, &fname, method == "HEAD", event_tx).await?;
+        // Enforce strict token checks on all /dl/{token}/... endpoints!
+        // Unauthenticated access or wrong token is rejected immediately (no single-file bypass).
+        send_404(&mut stream).await?;
+    } else {
+        let download_page_path = format!("/d/{}", token);
+        let download_page_prefix = format!("/d/{}/", token);
+
+        let is_authorized_by_token = path_clean == download_page_path || path_clean.starts_with(&download_page_prefix);
+        let is_pin_route = path_clean.is_empty() || path_clean == "/d" || path_clean == "/auth";
+
+        if is_authorized_by_token {
+            serve_download_html(&mut stream, file_paths, token, method == "HEAD").await?;
+        } else if is_pin_route {
+            if let Some(p) = &provided_pin {
+                if p == pin {
+                    serve_download_html(&mut stream, file_paths, token, method == "HEAD").await?;
+                } else {
+                    let html = render_pin_page(Some("Invalid PIN. Please check your screen and try again."));
+                    send_html_with_status(&mut stream, "401 Unauthorized", &html).await?;
+                }
+            } else {
+                let html = render_pin_page(None);
+                send_html_with_status(&mut stream, "200 OK", &html).await?;
+            }
         } else {
             send_404(&mut stream).await?;
         }
-    } else {
-        // Any other GET/HEAD request (including /, /d, /d/, /download, /d/{token}) serves the download page!
-        let is_multi = file_paths.len() > 1;
-        if is_multi {
-            let mut files_info = Vec::new();
-            let mut total_size: u64 = 0;
-            for f in file_paths {
-                let size = std::fs::metadata(f).map(|m| m.len()).unwrap_or(0);
-                let name = f.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string());
-                total_size += size;
-                files_info.push((name, size));
-            }
-            let zip_dl_path = format!("/dl/{}/all.zip", token);
-            let html = render_multi_download_page(&files_info, total_size, &zip_dl_path, token);
-
-            if method == "HEAD" {
-                let header = format!(
-                    "HTTP/1.1 200 OK\r\n\
-                    Content-Type: text/html; charset=utf-8\r\n\
-                    Content-Length: {}\r\n\
-                    Access-Control-Allow-Origin: *\r\n\
-                    Cache-Control: no-cache, no-store, must-revalidate\r\n\
-                    Connection: close\r\n\r\n",
-                    html.len()
-                );
-                stream.write_all(header.as_bytes()).await?;
-                stream.flush().await?;
-            } else {
-                send_html(&mut stream, &html).await?;
-            }
-        } else {
-            let file_path = &file_paths[0];
-            let filename = file_path
-                .file_name()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| "file".to_string());
-            let size = std::fs::metadata(file_path).map(|m| m.len()).unwrap_or(0);
-            let dl_url = format!("/dl/{}/{}", token, urlencoding_encode(&filename));
-            let html = render_download_page(&filename, size, &dl_url);
-            if method == "HEAD" {
-                let header = format!(
-                    "HTTP/1.1 200 OK\r\n\
-                    Content-Type: text/html; charset=utf-8\r\n\
-                    Content-Length: {}\r\n\
-                    Access-Control-Allow-Origin: *\r\n\
-                    Cache-Control: no-cache, no-store, must-revalidate\r\n\
-                    Connection: close\r\n\r\n",
-                    html.len()
-                );
-                stream.write_all(header.as_bytes()).await?;
-                stream.flush().await?;
-            } else {
-                send_html(&mut stream, &html).await?;
-            }
-        }
     }
 
+    Ok(())
+}
+
+async fn serve_download_html(
+    stream: &mut TcpStream,
+    file_paths: &[PathBuf],
+    token: &str,
+    is_head: bool,
+) -> anyhow::Result<()> {
+    let is_multi = file_paths.len() > 1;
+    let html = if is_multi {
+        let mut files_info = Vec::new();
+        let mut total_size: u64 = 0;
+        for f in file_paths {
+            let size = std::fs::metadata(f).map(|m| m.len()).unwrap_or(0);
+            let name = f.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string());
+            total_size += size;
+            files_info.push((name, size));
+        }
+        let zip_dl_path = format!("/dl/{}/all.zip", token);
+        render_multi_download_page(&files_info, total_size, &zip_dl_path, token)
+    } else {
+        let file_path = &file_paths[0];
+        let filename = file_path
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "file".to_string());
+        let size = std::fs::metadata(file_path).map(|m| m.len()).unwrap_or(0);
+        let dl_url = format!("/dl/{}/{}", token, urlencoding_encode(&filename));
+        render_download_page(&filename, size, &dl_url)
+    };
+
+    if is_head {
+        let header = format!(
+            "HTTP/1.1 200 OK\r\n\
+            Content-Type: text/html; charset=utf-8\r\n\
+            Content-Length: {}\r\n\
+            Access-Control-Allow-Origin: *\r\n\
+            Cache-Control: no-cache, no-store, must-revalidate\r\n\
+            Connection: close\r\n\r\n",
+            html.len()
+        );
+        stream.write_all(header.as_bytes()).await?;
+        stream.flush().await?;
+    } else {
+        send_html(stream, &html).await?;
+    }
+    Ok(())
+}
+
+async fn serve_upload_html(
+    stream: &mut TcpStream,
+    upload_endpoint: &str,
+    is_head: bool,
+) -> anyhow::Result<()> {
+    let html = render_upload_page(upload_endpoint);
+    if is_head {
+        let header = format!(
+            "HTTP/1.1 200 OK\r\n\
+            Content-Type: text/html; charset=utf-8\r\n\
+            Content-Length: {}\r\n\
+            Access-Control-Allow-Origin: *\r\n\
+            Cache-Control: no-cache, no-store, must-revalidate\r\n\
+            Connection: close\r\n\r\n",
+            html.len()
+        );
+        stream.write_all(header.as_bytes()).await?;
+        stream.flush().await?;
+    } else {
+        send_html(stream, &html).await?;
+    }
     Ok(())
 }
 
@@ -489,22 +554,39 @@ async fn handle_recv_connection(
     mut stream: TcpStream,
     save_dir: &Path,
     token: &str,
+    pin: &str,
     event_tx: mpsc::UnboundedSender<FShareEvent>,
 ) -> anyhow::Result<()> {
     let mut reader = BufReader::new(&mut stream);
     let mut header_lines = Vec::new();
 
-    // Read HTTP headers line-by-line
+    // Read HTTP headers line-by-line with timeout and total length ceiling
     let mut content_length: u64 = 0;
     let mut raw_filename = String::new();
     let mut method = String::new();
     let mut path = String::new();
+    let mut header_pin: Option<String> = None;
 
     let mut line_buf = String::new();
-    while let Ok(bytes) = reader.read_line(&mut line_buf).await {
+    let mut total_header_bytes: usize = 0;
+
+    loop {
+        line_buf.clear();
+        let read_future = reader.read_line(&mut line_buf);
+        let bytes = match tokio::time::timeout(std::time::Duration::from_secs(5), read_future).await {
+            Ok(Ok(n)) => n,
+            _ => break,
+        };
+
         if bytes == 0 || line_buf == "\r\n" || line_buf == "\n" {
             break;
         }
+        total_header_bytes += bytes;
+        if total_header_bytes > 8192 {
+            send_404(&mut stream).await?;
+            return Ok(());
+        }
+
         let line = line_buf.trim().to_string();
         if header_lines.is_empty() {
             let mut parts = line.split_whitespace();
@@ -520,15 +602,45 @@ async fn handle_recv_connection(
                 if let Some(val) = line.split(':').nth(1) {
                     raw_filename = urlencoding_decode(val.trim());
                 }
+            } else if lower.starts_with("x-pin:") {
+                if let Some(val) = line.split(':').nth(1) {
+                    header_pin = Some(val.trim().to_string());
+                }
             }
         }
         header_lines.push(line);
-        line_buf.clear();
     }
 
+    // DoS protection: reject excessive upload sizes
+    const MAX_UPLOAD_SIZE: u64 = 10 * 1024 * 1024 * 1024; // 10 GB limit
+    if content_length > MAX_UPLOAD_SIZE {
+        let resp = "HTTP/1.1 413 Payload Too Large\r\n\
+                    Content-Type: text/plain\r\n\
+                    Content-Length: 24\r\n\
+                    Connection: close\r\n\r\nPayload Too Large (>10GB)";
+        stream.write_all(resp.as_bytes()).await?;
+        stream.flush().await?;
+        return Ok(());
+    }
+
+    let (path_part, query_part) = match path.split_once('?') {
+        Some((p, q)) => (p, q),
+        None => (path.as_str(), ""),
+    };
+    let path_clean = path_part.trim_end_matches('/');
+
+    let mut query_pin: Option<String> = None;
+    for pair in query_part.split('&') {
+        if let Some(val) = pair.strip_prefix("pin=") {
+            query_pin = Some(urlencoding_decode(val));
+            break;
+        }
+    }
+    let provided_pin = query_pin.or(header_pin);
+
     let upload_page_path = format!("/r/{}", token);
+    let upload_page_prefix = format!("/r/{}/", token);
     let upload_endpoint = format!("/upload/{}", token);
-    let path_clean = path.split('?').next().unwrap_or("").trim_end_matches('/');
 
     if method == "OPTIONS" && (path_clean == upload_endpoint || path.starts_with(&upload_endpoint)) {
         let resp = "HTTP/1.1 204 No Content\r\n\
@@ -549,24 +661,7 @@ async fn handle_recv_connection(
         return Ok(());
     }
 
-    if (method == "GET" || method == "HEAD") && (path_clean == upload_page_path || !path_clean.starts_with("/upload/")) {
-        let html = render_upload_page(&upload_endpoint);
-        if method == "HEAD" {
-            let header = format!(
-                "HTTP/1.1 200 OK\r\n\
-                Content-Type: text/html; charset=utf-8\r\n\
-                Content-Length: {}\r\n\
-                Access-Control-Allow-Origin: *\r\n\
-                Cache-Control: no-cache, no-store, must-revalidate\r\n\
-                Connection: close\r\n\r\n",
-                html.len()
-            );
-            stream.write_all(header.as_bytes()).await?;
-            stream.flush().await?;
-        } else {
-            send_html(&mut stream, &html).await?;
-        }
-    } else if method == "POST" && (path_clean == upload_endpoint || path.starts_with(&upload_endpoint)) {
+    if method == "POST" && (path_clean == upload_endpoint || path.starts_with(&upload_endpoint)) {
         let clean_name = sanitize_filename(&raw_filename);
         let mut save_path = save_dir.join(&clean_name);
 
@@ -597,10 +692,16 @@ async fn handle_recv_connection(
 
         while remaining > 0 {
             let to_read = remaining.min(buffer.len() as u64) as usize;
-            let read_bytes = reader.read(&mut buffer[..to_read]).await?;
-            if read_bytes == 0 {
-                break;
-            }
+            let read_future = reader.read(&mut buffer[..to_read]);
+            let read_bytes = match tokio::time::timeout(std::time::Duration::from_secs(30), read_future).await {
+                Ok(Ok(n)) if n > 0 => n,
+                _ => {
+                    drop(out_file);
+                    let _ = tokio::fs::remove_file(&save_path).await;
+                    let _ = event_tx.send(FShareEvent::Error(format!("Upload aborted or timed out for '{}'", clean_name)));
+                    return Ok(());
+                }
+            };
             out_file.write_all(&buffer[..read_bytes]).await?;
             remaining -= read_bytes as u64;
             received += read_bytes as u64;
@@ -629,17 +730,39 @@ async fn handle_recv_connection(
                     Connection: close\r\n\r\nOK";
         stream.write_all(resp.as_bytes()).await?;
         stream.flush().await?;
-    } else {
+    } else if method == "POST" && path_clean.starts_with("/upload/") {
+        // Enforce strict token checks on all upload endpoints
         send_404(&mut stream).await?;
+    } else {
+        let is_authorized_by_token = path_clean == upload_page_path || path_clean.starts_with(&upload_page_prefix);
+        let is_pin_route = path_clean.is_empty() || path_clean == "/r" || path_clean == "/auth";
+
+        if (method == "GET" || method == "HEAD") && is_authorized_by_token {
+            serve_upload_html(&mut stream, &upload_endpoint, method == "HEAD").await?;
+        } else if (method == "GET" || method == "HEAD") && is_pin_route {
+            if let Some(p) = &provided_pin {
+                if p == pin {
+                    serve_upload_html(&mut stream, &upload_endpoint, method == "HEAD").await?;
+                } else {
+                    let html = render_pin_page(Some("Invalid PIN. Please check your screen and try again."));
+                    send_html_with_status(&mut stream, "401 Unauthorized", &html).await?;
+                }
+            } else {
+                let html = render_pin_page(None);
+                send_html_with_status(&mut stream, "200 OK", &html).await?;
+            }
+        } else {
+            send_404(&mut stream).await?;
+        }
     }
 
     Ok(())
 }
 
-async fn send_html(stream: &mut TcpStream, html: &str) -> anyhow::Result<()> {
+async fn send_html_with_status(stream: &mut TcpStream, status: &str, html: &str) -> anyhow::Result<()> {
     let bytes = html.as_bytes();
     let header = format!(
-        "HTTP/1.1 200 OK\r\n\
+        "HTTP/1.1 {}\r\n\
         Content-Type: text/html; charset=utf-8\r\n\
         Content-Length: {}\r\n\
         Access-Control-Allow-Origin: *\r\n\
@@ -647,12 +770,17 @@ async fn send_html(stream: &mut TcpStream, html: &str) -> anyhow::Result<()> {
         Pragma: no-cache\r\n\
         Expires: 0\r\n\
         Connection: close\r\n\r\n",
+        status,
         bytes.len()
     );
     stream.write_all(header.as_bytes()).await?;
     stream.write_all(bytes).await?;
     stream.flush().await?;
     Ok(())
+}
+
+async fn send_html(stream: &mut TcpStream, html: &str) -> anyhow::Result<()> {
+    send_html_with_status(stream, "200 OK", html).await
 }
 
 async fn send_404(stream: &mut TcpStream) -> anyhow::Result<()> {
@@ -939,26 +1067,98 @@ mod tests {
         .await
         .unwrap();
 
-        // Root / should serve download page
+        // 6. Test universal PIN challenge and PIN-authenticated access
+        // Unauthenticated root / should serve PIN challenge and MUST NOT leak secrets or filenames
         let mut s_root = TcpStream::connect(format!("127.0.0.1:{}", univ_handle.port)).await.unwrap();
         s_root.write_all(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n").await.unwrap();
         let mut resp_root = Vec::new();
         s_root.read_to_end(&mut resp_root).await.unwrap();
         let s_resp_root = String::from_utf8_lossy(&resp_root);
-        assert!(s_resp_root.contains("HTTP/1.1 200 OK"), "Root path / must return 200 OK");
-        assert!(s_resp_root.contains("Cache-Control: no-cache, no-store, must-revalidate"));
-        assert!(s_resp_root.contains("Access-Control-Allow-Origin: *"));
-        assert!(s_resp_root.contains("photo.png"));
+        assert!(s_resp_root.contains("HTTP/1.1 200 OK"), "Root path / must return 200 OK with PIN challenge");
+        assert!(s_resp_root.contains("PIN Verification"), "Root path must display PIN challenge");
+        assert!(!s_resp_root.contains("photo.png"), "Unauthenticated request must not leak shared filenames");
+        assert!(!s_resp_root.contains("univtok123"), "Unauthenticated request must not leak session token");
 
-        // Path /d and /d/ should also serve download page
+        // Entering invalid PIN must return 401 Unauthorized
+        let mut s_bad_pin = TcpStream::connect(format!("127.0.0.1:{}", univ_handle.port)).await.unwrap();
+        s_bad_pin.write_all(b"GET /?pin=9999 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n").await.unwrap();
+        let mut resp_bad = Vec::new();
+        s_bad_pin.read_to_end(&mut resp_bad).await.unwrap();
+        let s_resp_bad = String::from_utf8_lossy(&resp_bad);
+        assert!(s_resp_bad.contains("HTTP/1.1 401 Unauthorized"));
+        assert!(s_resp_bad.contains("Invalid PIN"));
+
+        // Entering valid PIN (?pin=1111) must serve download page with shared files
+        let mut s_pin = TcpStream::connect(format!("127.0.0.1:{}", univ_handle.port)).await.unwrap();
+        s_pin.write_all(b"GET /?pin=1111 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n").await.unwrap();
+        let mut resp_pin = Vec::new();
+        s_pin.read_to_end(&mut resp_pin).await.unwrap();
+        let s_resp_pin = String::from_utf8_lossy(&resp_pin);
+        assert!(s_resp_pin.contains("HTTP/1.1 200 OK"));
+        assert!(s_resp_pin.contains("photo.png"));
+
+        // Path with valid token /d/{token} must serve download page directly
         let mut s_d = TcpStream::connect(format!("127.0.0.1:{}", univ_handle.port)).await.unwrap();
-        s_d.write_all(b"GET /d HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n").await.unwrap();
+        s_d.write_all(format!("GET /d/{} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", univ_token).as_bytes()).await.unwrap();
         let mut resp_d = Vec::new();
         s_d.read_to_end(&mut resp_d).await.unwrap();
         let s_resp_d = String::from_utf8_lossy(&resp_d);
-        assert!(s_resp_d.contains("HTTP/1.1 200 OK"), "/d must return 200 OK");
+        assert!(s_resp_d.contains("HTTP/1.1 200 OK"), "/d/{token} must return 200 OK");
+        assert!(s_resp_d.contains("photo.png"));
 
         univ_handle.stop();
+        let _ = std::fs::remove_dir_all(&test_dir);
+    }
+
+    #[tokio::test]
+    async fn test_fshare_blocks_unauthorized_single_file_download_and_upload() {
+        let test_dir = std::env::temp_dir().join(format!("msui_test_auth_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&test_dir);
+        let test_file = test_dir.join("secret_document.pdf");
+        std::fs::write(&test_file, b"%PDF-1.4 confidential content").unwrap();
+
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let token = "realtoken777".to_string();
+        let pin = "7777".to_string();
+
+        let handle = FShareServer::start_send(
+            vec![test_file.clone()],
+            "127.0.0.1".into(),
+            token.clone(),
+            pin.clone(),
+            tx,
+        )
+        .await
+        .unwrap();
+
+        // 1. Attempting /dl/ with wrong token MUST return 404 (no single file auth bypass!)
+        let mut s_bypass = TcpStream::connect(format!("127.0.0.1:{}", handle.port)).await.unwrap();
+        s_bypass.write_all(b"GET /dl/wrongtoken/secret_document.pdf HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n").await.unwrap();
+        let mut resp_bypass = Vec::new();
+        s_bypass.read_to_end(&mut resp_bypass).await.unwrap();
+        let s_resp_bypass = String::from_utf8_lossy(&resp_bypass);
+        assert!(s_resp_bypass.contains("HTTP/1.1 404 Not Found"));
+        assert!(!s_resp_bypass.contains("confidential content"));
+
+        // 2. Direct /dl/ or /dl/secret_document.pdf without token prefix MUST return 404
+        let mut s_direct = TcpStream::connect(format!("127.0.0.1:{}", handle.port)).await.unwrap();
+        s_direct.write_all(b"GET /dl/secret_document.pdf HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n").await.unwrap();
+        let mut resp_direct = Vec::new();
+        s_direct.read_to_end(&mut resp_direct).await.unwrap();
+        let s_resp_direct = String::from_utf8_lossy(&resp_direct);
+        assert!(s_resp_direct.contains("HTTP/1.1 404 Not Found"));
+        assert!(!s_resp_direct.contains("confidential content"));
+
+        // 3. Valid token download MUST succeed
+        let mut s_valid = TcpStream::connect(format!("127.0.0.1:{}", handle.port)).await.unwrap();
+        s_valid.write_all(format!("GET /dl/{}/secret_document.pdf HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", token).as_bytes()).await.unwrap();
+        let mut resp_valid = Vec::new();
+        s_valid.read_to_end(&mut resp_valid).await.unwrap();
+        let s_resp_valid = String::from_utf8_lossy(&resp_valid);
+        assert!(s_resp_valid.contains("HTTP/1.1 200 OK"));
+        assert!(s_resp_valid.contains("%PDF-1.4 confidential content"));
+
+        handle.stop();
         let _ = std::fs::remove_dir_all(&test_dir);
     }
 }

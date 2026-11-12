@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Captures active primary selection (or clipboard) and queries Ollama
+# Captures active primary selection (or clipboard) and queries msUI Local AI (llama-server)
 SELECTED=$(wl-paste --primary 2>/dev/null || wl-paste 2>/dev/null || true)
 
 if [ -z "$SELECTED" ]; then

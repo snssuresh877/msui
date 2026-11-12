@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# =============================================================================
+# firewall-manual - View the UFW Firewall & Network Security Manual
+# =============================================================================
+
+set -eo pipefail
+
+SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+MANUAL_FILE="${SCRIPT_DIR}/../docs/firewall-manual.md"
+
+if [[ ! -f "$MANUAL_FILE" ]]; then
+    # Fallback to standard installation paths
+    if [[ -f "${HOME}/Projects/msui/dotfiles/docs/firewall-manual.md" ]]; then
+        MANUAL_FILE="${HOME}/Projects/msui/dotfiles/docs/firewall-manual.md"
+    elif [[ -f "${HOME}/msui/dotfiles/docs/firewall-manual.md" ]]; then
+        MANUAL_FILE="${HOME}/msui/dotfiles/docs/firewall-manual.md"
+    fi
+fi
+
+if [[ -f "$MANUAL_FILE" ]]; then
+    if command -v bat >/dev/null 2>&1; then
+        bat --style=plain --language=markdown "$MANUAL_FILE"
+    elif command -v glow >/dev/null 2>&1; then
+        glow "$MANUAL_FILE"
+    else
+        cat "$MANUAL_FILE"
+    fi
+else
+    echo "Error: Firewall manual not found at: ${MANUAL_FILE}" >&2
+    exit 1
+fi

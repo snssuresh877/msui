@@ -20,3 +20,4 @@ chrono.workspace = true
 iced.workspace = true
 qrcode.workspace = true
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+libc.workspace = true

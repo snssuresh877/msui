@@ -1657,6 +1657,17 @@ pub fn run_daemon(config: MsuiConfig) -> anyhow::Result<()> {
                 }
             });
 
+            // Periodic AI idle watcher to auto-unload llama-server if configured
+            tokio::spawn(async {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                    let ai_cfg = msui_core::AiConfig::load();
+                    if ai_cfg.auto_unload_mins > 0 {
+                        let _ = msui_core::LlamaRuntime::check_and_auto_unload(ai_cfg.auto_unload_mins);
+                    }
+                }
+            });
+
             // Reclaim initial startup memory allocations immediately
             #[cfg(target_os = "linux")]
             unsafe {

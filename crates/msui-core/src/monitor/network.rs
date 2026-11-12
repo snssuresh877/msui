@@ -151,14 +151,30 @@ impl NetworkMonitor {
 
     pub fn connect_wifi(ssid: &str, password: Option<&str>) -> Result<(), String> {
         let mut cmd = Command::new("nmcli");
+        let has_pwd = password.map(|p| !p.trim().is_empty()).unwrap_or(false);
+
+        if has_pwd {
+            // --ask tells nmcli to read passwords from stdin instead of process arguments
+            cmd.arg("--ask");
+        }
         cmd.args(["device", "wifi", "connect", ssid]);
+        cmd.stdin(std::process::Stdio::piped());
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+
+        let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+
         if let Some(pwd) = password {
-            if !pwd.trim().is_empty() {
-                cmd.args(["password", pwd.trim()]);
+            if has_pwd {
+                if let Some(mut stdin) = child.stdin.take() {
+                    use std::io::Write;
+                    let _ = stdin.write_all(format!("{}\n", pwd.trim()).as_bytes());
+                    let _ = stdin.flush();
+                }
             }
         }
 
-        match cmd.output() {
+        match child.wait_with_output() {
             Ok(out) => {
                 if out.status.success() {
                     Ok(())

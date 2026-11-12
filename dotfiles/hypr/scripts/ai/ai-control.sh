@@ -4,35 +4,20 @@
 # ==============================================================================
 # Guarantees 0 MB resident RAM on boot by running strictly on-demand.
 # Features:
-#   - Instant start/stop of local Ollama inference server
-#   - Complete RAM reclamation on shutdown (unloads model + drops caches)
+#   - Native integration with msUI llama.cpp engine (llama-server)
+#   - Instant start/stop of local AI server (0 MB resident when stopped)
+#   - 100% RAM reclamation on shutdown (unloads model + drops caches)
 #   - Floating chat window toggle
 #   - ArtCraft / VectorCraft integration trigger
 # ==============================================================================
 
 set -uo pipefail
 
-MODEL="$(ollama list 2>/dev/null | awk 'NR>1 {print $1}' | head -n 1)"
-if [[ -z "$MODEL" ]]; then
-    MODEL="qwen2.5-coder:3b"
-fi
-PORT=11434
-API_URL="http://127.0.0.1:${PORT}"
 APP_ID="msui-ai-float"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 is_server_running() {
-    curl -s --connect-timeout 1 "${API_URL}/" 2>/dev/null | grep -q "Ollama is running"
-}
-
-get_ollama_ram_mb() {
-    local pids
-    pids=$(pgrep -d',' -x ollama 2>/dev/null || true)
-    if [[ -z "$pids" ]]; then
-        echo "0"
-        return
-    fi
-    ps -o rss= -p "$pids" 2>/dev/null | awk '{sum += $1} END {printf "%.1f", sum/1024}'
+    msui ai status 2>/dev/null | grep -q "RUNNING"
 }
 
 start_server() {
@@ -40,54 +25,30 @@ start_server() {
         return 0
     fi
 
-    # Prefer systemd service if installed
-    if [ -f /usr/lib/systemd/system/ollama.service ] || systemctl list-unit-files ollama.service >/dev/null 2>&1; then
-        systemctl start ollama.service
+    echo "Starting msUI Local AI runtime..."
+    if msui ai start; then
+        notify-send -a "msUI AI" -i preferences-system "🤖 Local AI Engine Started" "Runtime: llama-server (llama.cpp)\nAPI: http://127.0.0.1:8080/v1\nReady for ArtCraft / VectorCraft / Terminal"
+        return 0
     else
-        OLLAMA_ORIGINS="*" OLLAMA_HOST="127.0.0.1:${PORT}" ollama serve >/dev/null 2>&1 &
+        notify-send -u critical -a "msUI AI" "AI Engine Error" "Failed to start local AI runtime"
+        return 1
     fi
-
-    # Wait for server readiness (max 10 seconds)
-    local retries=20
-    while [[ $retries -gt 0 ]]; do
-        if is_server_running; then
-            notify-send -a "msUI AI" -i preferences-system "🤖 Local AI Engine Started" "Model: ${MODEL}\nAPI: ${API_URL}\nReady for ArtCraft / VectorCraft"
-            return 0
-        fi
-        sleep 0.5
-        ((retries--))
-    done
-
-    notify-send -u critical -a "msUI AI" "AI Engine Error" "Failed to start local Ollama server"
-    return 1
 }
 
 stop_server() {
-    if ! is_server_running && ! pgrep -x ollama >/dev/null 2>&1; then
+    if ! is_server_running; then
         notify-send -a "msUI AI" -i preferences-system "Local AI Engine" "Already stopped (0 MB RAM)"
         return 0
     fi
 
-    local ram_before
-    ram_before=$(get_ollama_ram_mb)
-
-    # 1. Unload any active models from RAM immediately
-    curl -s "${API_URL}/api/generate" -d "{\"model\": \"${MODEL}\", \"keep_alive\": 0}" >/dev/null 2>&1 || true
-
-    # 2. Stop systemd service cleanly if active
-    if systemctl is-active ollama.service >/dev/null 2>&1; then
-        systemctl stop ollama.service >/dev/null 2>&1 || true
+    echo "Stopping msUI Local AI runtime..."
+    if msui ai stop; then
+        notify-send -a "msUI AI" -i preferences-system "🤖 Local AI Engine Stopped" "Runtime unloaded (llama-server)\n100% RAM reclaimed\nIdle RAM overhead: 0 MB"
+        return 0
+    else
+        notify-send -u critical -a "msUI AI" "AI Engine Error" "Failed to stop local AI runtime"
+        return 1
     fi
-
-    # 3. Terminate any user-level ollama processes
-    pkill -TERM -x ollama >/dev/null 2>&1 || true
-    sleep 0.5
-    if pgrep -x ollama >/dev/null 2>&1; then
-        pkill -KILL -x ollama >/dev/null 2>&1 || true
-    fi
-
-    notify-send -a "msUI AI" -i preferences-system "🤖 Local AI Engine Stopped" "All models unloaded\nFreed ~${ram_before} MB RAM\nIdle RAM overhead: 0 MB"
-    return 0
 }
 
 toggle_server() {
@@ -101,7 +62,7 @@ toggle_server() {
 toggle_window() {
     # Check if floating chat window already exists
     if hyprctl clients 2>/dev/null | grep -q "class: ${APP_ID}"; then
-        # Window exists: close or toggle focus
+        # Window exists: close it
         pkill -f "foot.*${APP_ID}" >/dev/null 2>&1 || true
     else
         start_server
@@ -111,15 +72,7 @@ toggle_window() {
 }
 
 show_status() {
-    if is_server_running; then
-        local ram
-        ram=$(get_ollama_ram_mb)
-        echo "Active (RAM: ${ram} MB, Model: ${MODEL}, URL: ${API_URL})"
-        return 0
-    else
-        echo "Inactive (0 MB RAM resident)"
-        return 1
-    fi
+    msui ai status
 }
 
 case "${1:-toggle}" in
