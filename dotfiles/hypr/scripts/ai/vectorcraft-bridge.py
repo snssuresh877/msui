@@ -7,6 +7,7 @@ using local Ollama inference (qwen2.5-coder:1.5b).
 
 import sys
 import json
+import os
 import socket
 import urllib.request
 import urllib.error
@@ -44,7 +45,24 @@ def send_to_vectorcraft(command_json: dict) -> dict:
         return {"error": str(e)}
 
 def prompt_ai(user_input: str) -> str:
+    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+
+    if gemini_key:
+        api_url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        model = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {gemini_key}"
+        }
+        print(f"✨ Using Google AI (Gemini: {model})...")
+    else:
+        api_url = API_URL
+        model = "local-model"
+        headers = {"Content-Type": "application/json"}
+        print("🤖 Using msUI Local AI (qwen2.5-coder)...")
+
     payload = {
+        "model": model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_input}
@@ -53,9 +71,9 @@ def prompt_ai(user_input: str) -> str:
         "max_tokens": 1024
     }
     req = urllib.request.Request(
-        API_URL,
+        api_url,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"}
+        headers=headers
     )
     with urllib.request.urlopen(req, timeout=120.0) as resp:
         result = json.loads(resp.read().decode("utf-8"))
