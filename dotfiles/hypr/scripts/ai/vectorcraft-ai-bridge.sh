@@ -12,12 +12,25 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VC_DIR="/home/m/Projects/vectorcraft"
-VC_BIN="${VC_DIR}/target/release/vectorcraft"
-VC_CLI="${VC_DIR}/target/release/vectorcraft-cli"
+VC_DIR="${HOME}/Projects/vectorcraft"
+
+if [[ -x "${VC_DIR}/target/release/vectorcraft" ]]; then
+    VC_BIN="${VC_DIR}/target/release/vectorcraft"
+    VC_CLI="${VC_DIR}/target/release/vectorcraft-cli"
+elif command -v vectorcraft &>/dev/null; then
+    VC_BIN="$(command -v vectorcraft)"
+    VC_CLI="$(command -v vectorcraft-cli)"
+else
+    echo "❌ Error: vectorcraft binary not found." >&2
+    exit 1
+fi
 
 # 1. Ensure local AI engine is running
-"${SCRIPT_DIR}/ai-control.sh" start
+if command -v msui &>/dev/null; then
+    msui ai start >/dev/null 2>&1 || true
+elif [[ -x "${SCRIPT_DIR}/ai-control.sh" ]]; then
+    "${SCRIPT_DIR}/ai-control.sh" start
+fi
 
 # 2. Check VectorCraft GUI
 if ! ss -tuln | grep -q ":7979 "; then
@@ -26,7 +39,7 @@ if ! ss -tuln | grep -q ":7979 "; then
         echo "Starting VectorCraft with remote control enabled..."
         "${VC_BIN}" --control 7979 &
         sleep 2
-    else
+    elif [[ -f "${VC_DIR}/Cargo.toml" ]]; then
         echo "Building or running VectorCraft via cargo..."
         cargo run --release -p vectorcraft --manifest-path "${VC_DIR}/Cargo.toml" -- --control 7979 &
         sleep 3
@@ -36,11 +49,7 @@ fi
 # 3. Handle arguments
 if [[ "${1:-}" == "--mcp" ]]; then
     echo "Starting VectorCraft Model Context Protocol (MCP) server..."
-    if [[ -x "${VC_CLI}" ]]; then
-        exec "${VC_CLI}" mcp --connect 127.0.0.1:7979
-    else
-        exec cargo run --release -p vectorcraft-cli --manifest-path "${VC_DIR}/Cargo.toml" -- mcp --connect 127.0.0.1:7979
-    fi
+    exec "${VC_CLI}" mcp --connect 127.0.0.1:7979
 elif [[ $# -gt 0 ]]; then
     python3 "${SCRIPT_DIR}/vectorcraft-bridge.py" "$@"
 else
