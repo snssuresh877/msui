@@ -12,6 +12,28 @@ prepend_keymap = [
 	# Interactive chmod on selected files
 	{ on = [ "c", "m" ], run = "plugin chmod", desc = "Chmod on selected files" },
 
+	# Compress selected files into a zip archive
+	{ on = [ "c", "z" ], run = '''shell --block '
+		name=$(basename "$1")
+		if [ "$#" -gt 1 ]; then
+			out="${name%.*}-archive.zip"
+		else
+			out="${name%.*}.zip"
+		fi
+		zip -r "$out" "$@"
+		notify-send -a "Yazi" "Archive Created" "Saved as $out"
+	' ''', desc = "Compress selected to zip" },
+
+	# Extract archive into a folder with the archive name (supports .zip, .tar.*, .7z, .rar)
+	{ on = [ "c", "x" ], run = '''shell --block '
+		for f in "$@"; do
+			dir="${f%.*}"
+			dir="${dir%.tar}"
+			7z x "$f" -o"$dir"
+			notify-send -a "Yazi" "Archive Extracted" "Extracted $f to $dir"
+		done
+	' ''', desc = "Extract archive to folder" },
+
 	# Open hovered file or directory in Neovim
 	{ on = [ "e" ], run = "shell --block 'nvim %s'", desc = "Open in Neovim" },
 

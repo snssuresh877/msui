@@ -12,6 +12,8 @@ These custom bindings are defined in [`keymap.toml`](file:///home/m/Projects/msu
 | :--- | :--- | :--- |
 | `<C-d>` / `<C-n>` | `plugin drag` | Drag & drop hovered/selected files into external GUI apps (`ripdrag`) |
 | `c m` | `plugin chmod` | Interactive chmod modal on selected files |
+| `c z` | `shell --block 'zip ...'` | Compress selected file(s) into a `.zip` archive |
+| `c x` | `shell --block '7z x ...'` | Extract archive into a dedicated folder (`.zip`, `.tar.*`, `.7z`, `.rar`) |
 | `e` | `shell --block 'nvim %s'` | Open hovered file or directory in Neovim |
 | `E` | `shell --block 'nvim .'` | Open current working directory in Neovim |
 | `<Enter>` | `plugin smart-enter` | Smart open: enters directories, opens files according to rules in `yazi.toml` |
@@ -83,6 +85,8 @@ These custom bindings are defined in [`keymap.toml`](file:///home/m/Projects/msu
 | `r` | Rename hovered file |
 | `R` | Batch rename selected files |
 | `c m` | Interactive file permission change (*custom `chmod` plugin*) |
+| `c z` | Compress selected file(s) into `.zip` archive |
+| `c x` | Extract archive into dedicated folder (*supports `.zip`, `.tar.*`, `.7z`, `.rar`*) |
 | `<C-d>` / `<C-n>` | Drag & drop files to GUI apps (*custom `drag` plugin with `ripdrag`*) |
 
 ---
