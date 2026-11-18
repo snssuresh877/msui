@@ -47,9 +47,13 @@ These custom bindings are defined in [`keymap.toml`](file:///home/m/Projects/msu
 | Key | Action |
 | :--- | :--- |
 | `g h` | Jump to Home directory (`~`) |
+| `g p` | Jump to Projects folder (`~/Projects`) |
+| `g m` | Jump to `msui` project (`~/Projects/msui`) |
+| `g t` | Jump to `Trading` project (`~/Projects/Trading`) |
 | `g c` | Jump to Config directory (`~/.config`) |
 | `g d` | Jump to Downloads directory (`~/Downloads`) |
-| `g t` | Jump to Temporary directory (`/tmp`) |
+| `g D` | Jump to Documents directory (`~/Documents`) |
+| `g P` | Jump to Pictures directory (`~/Pictures`) |
 | `g <Space>` | Interactive jump prompt (type directory path) |
 | `z` | Jump via **zoxide** (fuzzy jump to recent directories) |
 | `Z` | Jump via **fzf** |

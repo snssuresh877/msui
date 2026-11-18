@@ -44,4 +44,12 @@ prepend_keymap = [
 	{ on = [ "<Enter>" ], run = "plugin smart-enter", desc = "Enter directory or open file" },
 	{ on = [ "l" ], run = "plugin smart-enter", desc = "Enter directory or open file" },
 	{ on = [ "<Right>" ], run = "plugin smart-enter", desc = "Enter directory or open file" },
+
+	# Fast Project & Folder Navigation
+	{ on = [ "g", "p" ], run = "cd ~/Projects", desc = "Jump to Projects folder" },
+	{ on = [ "g", "m" ], run = "cd ~/Projects/msui", desc = "Jump to msui project" },
+	{ on = [ "g", "t" ], run = "cd ~/Projects/Trading", desc = "Jump to Trading project" },
+	{ on = [ "g", "D" ], run = "cd ~/Documents", desc = "Jump to Documents" },
+	{ on = [ "g", "P" ], run = "cd ~/Pictures", desc = "Jump to Pictures" },
 ]
+

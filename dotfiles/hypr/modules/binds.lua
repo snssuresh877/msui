@@ -525,6 +525,21 @@ hl.bind(MOD .. " + CTRL + W", hl.dsp.exec_cmd("msui wifi"), {
 	description = "Network & Wi-Fi Manager (msUI)",
 })
 
+-- Super + Ctrl + P -> Battery Diagnostics & Power Profiles (msUI)
+hl.bind(MOD .. " + CTRL + P", hl.dsp.exec_cmd("msui battery"), {
+	description = "Battery Diagnostics & Power Profiles (msUI)",
+})
+
+-- Super + Ctrl + M -> Media Player Controller (msUI)
+hl.bind(MOD .. " + CTRL + M", hl.dsp.exec_cmd("msui media"), {
+	description = "Media Player Controller (msUI)",
+})
+
+-- Super + Ctrl + D -> Storage & Removable Devices (msUI)
+hl.bind(MOD .. " + CTRL + D", hl.dsp.exec_cmd("msui storage"), {
+	description = "Storage & Removable Drives (msUI)",
+})
+
 -- Super + Ctrl + S -> Share menu (via LocalSend)
 hl.bind(MOD .. " + CTRL + S", hl.dsp.exec_cmd("localsend"), {
 	description = "Share menu (LocalSend)",
