@@ -1163,208 +1163,27 @@ fn main() -> anyhow::Result<()> {
             }
         }
         "fshare" | "share" | "fileshare" => {
-            let sub = args.get(2).map(|s| s.as_str());
-            match sub {
-                Some("history") => {
-                    let history = msui_core::fshare::load_transfer_history();
-                    if history.is_empty() {
-                        println!("No FShare transfers found in history.");
+            let mut cmd = std::process::Command::new("localsend");
+            for arg in args.iter().skip(2) {
+                if arg == "send" || arg == "recv" || arg == "receive" || arg == "history" {
+                    continue;
+                }
+                let path = if let Some(stripped) = arg.strip_prefix("~/") {
+                    if let Some(home) = std::env::var_os("HOME") {
+                        std::path::PathBuf::from(home).join(stripped)
                     } else {
-                        println!("{:<6} {:<32} {:<12} TIMESTAMP", "DIR", "FILENAME", "SIZE");
-                        println!("{}", "-".repeat(70));
-                        for h in history {
-                            let size_mb = h.size_bytes as f64 / (1024.0 * 1024.0);
-                            println!("{:<6} {:<32} {:<12} {}", h.direction, h.filename, format!("{:.2} MB", size_mb), h.timestamp);
-                        }
+                        std::path::PathBuf::from(arg)
                     }
+                } else {
+                    std::path::PathBuf::from(arg)
+                };
+                if path.exists() {
+                    cmd.arg(path);
                 }
-                Some("send") => {
-                    let mut file_paths: Vec<std::path::PathBuf> = Vec::new();
-                    for target_file_str in args.iter().skip(3) {
-                        let path = if let Some(stripped) = target_file_str.strip_prefix("~/") {
-                            if let Some(home) = std::env::var_os("HOME") {
-                                std::path::PathBuf::from(home).join(stripped)
-                            } else {
-                                std::path::PathBuf::from(target_file_str)
-                            }
-                        } else {
-                            std::path::PathBuf::from(target_file_str)
-                        };
-
-                        if !path.exists() {
-                            eprintln!("Error: File '{}' does not exist.", target_file_str);
-                            std::process::exit(1);
-                        }
-                        file_paths.push(path);
-                    }
-
-                    if file_paths.is_empty() {
-                        eprintln!("Usage: msui fshare send <file-path> [file-path-2 ...]");
-                        std::process::exit(1);
-                    }
-
-                    let local_ip = match msui_core::fshare::get_local_ip() {
-                        Some(ip) => ip,
-                        None => {
-                            eprintln!("Error: Could not detect active Wi-Fi LAN IP.");
-                            std::process::exit(1);
-                        }
-                    };
-
-                    let token = msui_core::fshare::generate_token();
-                    let pin = msui_core::fshare::generate_pin();
-                    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-
-                    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
-                    rt.block_on(async move {
-                        let handle = msui_core::fshare::FShareServer::start_send(
-                            file_paths.clone(),
-                            local_ip.clone(),
-                            token.clone(),
-                            pin.clone(),
-                            tx,
-                        ).await?;
-
-                        let url = format!("http://{}:{}/d/{}", local_ip, handle.port, token);
-                        println!("========================================");
-                        println!("  msUI FShare - File Sharing Server");
-                        println!("========================================");
-                        if file_paths.len() == 1 {
-                            println!("Sharing File: {}", file_paths[0].display());
-                        } else {
-                            println!("Sharing {} Files:", file_paths.len());
-                            for f in &file_paths {
-                                println!("  - {}", f.display());
-                            }
-                        }
-                        println!("Direct URL:   {}", url);
-                        println!("PIN Code:     {}", pin);
-                        println!();
-                        if let Ok(qr) = msui_core::fshare::generate_qr_terminal(&url) {
-                            println!("{}", qr);
-                        }
-                        println!("Scan QR code with phone camera or open the URL.");
-                        println!("Press Ctrl+C to terminate.");
-                        println!("========================================");
-
-                        while let Some(ev) = rx.recv().await {
-                            match ev {
-                                msui_core::fshare::FShareEvent::ClientConnected { peer_ip } => {
-                                    println!("📱 Phone connected from {}", peer_ip);
-                                }
-                                msui_core::fshare::FShareEvent::Progress { transferred_bytes, total_bytes, speed_mbps } => {
-                                    let pct = if total_bytes > 0 { (transferred_bytes as f32 / total_bytes as f32) * 100.0 } else { 0.0 };
-                                    print!("\rTransferring: {:.1}% ({:.1} MB/s)...", pct, speed_mbps);
-                                    let _ = std::io::Write::flush(&mut std::io::stdout());
-                                }
-                                msui_core::fshare::FShareEvent::FileSent { filename, size_bytes } => {
-                                    println!("\n✅ Successfully sent '{}' ({:.2} MB)!", filename, size_bytes as f64 / (1024.0 * 1024.0));
-                                    msui_core::fshare::log_transfer("Sent", &filename, size_bytes);
-                                    if file_paths.len() <= 1 {
-                                        break;
-                                    }
-                                }
-                                msui_core::fshare::FShareEvent::Error(e) => {
-                                    eprintln!("\n❌ Transfer error: {}", e);
-                                    break;
-                                }
-                                _ => {}
-                            }
-                        }
-                        handle.stop();
-                        Ok::<(), anyhow::Error>(())
-                    })?;
-                }
-                Some("receive") | Some("recv") => {
-                    let save_dir = msui_core::fshare::default_save_dir();
-                    let local_ip = match msui_core::fshare::get_local_ip() {
-                        Some(ip) => ip,
-                        None => {
-                            eprintln!("Error: Could not detect active Wi-Fi LAN IP.");
-                            std::process::exit(1);
-                        }
-                    };
-
-                    let token = msui_core::fshare::generate_token();
-                    let pin = msui_core::fshare::generate_pin();
-                    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-
-                    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
-                    rt.block_on(async move {
-                        let handle = msui_core::fshare::FShareServer::start_recv(
-                            save_dir.clone(),
-                            local_ip.clone(),
-                            token.clone(),
-                            pin.clone(),
-                            tx,
-                        ).await?;
-
-                        let url = format!("http://{}:{}/r/{}", local_ip, handle.port, token);
-                        println!("========================================");
-                        println!("  msUI FShare - File Dropzone Receiver");
-                        println!("========================================");
-                        println!("Destination: {}", save_dir.display());
-                        println!("Direct URL:  {}", url);
-                        println!("PIN Code:    {}", pin);
-                        println!();
-                        if let Ok(qr) = msui_core::fshare::generate_qr_terminal(&url) {
-                            println!("{}", qr);
-                        }
-                        println!("Scan QR code with phone camera to send files to PC.");
-                        println!("Press Ctrl+C to terminate.");
-                        println!("========================================");
-
-                        while let Some(ev) = rx.recv().await {
-                            match ev {
-                                msui_core::fshare::FShareEvent::ClientConnected { peer_ip } => {
-                                    println!("📱 Phone connected from {}", peer_ip);
-                                }
-                                msui_core::fshare::FShareEvent::Progress { transferred_bytes, total_bytes, speed_mbps } => {
-                                    let pct = if total_bytes > 0 { (transferred_bytes as f32 / total_bytes as f32) * 100.0 } else { 0.0 };
-                                    print!("\rReceiving: {:.1}% ({:.1} MB/s)...", pct, speed_mbps);
-                                    let _ = std::io::Write::flush(&mut std::io::stdout());
-                                }
-                                msui_core::fshare::FShareEvent::FileReceived { filename, size_bytes, path } => {
-                                    println!("\n✅ Received '{}' -> {}", filename, path.display());
-                                    msui_core::fshare::log_transfer("Received", &filename, size_bytes);
-                                }
-                                msui_core::fshare::FShareEvent::Error(e) => {
-                                    eprintln!("\n❌ Error: {}", e);
-                                }
-                                _ => {}
-                            }
-                        }
-                        handle.stop();
-                        Ok::<(), anyhow::Error>(())
-                    })?;
-                }
-                _ => {
-                    let mut initial_files = Vec::new();
-                    for arg in args.iter().skip(2) {
-                        let p = if let Some(stripped) = arg.strip_prefix("~/") {
-                            if let Some(home) = std::env::var_os("HOME") {
-                                std::path::PathBuf::from(home).join(stripped)
-                            } else {
-                                std::path::PathBuf::from(arg)
-                            }
-                        } else {
-                            std::path::PathBuf::from(arg)
-                        };
-                        if p.exists() {
-                            initial_files.push(p);
-                        }
-                    }
-
-                    if initial_files.is_empty()
-                        && try_ipc_toggle("fshare") {
-                            return Ok(());
-                        }
-
-                    tracing::info!("Starting msUI FShare Hub with {} initial file(s)...", initial_files.len());
-                    if let Err(e) = msui_launcher::run_fshare_modal(initial_files) {
-                        tracing::error!("msUI FShare exited with error: {:?}", e);
-                    }
-                }
+            }
+            if let Err(e) = cmd.spawn() {
+                eprintln!("Failed to launch LocalSend: {}", e);
+                std::process::exit(1);
             }
         }
         "toggle" => {
@@ -2088,7 +1907,7 @@ fn print_help() {
           wallpaper     Open the Wallpaper changer overlay (or 'cycle', 'random', 'set <path>')\n  \
           bg            Run the native Wayland background wallpaper daemon\n  \
           theme         Open the Theme switcher overlay (or pass theme name)\n  \
-          fshare        Open the msUI FShare local Wi-Fi & QR code file sharing hub (or 'history')\n  \
+          fshare        Share files locally using LocalSend (or 'msui share [files...]')\n  \
           ai            Local AI Manager powered by llama.cpp (status|start|stop|restart|models|delete|chat)\n  \
           power         Open the Power & Session menu overlay\n  \
           polkit        Run the native D-Bus PolicyKit 1 authentication agent daemon\n  \

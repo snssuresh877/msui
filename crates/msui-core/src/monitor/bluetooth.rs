@@ -42,12 +42,11 @@ impl BluetoothManager {
     /// Returns cached state in ~0.001ms. Never blocks the UI thread on subprocesses.
     pub fn read() -> BluetoothInfo {
         // 1. Check in-memory cache (2-second TTL)
-        if let Ok(guard) = BLUETOOTH_CACHE.lock() {
-            if let Some((instant, ref info)) = *guard {
-                if instant.elapsed() < Duration::from_secs(2) {
-                    return info.clone();
-                }
-            }
+        if let Ok(guard) = BLUETOOTH_CACHE.lock()
+            && let Some((instant, ref info)) = *guard
+            && instant.elapsed() < Duration::from_secs(2)
+        {
+            return info.clone();
         }
 
         // 2. Ultra-fast sysfs rfkill check (< 0.05ms, 0 subprocesses)
@@ -96,10 +95,10 @@ impl BluetoothManager {
         }
 
         // Return existing cached value (or default if very first frame)
-        if let Ok(guard) = BLUETOOTH_CACHE.lock() {
-            if let Some((_, ref info)) = *guard {
-                return info.clone();
-            }
+        if let Ok(guard) = BLUETOOTH_CACHE.lock()
+            && let Some((_, ref info)) = *guard
+        {
+            return info.clone();
         }
 
         BluetoothInfo {

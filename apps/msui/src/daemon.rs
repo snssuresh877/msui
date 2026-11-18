@@ -21,7 +21,7 @@ use msui_core::{
 use msui_launcher::{
     AppDrawer, AppDrawerMessage, AudioMenu, AudioMessage, BatteryMenu, BatteryMessage,
     BluetoothMenu, BluetoothMessage, ClipboardMenu, ClipboardMessage, ControlCenter,
-    ControlCenterMessage, DisplayMenu, DisplayMessage, FShareMessage, FShareModal, Launcher,
+    ControlCenterMessage, DisplayMenu, DisplayMessage, Launcher,
     LauncherMessage, MediaMenu, MediaMessage, NotificationCenter, NotificationCenterMessage,
     OsdMessage, OsdWindow, PolkitDialog, PolkitDialogArgs, PolkitMessage, PowerMenu, PowerMessage,
     ReminderMenu, ReminderMessage, SettingsMessage, SettingsPanel, StorageMenu, StorageMessage, ThemeMenu, ThemeMessage, ToastApp,
@@ -44,7 +44,6 @@ pub enum ActiveModal {
     Audio(AudioMenu),
     Theme(ThemeMenu),
     Wallpaper(WallpaperMenu),
-    FShare(FShareModal),
     Battery(BatteryMenu),
     Display(DisplayMenu),
     Media(MediaMenu),
@@ -68,7 +67,6 @@ impl ActiveModal {
             ActiveModal::Audio(_) => "audio",
             ActiveModal::Theme(_) => "theme",
             ActiveModal::Wallpaper(_) => "wallpaper",
-            ActiveModal::FShare(_) => "fshare",
             ActiveModal::Battery(_) => "battery",
             ActiveModal::Display(_) => "display",
             ActiveModal::Media(_) => "media",
@@ -92,7 +90,6 @@ impl ActiveModal {
             ActiveModal::Audio(m) => m.should_close(),
             ActiveModal::Theme(m) => m.should_close(),
             ActiveModal::Wallpaper(m) => m.should_close(),
-            ActiveModal::FShare(m) => m.should_close(),
             ActiveModal::Battery(m) => m.should_close(),
             ActiveModal::Display(m) => m.should_close(),
             ActiveModal::Media(m) => m.should_close(),
@@ -117,7 +114,6 @@ impl ActiveModal {
             ActiveModal::Audio(m) => m.reset_should_close(),
             ActiveModal::Theme(m) => m.reset_should_close(),
             ActiveModal::Wallpaper(m) => m.reset_should_close(),
-            ActiveModal::FShare(m) => m.reset_should_close(),
             ActiveModal::Battery(m) => m.reset_should_close(),
             ActiveModal::Display(m) => m.reset_should_close(),
             ActiveModal::Media(m) => m.reset_should_close(),
@@ -142,7 +138,6 @@ pub enum ModalMessage {
     Audio(AudioMessage),
     Theme(ThemeMessage),
     Wallpaper(WallpaperMenuMessage),
-    FShare(FShareMessage),
     Battery(BatteryMessage),
     Display(DisplayMessage),
     Media(MediaMessage),
@@ -398,6 +393,11 @@ impl UnifiedShell {
     }
 
     fn toggle_modal(&mut self, target: &str) -> Task<DaemonMessage> {
+        if matches!(target, "fshare" | "share" | "fileshare") {
+            let _ = std::process::Command::new("localsend").spawn();
+            return Task::none();
+        }
+
         let target_norm = match target {
             "launcher" => "launcher",
             "power" => "power",
@@ -410,7 +410,6 @@ impl UnifiedShell {
             "audio" | "mixer" => "audio",
             "theme" | "themes" => "theme",
             "wallpaper" | "wall" => "wallpaper",
-            "fshare" | "share" | "fileshare" => "fshare",
             "battery" | "bat" => "battery",
             "display" | "disp" | "monitors" => "display",
             "media" | "player" => "media",
@@ -649,24 +648,6 @@ impl UnifiedShell {
                 tasks.push(init_cmd.map(|m| DaemonMessage::Modal(ModalMessage::Wallpaper(m))));
                 tasks.push(reset_cmd);
             }
-            "fshare" => {
-                let (mid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
-                    size: LayerSize::px(680, 560),
-                    layer: Layer::Overlay,
-                    anchor: Anchor::empty(),
-                    keyboard_interactivity: KeyboardInteractivity::Exclusive,
-                    output_option,
-                    blur_option,
-                    ..Default::default()
-                });
-                let (mut fshare, init_cmd) = FShareModal::new_embedded();
-                let reset_cmd = fshare.reset().map(|m| DaemonMessage::Modal(ModalMessage::FShare(m)));
-                self.modal_id = Some(mid);
-                self.active_modal = Some(ActiveModal::FShare(fshare));
-                tasks.push(open_task);
-                tasks.push(init_cmd.map(|m| DaemonMessage::Modal(ModalMessage::FShare(m))));
-                tasks.push(reset_cmd);
-            }
             "battery" | "bat" => {
                 let (mid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
                     size: LayerSize::px(680, 680),
@@ -820,7 +801,6 @@ impl UnifiedShell {
                 ActiveModal::Audio(m) => m.subscription().map(|msg| DaemonMessage::Modal(ModalMessage::Audio(msg))),
                 ActiveModal::Theme(m) => m.subscription().map(|msg| DaemonMessage::Modal(ModalMessage::Theme(msg))),
                 ActiveModal::Wallpaper(m) => m.subscription().map(|msg| DaemonMessage::Modal(ModalMessage::Wallpaper(msg))),
-                ActiveModal::FShare(m) => m.subscription().map(|msg| DaemonMessage::Modal(ModalMessage::FShare(msg))),
                 ActiveModal::Battery(m) => m.subscription().map(|msg| DaemonMessage::Modal(ModalMessage::Battery(msg))),
                 ActiveModal::Display(m) => m.subscription().map(|msg| DaemonMessage::Modal(ModalMessage::Display(msg))),
                 ActiveModal::Media(m) => m.subscription().map(|msg| DaemonMessage::Modal(ModalMessage::Media(msg))),
@@ -976,9 +956,6 @@ impl UnifiedShell {
                     }
                     (ModalMessage::Wallpaper(m), Some(ActiveModal::Wallpaper(inst))) => {
                         inst.update(m).map(|x| DaemonMessage::Modal(ModalMessage::Wallpaper(x)))
-                    }
-                    (ModalMessage::FShare(m), Some(ActiveModal::FShare(inst))) => {
-                        inst.update(m).map(|x| DaemonMessage::Modal(ModalMessage::FShare(x)))
                     }
                     (ModalMessage::Battery(m), Some(ActiveModal::Battery(inst))) => {
                         match &m {
@@ -1160,6 +1137,10 @@ impl UnifiedShell {
                         }
                     }
                     IpcCommand::Open(target) => {
+                        if matches!(target.as_str(), "fshare" | "share" | "fileshare") {
+                            let _ = std::process::Command::new("localsend").spawn();
+                            return Task::none();
+                        }
                         let target_norm = match target.as_str() {
                             "control" | "quicksettings" | "cc" => "control",
                             "clipboard" | "clip" => "clipboard",
@@ -1170,7 +1151,6 @@ impl UnifiedShell {
                             "audio" | "mixer" => "audio",
                             "theme" | "themes" => "theme",
                             "wallpaper" | "wall" => "wallpaper",
-                            "fshare" | "share" | "fileshare" => "fshare",
                             "battery" | "bat" => "battery",
                             "display" | "disp" | "monitors" => "display",
                             "media" | "player" => "media",
@@ -1522,7 +1502,6 @@ impl UnifiedShell {
                     ActiveModal::Audio(m) => m.view().map(|x| DaemonMessage::Modal(ModalMessage::Audio(x))),
                     ActiveModal::Theme(m) => m.view().map(|x| DaemonMessage::Modal(ModalMessage::Theme(x))),
                     ActiveModal::Wallpaper(m) => m.view().map(|x| DaemonMessage::Modal(ModalMessage::Wallpaper(x))),
-                    ActiveModal::FShare(m) => m.view().map(|x| DaemonMessage::Modal(ModalMessage::FShare(x))),
                     ActiveModal::Battery(m) => m.view().map(|x| DaemonMessage::Modal(ModalMessage::Battery(x))),
                     ActiveModal::Display(m) => m.view().map(|x| DaemonMessage::Modal(ModalMessage::Display(x))),
                     ActiveModal::Media(m) => m.view().map(|x| DaemonMessage::Modal(ModalMessage::Media(x))),

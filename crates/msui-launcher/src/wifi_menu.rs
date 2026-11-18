@@ -318,16 +318,12 @@ impl WifiMenu {
         let mut content_col = column![header].spacing(12);
 
         // Status Banner
-        if let Some((msg, is_error)) = &self.status_msg {
+        if let Some((msg, _is_error)) = &self.status_msg {
             let banner_text = text(msg).size(12);
             let banner_container = container(banner_text)
                 .width(Length::Fill)
                 .padding([6, 12])
-                .style(if *is_error {
-                    container::bordered_box
-                } else {
-                    container::bordered_box
-                });
+                .style(container::bordered_box);
             content_col = content_col.push(banner_container);
         }
 

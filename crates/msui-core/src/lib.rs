@@ -10,7 +10,6 @@ pub mod power;
 pub mod reminder;
 pub mod theme;
 pub mod tray;
-pub mod fshare;
 pub mod wallpaper;
 pub mod service;
 pub mod color;

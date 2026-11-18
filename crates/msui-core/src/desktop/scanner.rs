@@ -339,7 +339,8 @@ pub fn find_icon_for_class(class: &str) -> Option<PathBuf> {
     None
 }
 
-static APP_CACHE: LazyLock<std::sync::RwLock<Option<(std::time::Instant, Vec<DesktopApp>)>>> =
+type CachedApps = Option<(std::time::Instant, Vec<DesktopApp>)>;
+static APP_CACHE: LazyLock<std::sync::RwLock<CachedApps>> =
     LazyLock::new(|| std::sync::RwLock::new(None));
 
 pub fn invalidate_desktop_cache() {

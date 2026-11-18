@@ -496,7 +496,7 @@ impl BatteryMenu {
         } else if bat.percentage > 60 {
             "󰂀"
         } else if bat.percentage > 40 {
-            "󰁼"
+            "󰁾"
         } else if bat.percentage > 20 {
             "󰁼"
         } else {

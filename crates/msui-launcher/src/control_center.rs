@@ -528,7 +528,7 @@ impl ControlCenter {
                 }
             }
             Message::OpenFShare => {
-                spawn_detached("fshare");
+                let _ = std::process::Command::new("localsend").spawn();
                 if self.is_standalone {
                     std::process::exit(0);
                 } else {
@@ -640,10 +640,11 @@ impl ControlCenter {
                     self.should_close = true;
                 }
             }
-            Message::IcedEvent(Event::Keyboard(KeyboardEvent::KeyPressed { key, .. })) => {
-                if let Key::Named(Named::Escape) = key {
-                    return Command::done(Message::Close);
-                }
+            Message::IcedEvent(Event::Keyboard(KeyboardEvent::KeyPressed {
+                key: Key::Named(Named::Escape),
+                ..
+            })) => {
+                return Command::done(Message::Close);
             }
             _ => {}
         }
@@ -904,13 +905,13 @@ impl ControlCenter {
         .padding([8, 10])
         .on_press(Message::OpenClipboardManager);
 
-        // Pill 12: FShare Direct Wi-Fi File Hub Shortcut
+        // Pill 12: LocalSend Direct Nearby Sharing Shortcut
         let fshare_btn = button(
             row![
                 text("󰅟").size(16),
                 column![
-                    text("FShare Hub").size(12),
-                    text("Wi-Fi Transfer").size(10),
+                    text("LocalSend").size(12),
+                    text("Nearby Share").size(10),
                 ].spacing(1),
             ]
             .spacing(8)

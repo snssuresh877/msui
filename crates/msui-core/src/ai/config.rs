@@ -67,7 +67,7 @@ impl AiConfig {
             }
         }
         let toml_str = toml::to_string_pretty(self)
-            .map_err(|e| std::io::Error::other(e))?;
+            .map_err(std::io::Error::other)?;
         #[cfg(unix)]
         {
             use std::fs::OpenOptions;

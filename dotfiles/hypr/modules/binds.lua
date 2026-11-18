@@ -55,8 +55,8 @@ hl.bind(MOD .. " + CTRL + SPACE", hl.dsp.exec_cmd("msui settings"), {
 	description = "msUI System Control Panel GUI (Super+Ctrl+Space fallback)",
 })
 
-hl.bind(MOD .. " + S", hl.dsp.exec_cmd("msui fshare"), {
-	description = "msUI FShare Local File Transfer Hub",
+hl.bind(MOD .. " + S", hl.dsp.exec_cmd("localsend"), {
+	description = "LocalSend Nearby File Sharing",
 })
 
 

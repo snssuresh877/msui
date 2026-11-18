@@ -318,10 +318,10 @@ impl SettingsPanel {
     pub fn subscription(&self) -> iced::Subscription<SettingsMessage> {
         iced::Subscription::batch(vec![
             event::listen_with(|event, _status, _window| match event {
-                Event::Keyboard(KeyboardEvent::KeyPressed { key, .. }) => match key {
-                    Key::Named(Named::Escape) => Some(SettingsMessage::Close),
-                    _ => None,
-                },
+                Event::Keyboard(KeyboardEvent::KeyPressed {
+                    key: Key::Named(Named::Escape),
+                    ..
+                }) => Some(SettingsMessage::Close),
                 _ => None,
             }),
             iced::time::every(Duration::from_secs(3)).map(|_| SettingsMessage::Tick),

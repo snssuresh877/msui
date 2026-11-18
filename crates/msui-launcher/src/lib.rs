@@ -5,7 +5,6 @@ pub mod bluetooth_menu;
 pub mod clipboard_menu;
 pub mod control_center;
 pub mod display_menu;
-pub mod fshare_modal;
 pub mod launcher;
 pub mod media_menu;
 pub mod notification_center;
@@ -31,7 +30,6 @@ pub use bluetooth_menu::{run_bluetooth_menu, BluetoothMenu, Message as Bluetooth
 pub use clipboard_menu::{run_clipboard_menu, ClipboardMenu, Message as ClipboardMessage};
 pub use control_center::{run_control_center, run_control_center_topbar, ControlCenter, ControlCenterTab, Message as ControlCenterMessage};
 pub use display_menu::{run_display_menu, DisplayMenu, Message as DisplayMessage};
-pub use fshare_modal::{run_fshare_modal, FShareModal, Message as FShareMessage};
 pub use launcher::{run_launcher, Launcher, Message as LauncherMessage};
 pub use media_menu::{run_media_menu, MediaMenu, Message as MediaMessage};
 pub use notification_center::{run_notification_center, NotificationCenter, Message as NotificationCenterMessage};
