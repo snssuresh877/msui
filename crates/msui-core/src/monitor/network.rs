@@ -1,4 +1,7 @@
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NetworkInfo {
@@ -29,46 +32,138 @@ pub struct WifiNetwork {
     pub bars: String,
 }
 
+// In-memory cache with TTL to protect UI from blocking subprocesses
+static NETWORK_CACHE: Mutex<Option<(Instant, NetworkInfo)>> = Mutex::new(None);
+static IS_FETCHING: AtomicBool = AtomicBool::new(false);
+
 pub struct NetworkMonitor;
 
 impl NetworkMonitor {
+    /// Ultra-fast, non-blocking network query for the GUI event loop.
+    /// Returns cached state in ~0.001ms. Never blocks the UI thread on subprocesses or D-Bus.
     pub fn read() -> NetworkInfo {
-        // Try nmcli for active wifi first
-        if let Ok(output) = Command::new("nmcli")
-            .args(["-t", "-f", "active,ssid,signal", "dev", "wifi"])
-            .output()
-        {
-            let text = String::from_utf8_lossy(&output.stdout);
-            for line in text.lines() {
-                let parts: Vec<&str> = line.split(':').collect();
-                if parts.len() >= 3 && parts[0].trim() == "yes" {
-                    let ssid = parts[1].trim().to_string();
-                    let signal = parts[2].trim().parse::<u8>().unwrap_or(0);
-                    return NetworkInfo {
-                        is_connected: true,
-                        ssid: Some(ssid),
-                        signal_percent: signal,
-                        is_ethernet: false,
-                    };
+        // 1. Check in-memory cache (2-second TTL)
+        if let Ok(guard) = NETWORK_CACHE.lock() {
+            if let Some((instant, ref info)) = *guard {
+                if instant.elapsed() < Duration::from_secs(2) {
+                    return info.clone();
                 }
             }
         }
 
-        // Check for ethernet connection
+        // 2. Kernel sysfs check (< 0.02ms, 0 subprocesses): Is any non-loopback interface UP?
+        if !Self::has_active_interface() {
+            let disconnected = NetworkInfo::default();
+            if let Ok(mut guard) = NETWORK_CACHE.lock() {
+                *guard = Some((Instant::now(), disconnected.clone()));
+            }
+            return disconnected;
+        }
+
+        // 3. If cache is stale or missing, trigger a background fetch if not already in flight
+        if !IS_FETCHING.swap(true, Ordering::SeqCst) {
+            std::thread::Builder::new()
+                .name("msui-net-mon".into())
+                .spawn(move || {
+                    let info = Self::fetch_network_info();
+                    if let Ok(mut guard) = NETWORK_CACHE.lock() {
+                        *guard = Some((Instant::now(), info));
+                    }
+                    IS_FETCHING.store(false, Ordering::SeqCst);
+                })
+                .ok();
+        }
+
+        // Return existing cached value (or default if very first frame)
+        if let Ok(guard) = NETWORK_CACHE.lock() {
+            if let Some((_, ref info)) = *guard {
+                return info.clone();
+            }
+        }
+
+        NetworkInfo::default()
+    }
+
+    /// Fast kernel check: checks /sys/class/net/*/operstate without any subprocess or D-Bus call.
+    fn has_active_interface() -> bool {
+        let Ok(entries) = std::fs::read_dir("/sys/class/net") else {
+            return false;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            if name_str == "lo" {
+                continue;
+            }
+            if let Ok(operstate) = std::fs::read_to_string(entry.path().join("operstate")) {
+                let state = operstate.trim();
+                if state == "up" || state == "unknown" {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Read wireless signal quality (0-100) directly from /proc/net/wireless without subprocess
+    fn read_sys_wifi_signal() -> Option<u8> {
+        let Ok(content) = std::fs::read_to_string("/proc/net/wireless") else {
+            return None;
+        };
+        for line in content.lines() {
+            if line.contains(':') && !line.starts_with("Inter") && !line.starts_with(" face") {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 3 {
+                    let link_str = parts[2].trim_end_matches('.');
+                    if let Ok(val) = link_str.parse::<u8>() {
+                        let percent = if val <= 70 {
+                            ((val as f32 / 70.0) * 100.0) as u8
+                        } else {
+                            val
+                        };
+                        return Some(percent.min(100));
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Runs in background thread with a strict 2-second timeout (-w 2) on nmcli
+    fn fetch_network_info() -> NetworkInfo {
+        // Query nmcli device status: single command with -w 2 timeout
         if let Ok(output) = Command::new("nmcli")
-            .args(["-t", "-f", "TYPE,STATE", "dev"])
+            .args(["-w", "2", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "dev"])
             .output()
         {
-            let text = String::from_utf8_lossy(&output.stdout);
-            for line in text.lines() {
-                let parts: Vec<&str> = line.split(':').collect();
-                if parts.len() >= 2 && parts[0] == "ethernet" && parts[1] == "connected" {
-                    return NetworkInfo {
-                        is_connected: true,
-                        ssid: Some("Ethernet".into()),
-                        signal_percent: 100,
-                        is_ethernet: true,
-                    };
+            if output.status.success() {
+                let text = String::from_utf8_lossy(&output.stdout);
+                for line in text.lines() {
+                    let parts: Vec<&str> = line.split(':').collect();
+                    if parts.len() >= 4 {
+                        let dev_type = parts[1].trim();
+                        let state = parts[2].trim();
+                        let connection = parts[3].trim();
+
+                        if state == "connected" {
+                            if dev_type == "wifi" {
+                                let signal = Self::read_sys_wifi_signal().unwrap_or(75);
+                                return NetworkInfo {
+                                    is_connected: true,
+                                    ssid: Some(connection.to_string()),
+                                    signal_percent: signal,
+                                    is_ethernet: false,
+                                };
+                            } else if dev_type == "ethernet" {
+                                return NetworkInfo {
+                                    is_connected: true,
+                                    ssid: Some("Ethernet".into()),
+                                    signal_percent: 100,
+                                    is_ethernet: true,
+                                };
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -79,7 +174,7 @@ impl NetworkMonitor {
     pub fn scan_wifi() -> Vec<WifiNetwork> {
         let mut networks = Vec::new();
         if let Ok(output) = Command::new("nmcli")
-            .args(["-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY,BARS", "device", "wifi", "list"])
+            .args(["-w", "3", "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY,BARS", "device", "wifi", "list"])
             .output()
         {
             if output.status.success() {
@@ -132,7 +227,29 @@ impl NetworkMonitor {
     }
 
     pub fn is_wifi_enabled() -> bool {
-        if let Ok(output) = Command::new("nmcli").args(["radio", "wifi"]).output() {
+        // Fast sysfs rfkill check first (< 0.02ms, 0 subprocesses)
+        if let Ok(entries) = std::fs::read_dir("/sys/class/rfkill") {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if let Ok(t) = std::fs::read_to_string(p.join("type")) {
+                    if t.trim() == "wlan" {
+                        if let Ok(s) = std::fs::read_to_string(p.join("soft")) {
+                            if s.trim() == "1" {
+                                return false; // Soft-blocked (airplane mode / wifi off)
+                            }
+                        }
+                        if let Ok(h) = std::fs::read_to_string(p.join("hard")) {
+                            if h.trim() == "1" {
+                                return false; // Hardware killswitch
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback to nmcli with -w 2 timeout
+        if let Ok(output) = Command::new("nmcli").args(["-w", "2", "radio", "wifi"]).output() {
             let text = String::from_utf8_lossy(&output.stdout);
             return text.trim() == "enabled";
         }
@@ -142,11 +259,15 @@ impl NetworkMonitor {
     pub fn toggle_wifi_radio() {
         let enabled = Self::is_wifi_enabled();
         let target = if enabled { "off" } else { "on" };
-        let _ = Command::new("nmcli").args(["radio", "wifi", target]).status();
+        let _ = Command::new("nmcli").args(["-w", "2", "radio", "wifi", target]).status();
+        // Invalidate cache immediately on user toggle
+        if let Ok(mut guard) = NETWORK_CACHE.lock() {
+            *guard = None;
+        }
     }
 
     pub fn rescan_wifi() {
-        let _ = Command::new("nmcli").args(["device", "wifi", "rescan"]).spawn();
+        let _ = Command::new("nmcli").args(["-w", "2", "device", "wifi", "rescan"]).spawn();
     }
 
     pub fn connect_wifi(ssid: &str, password: Option<&str>) -> Result<(), String> {
@@ -157,7 +278,7 @@ impl NetworkMonitor {
             // --ask tells nmcli to read passwords from stdin instead of process arguments
             cmd.arg("--ask");
         }
-        cmd.args(["device", "wifi", "connect", ssid]);
+        cmd.args(["-w", "15", "device", "wifi", "connect", ssid]);
         cmd.stdin(std::process::Stdio::piped());
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
@@ -176,6 +297,10 @@ impl NetworkMonitor {
 
         match child.wait_with_output() {
             Ok(out) => {
+                // Invalidate cache on connect
+                if let Ok(mut guard) = NETWORK_CACHE.lock() {
+                    *guard = None;
+                }
                 if out.status.success() {
                     Ok(())
                 } else {
@@ -194,15 +319,21 @@ impl NetworkMonitor {
 
     pub fn disconnect_wifi() -> bool {
         let dev = Self::get_wifi_device().unwrap_or_else(|| "wlan0".to_string());
-        if let Ok(status) = Command::new("nmcli").args(["device", "disconnect", &dev]).status() {
+        let success = if let Ok(status) = Command::new("nmcli").args(["-w", "2", "device", "disconnect", &dev]).status() {
             status.success()
         } else {
             false
+        };
+        if success {
+            if let Ok(mut guard) = NETWORK_CACHE.lock() {
+                *guard = None;
+            }
         }
+        success
     }
 
     fn get_wifi_device() -> Option<String> {
-        if let Ok(out) = Command::new("nmcli").args(["-t", "-f", "DEVICE,TYPE", "device"]).output() {
+        if let Ok(out) = Command::new("nmcli").args(["-w", "2", "-t", "-f", "DEVICE,TYPE", "device"]).output() {
             let text = String::from_utf8_lossy(&out.stdout);
             for line in text.lines() {
                 let parts: Vec<&str> = line.split(':').collect();
