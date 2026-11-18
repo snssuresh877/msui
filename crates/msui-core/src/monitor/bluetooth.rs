@@ -27,13 +27,11 @@ pub struct BluetoothManager;
 impl BluetoothManager {
     pub fn read() -> BluetoothInfo {
         // 1. Check in-memory cache (2-second TTL to avoid re-querying in the same frame)
-        if let Ok(guard) = BLUETOOTH_CACHE.lock() {
-            if let Some((instant, ref info)) = *guard {
-                if instant.elapsed() < Duration::from_secs(2) {
+        if let Ok(guard) = BLUETOOTH_CACHE.lock()
+            && let Some((instant, ref info)) = *guard
+                && instant.elapsed() < Duration::from_secs(2) {
                     return info.clone();
                 }
-            }
-        }
 
         // 2. Ultra-fast sysfs rfkill check (< 0.05ms, 0 subprocesses)
         if let Ok(entries) = std::fs::read_dir("/sys/class/rfkill") {
@@ -42,16 +40,14 @@ impl BluetoothManager {
 
             for entry in entries.flatten() {
                 let p = entry.path();
-                if let Ok(t) = std::fs::read_to_string(p.join("type")) {
-                    if t.trim() == "bluetooth" {
+                if let Ok(t) = std::fs::read_to_string(p.join("type"))
+                    && t.trim() == "bluetooth" {
                         found_bt = true;
-                        if let Ok(s) = std::fs::read_to_string(p.join("soft")) {
-                            if s.trim() == "1" {
+                        if let Ok(s) = std::fs::read_to_string(p.join("soft"))
+                            && s.trim() == "1" {
                                 is_soft_blocked = true;
                             }
-                        }
                     }
-                }
             }
 
             if found_bt && is_soft_blocked {
@@ -78,12 +74,10 @@ impl BluetoothManager {
             .arg("show")
             .stdin(Stdio::null())
             .output()
-        {
-            if out.status.success() {
+            && out.status.success() {
                 let show_text = String::from_utf8_lossy(&out.stdout);
                 is_powered = show_text.lines().any(|l| l.trim().starts_with("Powered: yes"));
             }
-        }
 
         if is_powered {
             // Connected devices
@@ -91,8 +85,7 @@ impl BluetoothManager {
                 .args(["devices", "Connected"])
                 .stdin(Stdio::null())
                 .output()
-            {
-                if out.status.success() {
+                && out.status.success() {
                     let text = String::from_utf8_lossy(&out.stdout);
                     for line in text.lines() {
                         let parts: Vec<&str> = line.split_whitespace().collect();
@@ -110,15 +103,13 @@ impl BluetoothManager {
                         }
                     }
                 }
-            }
 
             // Paired devices
             if let Ok(out) = Command::new("bluetoothctl")
                 .args(["devices", "Paired"])
                 .stdin(Stdio::null())
                 .output()
-            {
-                if out.status.success() {
+                && out.status.success() {
                     let text = String::from_utf8_lossy(&out.stdout);
                     for line in text.lines() {
                         let parts: Vec<&str> = line.split_whitespace().collect();
@@ -137,7 +128,6 @@ impl BluetoothManager {
                         }
                     }
                 }
-            }
         }
 
         let info = BluetoothInfo {

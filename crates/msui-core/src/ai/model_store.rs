@@ -82,7 +82,7 @@ impl ModelStore {
             }
         }
 
-        models.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        models.sort_by_key(|a| a.name.to_lowercase());
         models
     }
 
@@ -141,22 +141,20 @@ impl ModelStore {
 
         // 4. Normalized match (remove hyphens, underscores, dots)
         let q_norm: String = q.chars().filter(|c| c.is_alphanumeric()).collect();
-        if !q_norm.is_empty() {
-            if let Some(m) = models.iter().find(|m| {
+        if !q_norm.is_empty()
+            && let Some(m) = models.iter().find(|m| {
                 let m_norm: String = m.name.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
                 m_norm.contains(&q_norm)
             }) {
                 return Some(m.clone());
             }
-        }
 
         // 5. Keyword tag matching (e.g. "1.5b", "0.5b", "3b")
         for tag in &["0.5b", "1.5b", "3b", "7b"] {
-            if q.contains(tag) {
-                if let Some(m) = models.iter().find(|m| m.name.to_lowercase().contains(tag)) {
+            if q.contains(tag)
+                && let Some(m) = models.iter().find(|m| m.name.to_lowercase().contains(tag)) {
                     return Some(m.clone());
                 }
-            }
         }
 
         None
@@ -172,21 +170,19 @@ impl ModelStore {
                         "Refusing to delete model outside models directory",
                     ));
                 }
-                if let Some(parent) = canon_model.parent() {
-                    if parent != canon_base && parent.parent() == Some(&canon_base) {
+                if let Some(parent) = canon_model.parent()
+                    && parent != canon_base && parent.parent() == Some(&canon_base) {
                         std::fs::remove_dir_all(parent)?;
                         return Ok(true);
                     }
-                }
                 std::fs::remove_file(canon_model)?;
                 return Ok(true);
             }
-            if let Some(parent) = model.path.parent() {
-                if parent != base_dir && parent.parent() == Some(&base_dir) {
+            if let Some(parent) = model.path.parent()
+                && parent != base_dir && parent.parent() == Some(&base_dir) {
                     std::fs::remove_dir_all(parent)?;
                     return Ok(true);
                 }
-            }
             std::fs::remove_file(model.path)?;
             Ok(true)
         } else {

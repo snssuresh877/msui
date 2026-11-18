@@ -35,8 +35,7 @@ pub fn get_local_ip() -> Option<String> {
     if let Ok(output) = std::process::Command::new("ip")
         .args(["-4", "-o", "addr", "show"])
         .output()
-    {
-        if let Ok(text) = String::from_utf8(output.stdout) {
+        && let Ok(text) = String::from_utf8(output.stdout) {
             let mut candidates: Vec<(u8, String)> = Vec::new();
             for line in text.lines() {
                 let parts: Vec<&str> = line.split_whitespace().collect();
@@ -85,7 +84,6 @@ pub fn get_local_ip() -> Option<String> {
                 return Some(best_ip);
             }
         }
-    }
 
     // 2. Fallback: UDP socket routing
     let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
@@ -145,8 +143,7 @@ pub fn get_active_wifi_ssid() -> Option<String> {
     if let Ok(output) = std::process::Command::new("nmcli")
         .args(["-t", "-f", "ACTIVE,SSID", "device", "wifi"])
         .output()
-    {
-        if output.status.success() {
+        && output.status.success() {
             let text = String::from_utf8_lossy(&output.stdout);
             for line in text.lines() {
                 if let Some(rest) = line.strip_prefix("yes:") {
@@ -157,7 +154,6 @@ pub fn get_active_wifi_ssid() -> Option<String> {
                 }
             }
         }
-    }
     None
 }
 
@@ -225,13 +221,11 @@ fn history_file_path() -> PathBuf {
 
 pub fn load_transfer_history() -> Vec<TransferHistoryEntry> {
     let path = history_file_path();
-    if path.exists() {
-        if let Ok(data) = std::fs::read_to_string(path) {
-            if let Ok(entries) = serde_json::from_str(&data) {
+    if path.exists()
+        && let Ok(data) = std::fs::read_to_string(path)
+            && let Ok(entries) = serde_json::from_str(&data) {
                 return entries;
             }
-        }
-    }
     Vec::new()
 }
 

@@ -411,8 +411,8 @@ async fn handle_send_connection(
                 }
             }
         } else if let Some((idx_str, _fname_part)) = rest.split_once('/') {
-            if let Ok(idx) = idx_str.parse::<usize>() {
-                if idx < file_paths.len() {
+            if let Ok(idx) = idx_str.parse::<usize>()
+                && idx < file_paths.len() {
                     let target_file = &file_paths[idx];
                     let fname = target_file
                         .file_name()
@@ -421,7 +421,6 @@ async fn handle_send_connection(
                     stream_file_response(&mut stream, target_file, &fname, method == "HEAD", event_tx).await?;
                     return Ok(());
                 }
-            }
             send_404(&mut stream).await?;
         } else {
             // Single file or direct match by filename
@@ -602,11 +601,10 @@ async fn handle_recv_connection(
                 if let Some(val) = line.split(':').nth(1) {
                     raw_filename = urlencoding_decode(val.trim());
                 }
-            } else if lower.starts_with("x-pin:") {
-                if let Some(val) = line.split(':').nth(1) {
+            } else if lower.starts_with("x-pin:")
+                && let Some(val) = line.split(':').nth(1) {
                     header_pin = Some(val.trim().to_string());
                 }
-            }
         }
         header_lines.push(line);
     }

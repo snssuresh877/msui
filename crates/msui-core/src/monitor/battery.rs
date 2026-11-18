@@ -81,31 +81,28 @@ pub struct PowerProfileManager;
 impl PowerProfileManager {
     pub fn get_profile() -> PowerProfile {
         // 1. TLP is the single primary authority
-        if let Ok(output) = std::process::Command::new("tlpctl").arg("get").output() {
-            if output.status.success() {
+        if let Ok(output) = std::process::Command::new("tlpctl").arg("get").output()
+            && output.status.success() {
                 let text = String::from_utf8_lossy(&output.stdout);
                 if let Some(prof) = PowerProfile::from_str_loose(&text) {
                     return prof;
                 }
             }
-        }
 
         // 2. Secondary authority: powerprofilesctl
-        if let Ok(output) = std::process::Command::new("powerprofilesctl").arg("get").output() {
-            if output.status.success() {
+        if let Ok(output) = std::process::Command::new("powerprofilesctl").arg("get").output()
+            && output.status.success() {
                 let text = String::from_utf8_lossy(&output.stdout);
                 if let Some(prof) = PowerProfile::from_str_loose(&text) {
                     return prof;
                 }
             }
-        }
 
         // 3. Fallback: direct ACPI platform_profile sysfs check
-        if let Ok(text) = std::fs::read_to_string("/sys/firmware/acpi/platform_profile") {
-            if let Some(prof) = PowerProfile::from_str_loose(&text) {
+        if let Ok(text) = std::fs::read_to_string("/sys/firmware/acpi/platform_profile")
+            && let Some(prof) = PowerProfile::from_str_loose(&text) {
                 return prof;
             }
-        }
 
         // 4. Fallback: D-Bus query
         if let Ok(output) = std::process::Command::new("busctl")
@@ -117,14 +114,12 @@ impl PowerProfileManager {
                 "ActiveProfile",
             ])
             .output()
-        {
-            if output.status.success() {
+            && output.status.success() {
                 let text = String::from_utf8_lossy(&output.stdout);
                 if let Some(prof) = PowerProfile::from_str_loose(&text) {
                     return prof;
                 }
             }
-        }
 
         PowerProfile::Balanced
     }
@@ -136,21 +131,17 @@ impl PowerProfileManager {
         if let Ok(status) = std::process::Command::new("tlpctl")
             .args(["set", slug])
             .status()
-        {
-            if status.success() {
+            && status.success() {
                 return true;
             }
-        }
 
         // 2. Fallback to powerprofilesctl
         if let Ok(status) = std::process::Command::new("powerprofilesctl")
             .args(["set", slug])
             .status()
-        {
-            if status.success() {
+            && status.success() {
                 return true;
             }
-        }
 
         // 3. Fallback: direct ACPI platform_profile sysfs (if root/writable)
         let acpi_slug = match profile {
@@ -268,8 +259,8 @@ impl BatteryMonitor {
         if let Ok(entries) = fs::read_dir("/sys/bus/platform/drivers") {
             for entry in entries.flatten() {
                 let name = entry.file_name().to_string_lossy().to_string();
-                if name.starts_with("ideapad") {
-                    if let Ok(devs) = fs::read_dir(entry.path()) {
+                if name.starts_with("ideapad")
+                    && let Ok(devs) = fs::read_dir(entry.path()) {
                         for dev in devs.flatten() {
                             let mode_file = dev.path().join("conservation_mode");
                             if mode_file.is_file() {
@@ -277,7 +268,6 @@ impl BatteryMonitor {
                             }
                         }
                     }
-                }
             }
         }
         None

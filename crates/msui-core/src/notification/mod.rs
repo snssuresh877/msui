@@ -72,6 +72,12 @@ pub static GLOBAL_NOTIFICATIONS: LazyLock<Arc<Mutex<NotificationStore>>> = LazyL
     Arc::new(Mutex::new(store))
 });
 
+impl Default for NotificationStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NotificationStore {
     pub fn new() -> Self {
         let (sender, _) = broadcast::channel(32);
@@ -109,16 +115,13 @@ impl NotificationStore {
     }
 
     pub fn load(&mut self) {
-        if let Some(path) = &self.cache_path {
-            if path.exists() {
-                if let Ok(data) = fs::read_to_string(path) {
-                    if let Ok(loaded) = serde_json::from_str::<Vec<Notification>>(&data) {
+        if let Some(path) = &self.cache_path
+            && path.exists()
+                && let Ok(data) = fs::read_to_string(path)
+                    && let Ok(loaded) = serde_json::from_str::<Vec<Notification>>(&data) {
                         self.next_id = loaded.iter().map(|n| n.id).max().unwrap_or(0) + 1;
                         self.history = VecDeque::from(loaded);
                     }
-                }
-            }
-        }
     }
 
     pub fn save(&self) {
@@ -246,13 +249,11 @@ pub fn dirs_cache_dir() -> Option<PathBuf> {
 pub fn load_active_toasts() -> Vec<Notification> {
     if let Some(dir) = dirs_cache_dir() {
         let path = dir.join("active_toasts.json");
-        if path.exists() {
-            if let Ok(data) = fs::read_to_string(&path) {
-                if let Ok(toasts) = serde_json::from_str::<Vec<Notification>>(&data) {
+        if path.exists()
+            && let Ok(data) = fs::read_to_string(&path)
+                && let Ok(toasts) = serde_json::from_str::<Vec<Notification>>(&data) {
                     return toasts;
                 }
-            }
-        }
     }
     Vec::new()
 }
@@ -298,16 +299,14 @@ pub fn clear_active_toasts() {
 pub fn is_toast_running() -> bool {
     if let Some(dir) = dirs_cache_dir() {
         let pid_path = dir.join("toast.pid");
-        if pid_path.exists() {
-            if let Ok(content) = fs::read_to_string(&pid_path) {
-                if let Ok(pid) = content.trim().parse::<i32>() {
+        if pid_path.exists()
+            && let Ok(content) = fs::read_to_string(&pid_path)
+                && let Ok(pid) = content.trim().parse::<i32>() {
                     let proc_path = format!("/proc/{}", pid);
                     if std::path::Path::new(&proc_path).exists() {
                         return true;
                     }
                 }
-            }
-        }
     }
     false
 }

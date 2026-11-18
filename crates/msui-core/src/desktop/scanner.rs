@@ -188,14 +188,13 @@ fn get_icon_path_from_xdgicon(iconname: &str) -> Option<PathBuf> {
     if p.is_absolute() && p.exists() {
         return Some(p.to_path_buf());
     }
-    if let Some(rest) = iconname.strip_prefix("~/") {
-        if let Ok(home) = std::env::var("HOME") {
+    if let Some(rest) = iconname.strip_prefix("~/")
+        && let Ok(home) = std::env::var("HOME") {
             let expanded = PathBuf::from(home).join(rest);
             if expanded.exists() {
                 return Some(expanded);
             }
         }
-    }
 
     // Strip extension if already present (e.g. "app.png" -> "app")
     let clean = iconname
@@ -322,24 +321,21 @@ pub fn find_icon_for_class(class: &str) -> Option<PathBuf> {
         return Some(p);
     }
     // Check known aliases for flatpaks/appimages
-    if lower == "wechat" {
-        if let Some(p) = get_icon_path_from_xdgicon("com.tencent.WeChat") {
+    if lower == "wechat"
+        && let Some(p) = get_icon_path_from_xdgicon("com.tencent.WeChat") {
             return Some(p);
         }
-    }
-    if lower.contains("vectorcraft") {
-        if let Some(p) = get_icon_path_from_xdgicon("vectorcraft")
+    if lower.contains("vectorcraft")
+        && let Some(p) = get_icon_path_from_xdgicon("vectorcraft")
             .or_else(|| get_icon_path_from_xdgicon("ai.storyteller.vectorcraft"))
         {
             return Some(p);
         }
-    }
     // Check without dashes/underscores or after last period (e.g., org.mozilla.firefox -> firefox)
-    if let Some(last_part) = lower.rsplit('.').next() {
-        if let Some(p) = get_icon_path_from_xdgicon(last_part) {
+    if let Some(last_part) = lower.rsplit('.').next()
+        && let Some(p) = get_icon_path_from_xdgicon(last_part) {
             return Some(p);
         }
-    }
     None
 }
 
@@ -353,13 +349,11 @@ pub fn invalidate_desktop_cache() {
 }
 
 pub fn scan_desktop_apps() -> Vec<DesktopApp> {
-    if let Ok(guard) = APP_CACHE.read() {
-        if let Some((instant, ref cached)) = *guard {
-            if instant.elapsed() < std::time::Duration::from_secs(60) {
+    if let Ok(guard) = APP_CACHE.read()
+        && let Some((instant, ref cached)) = *guard
+            && instant.elapsed() < std::time::Duration::from_secs(60) {
                 return cached.clone();
             }
-        }
-    }
 
     let desktop_entries = fde::desktop_entries(&LOCALE);
 
@@ -385,8 +379,8 @@ pub fn scan_desktop_apps() -> Vec<DesktopApp> {
                 // Fallback for AppImages without explicit Icon field in desktop file
                 if let Some(first_exec) = exec_cmds.first() {
                     let exec_p = std::path::Path::new(first_exec);
-                    if exec_p.extension().is_some_and(|e| e.eq_ignore_ascii_case("appimage")) {
-                        if let Some(parent) = exec_p.parent() {
+                    if exec_p.extension().is_some_and(|e| e.eq_ignore_ascii_case("appimage"))
+                        && let Some(parent) = exec_p.parent() {
                             for candidate in &[&id, &name.to_lowercase(), "vectorcraft", "icon", "app"] {
                                 let p_png = parent.join(format!("{candidate}.png"));
                                 if p_png.exists() {
@@ -413,7 +407,6 @@ pub fn scan_desktop_apps() -> Vec<DesktopApp> {
                                 }
                             }
                         }
-                    }
                 }
                 None
             });
@@ -430,7 +423,7 @@ pub fn scan_desktop_apps() -> Vec<DesktopApp> {
         })
         .collect();
 
-    apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    apps.sort_by_key(|a| a.name.to_lowercase());
     if let Ok(mut guard) = APP_CACHE.write() {
         *guard = Some((std::time::Instant::now(), apps.clone()));
     }

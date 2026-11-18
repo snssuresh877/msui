@@ -46,13 +46,11 @@ impl AiConfig {
 
     pub fn load() -> Self {
         let p = Self::config_path();
-        if p.exists() {
-            if let Ok(content) = std::fs::read_to_string(&p) {
-                if let Ok(cfg) = toml::from_str::<AiConfig>(&content) {
+        if p.exists()
+            && let Ok(content) = std::fs::read_to_string(&p)
+                && let Ok(cfg) = toml::from_str::<AiConfig>(&content) {
                     return cfg;
                 }
-            }
-        }
         let def = Self::default();
         let _ = def.save();
         def
@@ -69,7 +67,7 @@ impl AiConfig {
             }
         }
         let toml_str = toml::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(|e| std::io::Error::other(e))?;
         #[cfg(unix)]
         {
             use std::fs::OpenOptions;

@@ -4,6 +4,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Default)]
 pub struct NetworkInfo {
     pub is_connected: bool,
     pub ssid: Option<String>,
@@ -11,16 +12,6 @@ pub struct NetworkInfo {
     pub is_ethernet: bool,
 }
 
-impl Default for NetworkInfo {
-    fn default() -> Self {
-        Self {
-            is_connected: false,
-            ssid: None,
-            signal_percent: 0,
-            is_ethernet: false,
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WifiNetwork {
@@ -43,13 +34,11 @@ impl NetworkMonitor {
     /// Returns cached state in ~0.001ms. Never blocks the UI thread on subprocesses or D-Bus.
     pub fn read() -> NetworkInfo {
         // 1. Check in-memory cache (2-second TTL)
-        if let Ok(guard) = NETWORK_CACHE.lock() {
-            if let Some((instant, ref info)) = *guard {
-                if instant.elapsed() < Duration::from_secs(2) {
+        if let Ok(guard) = NETWORK_CACHE.lock()
+            && let Some((instant, ref info)) = *guard
+                && instant.elapsed() < Duration::from_secs(2) {
                     return info.clone();
                 }
-            }
-        }
 
         // 2. Kernel sysfs check (< 0.02ms, 0 subprocesses): Is any non-loopback interface UP?
         if !Self::has_active_interface() {
@@ -75,11 +64,10 @@ impl NetworkMonitor {
         }
 
         // Return existing cached value (or default if very first frame)
-        if let Ok(guard) = NETWORK_CACHE.lock() {
-            if let Some((_, ref info)) = *guard {
+        if let Ok(guard) = NETWORK_CACHE.lock()
+            && let Some((_, ref info)) = *guard {
                 return info.clone();
             }
-        }
 
         NetworkInfo::default()
     }
@@ -135,8 +123,7 @@ impl NetworkMonitor {
         if let Ok(output) = Command::new("nmcli")
             .args(["-w", "2", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "dev"])
             .output()
-        {
-            if output.status.success() {
+            && output.status.success() {
                 let text = String::from_utf8_lossy(&output.stdout);
                 for line in text.lines() {
                     let parts: Vec<&str> = line.split(':').collect();
@@ -166,7 +153,6 @@ impl NetworkMonitor {
                     }
                 }
             }
-        }
 
         NetworkInfo::default()
     }
@@ -176,8 +162,7 @@ impl NetworkMonitor {
         if let Ok(output) = Command::new("nmcli")
             .args(["-w", "3", "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY,BARS", "device", "wifi", "list"])
             .output()
-        {
-            if output.status.success() {
+            && output.status.success() {
                 let text = String::from_utf8_lossy(&output.stdout);
                 for line in text.lines() {
                     let parts: Vec<&str> = line.split(':').collect();
@@ -214,7 +199,6 @@ impl NetworkMonitor {
                     }
                 }
             }
-        }
 
         // Sort: connected first, then by signal strength descending
         networks.sort_by(|a, b| {
@@ -231,20 +215,17 @@ impl NetworkMonitor {
         if let Ok(entries) = std::fs::read_dir("/sys/class/rfkill") {
             for entry in entries.flatten() {
                 let p = entry.path();
-                if let Ok(t) = std::fs::read_to_string(p.join("type")) {
-                    if t.trim() == "wlan" {
-                        if let Ok(s) = std::fs::read_to_string(p.join("soft")) {
-                            if s.trim() == "1" {
+                if let Ok(t) = std::fs::read_to_string(p.join("type"))
+                    && t.trim() == "wlan" {
+                        if let Ok(s) = std::fs::read_to_string(p.join("soft"))
+                            && s.trim() == "1" {
                                 return false; // Soft-blocked (airplane mode / wifi off)
                             }
-                        }
-                        if let Ok(h) = std::fs::read_to_string(p.join("hard")) {
-                            if h.trim() == "1" {
+                        if let Ok(h) = std::fs::read_to_string(p.join("hard"))
+                            && h.trim() == "1" {
                                 return false; // Hardware killswitch
                             }
-                        }
                     }
-                }
             }
         }
 
@@ -285,15 +266,13 @@ impl NetworkMonitor {
 
         let mut child = cmd.spawn().map_err(|e| e.to_string())?;
 
-        if let Some(pwd) = password {
-            if has_pwd {
-                if let Some(mut stdin) = child.stdin.take() {
+        if let Some(pwd) = password
+            && has_pwd
+                && let Some(mut stdin) = child.stdin.take() {
                     use std::io::Write;
                     let _ = stdin.write_all(format!("{}\n", pwd.trim()).as_bytes());
                     let _ = stdin.flush();
                 }
-            }
-        }
 
         match child.wait_with_output() {
             Ok(out) => {
@@ -324,11 +303,10 @@ impl NetworkMonitor {
         } else {
             false
         };
-        if success {
-            if let Ok(mut guard) = NETWORK_CACHE.lock() {
+        if success
+            && let Ok(mut guard) = NETWORK_CACHE.lock() {
                 *guard = None;
             }
-        }
         success
     }
 

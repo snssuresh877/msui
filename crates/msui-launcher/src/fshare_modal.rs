@@ -132,23 +132,20 @@ impl TryInto<ExwlShellCustomActionWithId> for Message {
 
 fn expand_tilde(input: &str) -> PathBuf {
     let mut trimmed = input.trim();
-    if (trimmed.starts_with('"') && trimmed.ends_with('"'))
-        || (trimmed.starts_with('\'') && trimmed.ends_with('\''))
-    {
-        if trimmed.len() >= 2 {
+    if ((trimmed.starts_with('"') && trimmed.ends_with('"'))
+        || (trimmed.starts_with('\'') && trimmed.ends_with('\'')))
+        && trimmed.len() >= 2 {
             trimmed = trimmed[1..trimmed.len() - 1].trim();
         }
-    }
 
     if let Some(stripped) = trimmed.strip_prefix("~/") {
         if let Some(home) = std::env::var_os("HOME") {
             return PathBuf::from(home).join(stripped);
         }
-    } else if trimmed == "~" {
-        if let Some(home) = std::env::var_os("HOME") {
+    } else if trimmed == "~"
+        && let Some(home) = std::env::var_os("HOME") {
             return PathBuf::from(home);
         }
-    }
     PathBuf::from(trimmed)
 }
 
@@ -206,8 +203,8 @@ fn scan_dir(dir: &Path) -> Vec<DirEntryItem> {
         }
     }
 
-    dirs.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-    files.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    dirs.sort_by_key(|a| a.name.to_lowercase());
+    files.sort_by_key(|a| a.name.to_lowercase());
 
     dirs.extend(files);
     dirs
@@ -231,8 +228,8 @@ fn scan_recent_files() -> Vec<QuickFile> {
     for (dir, category, default_icon) in &folders {
         if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.flatten() {
-                if let Ok(ft) = entry.file_type() {
-                    if ft.is_file() {
+                if let Ok(ft) = entry.file_type()
+                    && ft.is_file() {
                         let path = entry.path();
                         let filename = path.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
                         if filename.starts_with('.') {
@@ -267,13 +264,12 @@ fn scan_recent_files() -> Vec<QuickFile> {
                                     path,
                                     name: filename,
                                     size_str,
-                                    category: *category,
+                                    category: category,
                                     icon,
                                 },
                             ));
                         }
                     }
-                }
             }
         }
     }
@@ -395,7 +391,7 @@ impl FShareModal {
     pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::EnsureFocus => {
-                return focus(INPUT_ID.clone());
+                focus(INPUT_ID.clone())
             }
             Message::SwitchTab(tab) => {
                 self.active_tab = tab;
@@ -436,11 +432,10 @@ impl FShareModal {
                         let target = expand_tilde(&self.send_path_input);
                         if target.is_dir() {
                             self.browse_current_dir = target;
-                        } else if let Some(parent) = target.parent() {
-                            if parent.is_dir() {
+                        } else if let Some(parent) = target.parent()
+                            && parent.is_dir() {
                                 self.browse_current_dir = parent.to_path_buf();
                             }
-                        }
                         self.browse_entries = scan_dir(&self.browse_current_dir);
                     }
                     SendTabMode::Browse => {
@@ -458,13 +453,12 @@ impl FShareModal {
                 Command::none()
             }
             Message::BrowseDirUp => {
-                if let Some(parent) = self.browse_current_dir.parent() {
-                    if parent.is_dir() {
+                if let Some(parent) = self.browse_current_dir.parent()
+                    && parent.is_dir() {
                         self.browse_current_dir = parent.to_path_buf();
                         self.browse_entries = scan_dir(&self.browse_current_dir);
                         self.send_path_input = self.browse_current_dir.to_string_lossy().to_string();
                     }
-                }
                 Command::none()
             }
             Message::PathInputChanged(path) => {

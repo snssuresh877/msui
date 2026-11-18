@@ -113,16 +113,14 @@ impl ThemeManager {
     }
 
     pub fn current_theme_name() -> String {
-        if let Some(path) = Self::cache_file_path() {
-            if path.exists() {
-                if let Ok(content) = fs::read_to_string(&path) {
+        if let Some(path) = Self::cache_file_path()
+            && path.exists()
+                && let Ok(content) = fs::read_to_string(&path) {
                     let trimmed = content.trim();
                     if !trimmed.is_empty() {
                         return trimmed.to_string();
                     }
                 }
-            }
-        }
         "Catppuccin Mocha".to_string()
     }
 
@@ -148,7 +146,7 @@ impl ThemeManager {
 
         let name = Self::current_theme_name();
         if cfg.color.scheme == "light" {
-            match name.to_lowercase().replace(' ', "-").replace('_', "-").as_str() {
+            match name.to_lowercase().replace([' ', '_'], "-").as_str() {
                 "gruvbox-dark" | "gruvbox-light" => Theme::GruvboxLight,
                 "tokyo-night" | "tokyo-night-storm" | "tokyo-night-light" => Theme::TokyoNightLight,
                 _ => Theme::CatppuccinLatte,
@@ -172,7 +170,7 @@ impl ThemeManager {
     }
 
     pub fn to_iced_theme(name: &str) -> Theme {
-        match name.to_lowercase().replace(' ', "-").replace('_', "-").as_str() {
+        match name.to_lowercase().replace([' ', '_'], "-").as_str() {
             "catppuccin-mocha" => Theme::CatppuccinMocha,
             "catppuccin-macchiato" => Theme::CatppuccinMacchiato,
             "catppuccin-frappe" => Theme::CatppuccinFrappe,

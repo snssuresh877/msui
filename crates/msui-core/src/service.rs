@@ -34,15 +34,12 @@ impl SystemServiceManager {
         if let Ok(entries) = fs::read_dir("/sys/class/rfkill") {
             for entry in entries.flatten() {
                 let p = entry.path();
-                if let Ok(t) = fs::read_to_string(p.join("type")) {
-                    if t.trim() == "bluetooth" {
-                        if let Ok(s) = fs::read_to_string(p.join("soft")) {
-                            if s.trim() == "1" {
+                if let Ok(t) = fs::read_to_string(p.join("type"))
+                    && t.trim() == "bluetooth"
+                        && let Ok(s) = fs::read_to_string(p.join("soft"))
+                            && s.trim() == "1" {
                                 return true;
                             }
-                        }
-                    }
-                }
             }
         }
         false
@@ -79,11 +76,10 @@ impl SystemServiceManager {
             let statm_path = format!("/proc/{}/statm", pid);
             if let Ok(statm) = fs::read_to_string(&statm_path) {
                 let parts: Vec<&str> = statm.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    if let Ok(rss_pages) = parts[1].parse::<u64>() {
+                if parts.len() >= 2
+                    && let Ok(rss_pages) = parts[1].parse::<u64>() {
                         total_kb += rss_pages * 4;
                     }
-                }
             }
         }
 

@@ -389,7 +389,7 @@ fn bar_btn_power(theme: &Theme, status: button::Status) -> button::Style {
 impl Bar {
     pub fn new(config: MsuiConfig, shell_events: ShellReceiver) -> Self {
         let is_light = msui_core::parse_hex_color(&config.gui.background)
-            .map_or(false, |(r, g, b)| (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.45);
+            .is_some_and(|(r, g, b)| (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.45);
         IS_LIGHT_BAR.store(is_light, std::sync::atomic::Ordering::Relaxed);
 
         let battery_monitor = BatteryMonitor::new();
@@ -471,19 +471,16 @@ impl Bar {
                 self.next_reminder = ReminderManager::next_expiring();
 
                 // Live dynamic reload if configuration file modified on disk
-                if let Some(cfg_path) = MsuiConfig::default_config_path() {
-                    if let Ok(meta) = std::fs::metadata(&cfg_path) {
-                        if let Ok(mtime) = meta.modified() {
-                            if self.last_config_mtime.map_or(true, |last| mtime > last) {
+                if let Some(cfg_path) = MsuiConfig::default_config_path()
+                    && let Ok(meta) = std::fs::metadata(&cfg_path)
+                        && let Ok(mtime) = meta.modified()
+                            && self.last_config_mtime.is_none_or(|last| mtime > last) {
                                 self.last_config_mtime = Some(mtime);
                                 self.config = MsuiConfig::load_or_default();
                                 let is_light = msui_core::parse_hex_color(&self.config.gui.background)
-                                    .map_or(false, |(r, g, b)| (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.45);
+                                    .is_some_and(|(r, g, b)| (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.45);
                                 IS_LIGHT_BAR.store(is_light, std::sync::atomic::Ordering::Relaxed);
                             }
-                        }
-                    }
-                }
             }
             Message::MetricsTick => {
                 self.system_metrics = self.system_monitor.sample();
@@ -511,7 +508,7 @@ impl Bar {
                 self.notification_count = msui_core::GLOBAL_NOTIFICATIONS.lock().unwrap().unread_count();
 
                 self.metrics_tick_count = self.metrics_tick_count.wrapping_add(1);
-                if self.metrics_tick_count % 15 == 0 {
+                if self.metrics_tick_count.is_multiple_of(15) {
                     unsafe {
                         libc::malloc_trim(0);
                     }
@@ -713,8 +710,8 @@ impl Bar {
             left_row = left_row.push(ws_row);
         }
 
-        if self.config.bar.show_active_window {
-            if let Some((class, title)) = &self.active_window {
+        if self.config.bar.show_active_window
+            && let Some((class, title)) = &self.active_window {
                 let icon = app_icon_for_class(class);
                 let display_title = if title.trim().is_empty() {
                     class.as_str()
@@ -733,11 +730,10 @@ impl Bar {
                     .on_press(Message::OpenDrawer);
                 left_row = left_row.push(win_btn);
             }
-        }
 
         // Media Widget (when playing or paused music exists)
-        if self.config.bar.show_media {
-            if let Some(media) = &self.media_info {
+        if self.config.bar.show_media
+            && let Some(media) = &self.media_info {
                 let symbol = if media.is_playing { "󰏤" } else { "󰐊" };
                 let short_title = if media.title.chars().count() > 20 {
                     let s: String = media.title.chars().take(18).collect();
@@ -756,21 +752,20 @@ impl Bar {
                 let media_group = row![track_btn, play_btn].spacing(2).align_y(Alignment::Center);
                 left_row = left_row.push(media_group);
             }
-        }
 
         // --- Center Section: Clock & Date + Live Reminder Countdown ---
         let mut center_row = row![].spacing(8).align_y(Alignment::Center);
 
         if self.config.bar.show_clock {
-            let clock_widget = button(text(format!("󰃭 {}", &self.current_time)).size(14))
+            let clock_widget = button(text(format!("󰃭 {}", self.current_time)).size(14))
                 .style(bar_btn_transparent)
                 .padding([2, 6])
                 .on_press(Message::OpenControlCenter);
             center_row = center_row.push(clock_widget);
         }
 
-        if self.config.bar.show_reminders_badge {
-            if let Some(reminder) = &self.next_reminder {
+        if self.config.bar.show_reminders_badge
+            && let Some(reminder) = &self.next_reminder {
                 let rem_str = reminder.formatted_remaining();
                 let is_expired = reminder.is_expired();
                 let label = if is_expired {
@@ -784,7 +779,6 @@ impl Bar {
                     .on_press(Message::OpenReminders);
                 center_row = center_row.push(timer_pill);
             }
-        }
 
         // --- Right Section: Hardware & Status ---
         let mut right_row = row![].spacing(6).align_y(Alignment::Center);
@@ -868,8 +862,8 @@ impl Bar {
         }
 
         // Backlight Brightness with +/- controls
-        if self.config.bar.show_brightness {
-            if let Some(b) = &self.brightness_info {
+        if self.config.bar.show_brightness
+            && let Some(b) = &self.brightness_info {
                 let bright_icon = if b.percent > 70 {
                     "󰃠"
                 } else if b.percent > 30 {
@@ -896,7 +890,6 @@ impl Bar {
                     .align_y(Alignment::Center);
                 right_row = right_row.push(bright_group);
             }
-        }
 
         // CPU & RAM stats
         if self.config.bar.show_cpu {
@@ -931,8 +924,8 @@ impl Bar {
         }
 
         // Battery
-        if self.config.bar.show_battery {
-            if let Some(bat) = &self.battery_info {
+        if self.config.bar.show_battery
+            && let Some(bat) = &self.battery_info {
                 let bat_icon = if bat.is_charging {
                     "󰂄"
                 } else if bat.percentage > 90 {
@@ -957,7 +950,6 @@ impl Bar {
                     .on_press(Message::OpenBattery);
                 right_row = right_row.push(bat_btn);
             }
-        }
 
         // Bluetooth Widget
         if self.config.bar.show_bluetooth {
@@ -968,7 +960,7 @@ impl Bar {
                 let name = if first_conn.name.len() > 10 {
                     format!(" {}", &first_conn.name[..10])
                 } else {
-                    format!(" {}", &first_conn.name)
+                    format!(" {}", first_conn.name)
                 };
                 ("󰂱", name)
             } else {
@@ -1226,8 +1218,8 @@ fn spawn_detached(cmd: &mut std::process::Command) {
 fn hyprland_stream() -> impl iced::futures::Stream<Item = Message> {
     iced::stream::channel(100, |mut output: Sender<Message>| async move {
         loop {
-            if let Some(sock_path) = msui_core::HyprlandIpc::socket2_path() {
-                if let Ok(stream) = tokio::net::UnixStream::connect(sock_path).await {
+            if let Some(sock_path) = msui_core::HyprlandIpc::socket2_path()
+                && let Ok(stream) = tokio::net::UnixStream::connect(sock_path).await {
                     let reader = tokio::io::BufReader::new(stream);
                     let mut lines = tokio::io::AsyncBufReadExt::lines(reader);
                     while let Ok(Some(line)) = lines.next_line().await {
@@ -1243,7 +1235,6 @@ fn hyprland_stream() -> impl iced::futures::Stream<Item = Message> {
                         }
                     }
                 }
-            }
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
     })

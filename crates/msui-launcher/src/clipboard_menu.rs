@@ -301,7 +301,7 @@ impl ClipboardMenu {
 
                 let icon = text("󰅍").size(18);
                 let preview_text = text(&entry.preview).size(14);
-                let meta_str = format!("{} • {} chars", &entry.timestamp, entry.char_count);
+                let meta_str = format!("{} • {} chars", entry.timestamp, entry.char_count);
                 let meta_text = text(meta_str).size(11);
 
                 let text_stack = column![preview_text, meta_text].spacing(2);

@@ -359,7 +359,7 @@ impl Launcher {
 
             let title_text = text(&app.name).size(15);
             let desc = if app.comment.is_empty() {
-                format!("Launch {}", &app.name)
+                format!("Launch {}", app.name)
             } else {
                 app.comment.clone()
             };

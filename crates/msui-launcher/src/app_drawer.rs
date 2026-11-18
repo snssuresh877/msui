@@ -833,7 +833,7 @@ impl AppDrawer {
 
                         let app_name = text(&app.name).size(14);
                         let comment_str = if app.comment.is_empty() {
-                            format!("Launch {}", &app.name)
+                            format!("Launch {}", app.name)
                         } else if app.comment.len() > 60 {
                             format!("{}…", &app.comment[..60])
                         } else {

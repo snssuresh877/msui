@@ -36,16 +36,14 @@ impl DisplayManager {
             for entry in entries.flatten() {
                 let path = entry.path();
                 let status_file = path.join("status");
-                if let Ok(status) = std::fs::read_to_string(status_file) {
-                    if status.trim() == "connected" {
-                        if let Some(fname) = path.file_name().and_then(|n| n.to_str()) {
+                if let Ok(status) = std::fs::read_to_string(status_file)
+                    && status.trim() == "connected"
+                        && let Some(fname) = path.file_name().and_then(|n| n.to_str()) {
                             // Format: card1-eDP-1 or card0-HDMI-A-1 -> eDP-1 or HDMI-A-1
                             if let Some(idx) = fname.find('-') {
                                 return Some(fname[idx + 1..].to_string());
                             }
                         }
-                    }
-                }
             }
         }
 
@@ -159,11 +157,10 @@ impl DisplayManager {
             name, mode, scale, transform
         );
 
-        if let Ok(output) = Command::new("hyprctl").args(["eval", &code]).output() {
-            if output.status.success() {
+        if let Ok(output) = Command::new("hyprctl").args(["eval", &code]).output()
+            && output.status.success() {
                 return true;
             }
-        }
 
         false
     }
@@ -237,11 +234,10 @@ impl NightLightManager {
 
     pub fn load_config() -> NightLightConfig {
         let path = Self::config_path();
-        if let Ok(data) = fs::read_to_string(&path) {
-            if let Ok(cfg) = serde_json::from_str(&data) {
+        if let Ok(data) = fs::read_to_string(&path)
+            && let Ok(cfg) = serde_json::from_str(&data) {
                 return cfg;
             }
-        }
         NightLightConfig::default()
     }
 

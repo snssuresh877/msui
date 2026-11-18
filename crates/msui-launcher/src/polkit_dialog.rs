@@ -188,7 +188,7 @@ impl PolkitDialog {
                         }
                     }
                     Key::Named(Named::Enter) => {
-                        return self.update(Message::Submit);
+                        self.update(Message::Submit)
                     }
                     _ => Command::none(),
                 }

@@ -33,15 +33,12 @@ impl ColorEngine {
 
     /// Loads the currently active semantic tokens from cache, or falls back to Midnight.
     pub fn current_tokens() -> SemanticTokens {
-        if let Some(path) = Self::cache_file_path() {
-            if path.exists() {
-                if let Ok(content) = fs::read_to_string(&path) {
-                    if let Ok(tokens) = serde_json::from_str::<SemanticTokens>(&content) {
+        if let Some(path) = Self::cache_file_path()
+            && path.exists()
+                && let Ok(content) = fs::read_to_string(&path)
+                    && let Ok(tokens) = serde_json::from_str::<SemanticTokens>(&content) {
                         return tokens;
                     }
-                }
-            }
-        }
         // Default to Midnight preset
         ColorPreset::find("midnight").unwrap().to_tokens(ColorSchemeMode::Dark)
     }

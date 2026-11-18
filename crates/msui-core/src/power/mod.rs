@@ -75,11 +75,10 @@ fi
 
     pub fn launch_terminal(preferred: &str) {
         let preferred = preferred.trim();
-        if !preferred.is_empty() {
-            if Self::spawn_terminal_cmd(preferred) {
+        if !preferred.is_empty()
+            && Self::spawn_terminal_cmd(preferred) {
                 return;
             }
-        }
 
         const FALLBACK_TERMINALS: &[&str] = &[
             "kitty",
@@ -115,11 +114,10 @@ fi
 
     pub fn launch_btop(preferred: &str) {
         let preferred = preferred.trim();
-        if !preferred.is_empty() {
-            if Self::spawn_btop_cmd(preferred) {
+        if !preferred.is_empty()
+            && Self::spawn_btop_cmd(preferred) {
                 return;
             }
-        }
 
         const FALLBACK_TERMINALS: &[&str] = &[
             "foot",

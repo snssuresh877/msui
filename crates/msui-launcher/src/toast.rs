@@ -220,7 +220,7 @@ impl ToastApp {
         let mut cards = column![].spacing(8);
 
         for (notif, _) in &self.active_notifications {
-            let app_title = text(format!("󰂚 {}", &notif.app_name))
+            let app_title = text(format!("󰂚 {}", notif.app_name))
                 .size(11);
             let time_str = text(&notif.timestamp).size(11);
 

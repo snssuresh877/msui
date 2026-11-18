@@ -63,16 +63,14 @@ impl OsdManager {
 
     pub fn is_osd_running() -> bool {
         let pid_path = Self::pid_path();
-        if pid_path.exists() {
-            if let Ok(content) = fs::read_to_string(&pid_path) {
-                if let Ok(pid) = content.trim().parse::<i32>() {
+        if pid_path.exists()
+            && let Ok(content) = fs::read_to_string(&pid_path)
+                && let Ok(pid) = content.trim().parse::<i32>() {
                     let proc_path = format!("/proc/{}", pid);
                     if Path::new(&proc_path).exists() {
                         return true;
                     }
                 }
-            }
-        }
         false
     }
 
@@ -87,15 +85,13 @@ impl OsdManager {
     }
 
     fn ensure_osd_window() {
-        if !Self::is_osd_running() {
-            if let Ok(exe) = std::env::current_exe() {
-                if let Ok(mut child) = std::process::Command::new(exe).arg("osd-window").spawn() {
+        if !Self::is_osd_running()
+            && let Ok(exe) = std::env::current_exe()
+                && let Ok(mut child) = std::process::Command::new(exe).arg("osd-window").spawn() {
                     std::thread::spawn(move || {
                         let _ = child.wait();
                     });
                 }
-            }
-        }
     }
 
     pub fn trigger_volume(action: &str) {

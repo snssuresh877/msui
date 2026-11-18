@@ -104,13 +104,11 @@ impl HyprlandIpc {
             .args(["activeworkspace", "-j"])
             .output();
 
-        if let Ok(out) = output {
-            if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&out.stdout) {
-                if let Some(id) = val.get("id").and_then(|v| v.as_i64()) {
+        if let Ok(out) = output
+            && let Ok(val) = serde_json::from_slice::<serde_json::Value>(&out.stdout)
+                && let Some(id) = val.get("id").and_then(|v| v.as_i64()) {
                     return id as i32;
                 }
-            }
-        }
         1
     }
 
@@ -270,14 +268,12 @@ impl HyprlandIpc {
         if let Ok(res) = std::process::Command::new("hyprctl")
             .args(["dispatch", &lua_focus])
             .output()
-        {
-            if res.status.success() {
+            && res.status.success() {
                 let stdout = String::from_utf8_lossy(&res.stdout);
                 if stdout.contains("ok") {
                     return true;
                 }
             }
-        }
 
         // 4. Fallback to standard hyprctl
         let _ = std::process::Command::new("hyprctl")
@@ -309,14 +305,13 @@ impl HyprlandIpc {
             .args(["dispatch", &lua_focus])
             .output()
             .await;
-        if let Ok(res) = res {
-            if res.status.success() {
+        if let Ok(res) = res
+            && res.status.success() {
                 let stdout = String::from_utf8_lossy(&res.stdout);
                 if stdout.contains("ok") {
                     return Ok(());
                 }
             }
-        }
 
         // Fallback to standard hyprctl
         let _ = tokio::process::Command::new("hyprctl")
@@ -375,14 +370,13 @@ impl HyprlandIpc {
                         };
                     }
                 }
-                "activewindowv2" => {
-                    if payload.is_empty() {
+                "activewindowv2"
+                    if payload.is_empty() => {
                         return HyprlandEvent::FocusedWindow {
                             class: String::new(),
                             title: String::new(),
                         };
                     }
-                }
                 _ => {}
             }
         }

@@ -28,6 +28,12 @@ pub static GLOBAL_CLIPBOARD: LazyLock<Arc<Mutex<ClipboardStore>>> = LazyLock::ne
     Arc::new(Mutex::new(store))
 });
 
+impl Default for ClipboardStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ClipboardStore {
     pub fn new() -> Self {
         let cache_path = dirs_cache_path();
@@ -63,11 +69,10 @@ impl ClipboardStore {
         }
 
         // Check if identical to the most recent entry
-        if let Some(first) = self.entries.first() {
-            if first.text == text {
+        if let Some(first) = self.entries.first()
+            && first.text == text {
                 return false;
             }
-        }
 
         // Remove if previously existed elsewhere in history (move to top)
         self.entries.retain(|e| e.text != text);
@@ -146,14 +151,12 @@ impl ClipboardStore {
 
     fn load(&mut self) {
         let Some(path) = &self.cache_path else { return; };
-        if path.exists() {
-            if let Ok(data) = fs::read_to_string(path) {
-                if let Ok(loaded) = serde_json::from_str::<Vec<ClipboardEntry>>(&data) {
+        if path.exists()
+            && let Ok(data) = fs::read_to_string(path)
+                && let Ok(loaded) = serde_json::from_str::<Vec<ClipboardEntry>>(&data) {
                     self.next_id = loaded.iter().map(|e| e.id).max().unwrap_or(0) + 1;
                     self.entries = loaded;
                 }
-            }
-        }
     }
 
     fn save(&self) {
@@ -201,11 +204,10 @@ fn dirs_cache_path() -> Option<PathBuf> {
 /// Checks if the Wayland selection offers the `x-kde-passwordManagerHint` MIME type,
 /// indicating that the copied content is a password or secret that should not be stored.
 pub fn is_password_hint_active() -> bool {
-    if let Ok(out) = Command::new("wl-paste").arg("-l").output() {
-        if out.status.success() {
+    if let Ok(out) = Command::new("wl-paste").arg("-l").output()
+        && out.status.success() {
             let types = String::from_utf8_lossy(&out.stdout);
             return types.contains("x-kde-passwordManagerHint");
         }
-    }
     false
 }

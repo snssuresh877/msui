@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct MsuiConfig {
     #[serde(default)]
     pub bar: BarConfig,
@@ -154,11 +155,10 @@ fn default_launcher_layer() -> String { "overlay".into() }
 fn default_placeholder() -> String { "Search applications...".into() }
 fn default_terminal() -> String {
     for term in ["kitty", "foot", "alacritty", "ghostty", "wezterm", "xterm", "gnome-terminal", "konsole"] {
-        if let Ok(child) = std::process::Command::new("which").arg(term).output() {
-            if child.status.success() {
+        if let Ok(child) = std::process::Command::new("which").arg(term).output()
+            && child.status.success() {
                 return term.to_string();
             }
-        }
     }
     "alacritty".into()
 }
@@ -315,18 +315,6 @@ fn default_color_mode() -> String { "dynamic".to_string() }
 fn default_color_scheme() -> String { "dark".to_string() }
 fn default_active_preset() -> String { "midnight".to_string() }
 
-impl Default for MsuiConfig {
-    fn default() -> Self {
-        Self {
-            bar: BarConfig::default(),
-            launcher: LauncherConfig::default(),
-            power: PowerConfig::default(),
-            gui: GuiConfig::default(),
-            color: ColorConfig::default(),
-            notification: NotificationConfig::default(),
-        }
-    }
-}
 
 impl Default for BarConfig {
     fn default() -> Self {
@@ -393,14 +381,12 @@ impl MsuiConfig {
     }
 
     pub fn load_or_default() -> Self {
-        if let Some(config_path) = Self::default_config_path() {
-            if config_path.exists() {
-                if let Ok(cfg) = Self::load_from_path(&config_path) {
+        if let Some(config_path) = Self::default_config_path()
+            && config_path.exists()
+                && let Ok(cfg) = Self::load_from_path(&config_path) {
                     tracing::info!("Loaded config from {}", config_path.display());
                     return cfg;
                 }
-            }
-        }
         tracing::warn!("Using default msUI configuration");
         Self::default()
     }

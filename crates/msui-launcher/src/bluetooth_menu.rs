@@ -122,19 +122,19 @@ impl BluetoothMenu {
                 });
             }
             Message::Connect(mac) => {
-                self.status_msg = Some(format!("Connecting to {}...", &mac));
+                self.status_msg = Some(format!("Connecting to {}...", mac));
                 let success = BluetoothManager::connect(&mac);
                 self.info = BluetoothManager::read();
                 self.status_msg = Some(if success {
-                    format!("Connected to {}", &mac)
+                    format!("Connected to {}", mac)
                 } else {
-                    format!("Failed to connect to {}", &mac)
+                    format!("Failed to connect to {}", mac)
                 });
             }
             Message::Disconnect(mac) => {
                 BluetoothManager::disconnect(&mac);
                 self.info = BluetoothManager::read();
-                self.status_msg = Some(format!("Disconnected from {}", &mac));
+                self.status_msg = Some(format!("Disconnected from {}", mac));
             }
             Message::StartScan => {
                 BluetoothManager::start_scan();

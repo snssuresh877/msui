@@ -55,11 +55,10 @@ impl StoragePartition {
     }
 
     pub fn display_title(&self) -> String {
-        if let Some(lbl) = &self.label {
-            if !lbl.trim().is_empty() {
+        if let Some(lbl) = &self.label
+            && !lbl.trim().is_empty() {
                 return lbl.clone();
             }
-        }
         if let Some(mp) = &self.mount_point {
             if mp == "/" {
                 return "Root (/)".to_string();
@@ -70,7 +69,7 @@ impl StoragePartition {
             } else if mp == "/boot" {
                 return "Boot (/boot)".to_string();
             } else if mp.starts_with("/run/media/") {
-                let name = mp.split('/').last().unwrap_or("Removable Drive");
+                let name = mp.split('/').next_back().unwrap_or("Removable Drive");
                 return format!("Removable ({})", name);
             }
             return mp.clone();
@@ -198,8 +197,8 @@ impl StorageManager {
             let parent_model = dev.model.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
             let parent_rm = parse_json_bool(dev.rm.as_ref());
 
-            if let Some(ref children) = dev.children {
-                if !children.is_empty() {
+            if let Some(ref children) = dev.children
+                && !children.is_empty() {
                     for child in children {
                         if let Some(part) = Self::convert_device(child, parent_model.as_deref(), parent_rm, &df_map) {
                             partitions.push(part);
@@ -207,7 +206,6 @@ impl StorageManager {
                     }
                     continue;
                 }
-            }
 
             // Top-level device without children (e.g. unpartitioned USB or raw disk)
             if let Some(part) = Self::convert_device(&dev, parent_model.as_deref(), parent_rm, &df_map) {
@@ -266,11 +264,10 @@ impl StorageManager {
 
         // Try to find df telemetry by device path or by mount point
         let mut df_entry = df_map.get(&device_path);
-        if df_entry.is_none() {
-            if let Some(mp) = &mount_point {
+        if df_entry.is_none()
+            && let Some(mp) = &mount_point {
                 df_entry = df_map.get(mp);
             }
-        }
 
         if let Some(entry) = df_entry {
             total_bytes = entry.total_bytes;
@@ -405,17 +402,13 @@ impl StorageManager {
                 continue;
             }
             let path = entry.path();
-            if let Ok(content) = std::fs::read_to_string(path.join("removable")) {
-                if content.trim() == "1" {
-                    if let Ok(size_str) = std::fs::read_to_string(path.join("size")) {
-                        if let Ok(sectors) = size_str.trim().parse::<u64>() {
-                            if sectors > 0 {
+            if let Ok(content) = std::fs::read_to_string(path.join("removable"))
+                && content.trim() == "1"
+                    && let Ok(size_str) = std::fs::read_to_string(path.join("size"))
+                        && let Ok(sectors) = size_str.trim().parse::<u64>()
+                            && sectors > 0 {
                                 return true;
                             }
-                        }
-                    }
-                }
-            }
         }
         false
     }

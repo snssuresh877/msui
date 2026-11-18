@@ -99,9 +99,9 @@ impl LlamaRuntime {
         let state_path = Self::state_file_path();
 
         if state_path.exists() {
-            if let Ok(content) = std::fs::read_to_string(&state_path) {
-                if let Ok(state) = serde_json::from_str::<RuntimeStateFile>(&content) {
-                    if Self::is_pid_alive(state.pid) {
+            if let Ok(content) = std::fs::read_to_string(&state_path)
+                && let Ok(state) = serde_json::from_str::<RuntimeStateFile>(&content)
+                    && Self::is_pid_alive(state.pid) {
                         let ram = Self::get_process_rss_mb(state.pid);
                         return RuntimeStatus {
                             is_running: true,
@@ -113,8 +113,6 @@ impl LlamaRuntime {
                             started_at: Some(state.started_at),
                         };
                     }
-                }
-            }
             let _ = std::fs::remove_file(&state_path);
         }
 
@@ -123,9 +121,8 @@ impl LlamaRuntime {
             .arg("-x")
             .arg("llama-server")
             .output()
-        {
-            if let Ok(txt) = String::from_utf8(output.stdout) {
-                if let Some(first_pid) = txt.lines().next().and_then(|p| p.parse::<u32>().ok()) {
+            && let Ok(txt) = String::from_utf8(output.stdout)
+                && let Some(first_pid) = txt.lines().next().and_then(|p| p.parse::<u32>().ok()) {
                     let ram = Self::get_process_rss_mb(first_pid);
                     return RuntimeStatus {
                         is_running: true,
@@ -137,8 +134,6 @@ impl LlamaRuntime {
                         started_at: None,
                     };
                 }
-            }
-        }
 
         RuntimeStatus {
             is_running: false,
@@ -303,8 +298,8 @@ impl LlamaRuntime {
 
     pub fn record_activity() {
         let state_path = Self::state_file_path();
-        if let Ok(content) = std::fs::read_to_string(&state_path) {
-            if let Ok(mut state) = serde_json::from_str::<RuntimeStateFile>(&content) {
+        if let Ok(content) = std::fs::read_to_string(&state_path)
+            && let Ok(mut state) = serde_json::from_str::<RuntimeStateFile>(&content) {
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -314,7 +309,6 @@ impl LlamaRuntime {
                     let _ = std::fs::write(&state_path, serialized);
                 }
             }
-        }
     }
 
     pub fn check_and_auto_unload(idle_timeout_mins: u64) -> bool {
@@ -322,9 +316,9 @@ impl LlamaRuntime {
             return false;
         }
         let state_path = Self::state_file_path();
-        if let Ok(content) = std::fs::read_to_string(&state_path) {
-            if let Ok(state) = serde_json::from_str::<RuntimeStateFile>(&content) {
-                if Self::is_pid_alive(state.pid) && state.last_activity_epoch > 0 {
+        if let Ok(content) = std::fs::read_to_string(&state_path)
+            && let Ok(state) = serde_json::from_str::<RuntimeStateFile>(&content)
+                && Self::is_pid_alive(state.pid) && state.last_activity_epoch > 0 {
                     let now = std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_default()
@@ -336,8 +330,6 @@ impl LlamaRuntime {
                         return true;
                     }
                 }
-            }
-        }
         false
     }
 

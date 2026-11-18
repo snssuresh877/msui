@@ -60,7 +60,7 @@ pub const PRESETS: &[ColorPreset] = &[
 
 impl ColorPreset {
     pub fn find(id: &str) -> Option<&'static ColorPreset> {
-        let norm = id.to_lowercase().replace(' ', "-").replace('_', "-");
+        let norm = id.to_lowercase().replace([' ', '_'], "-");
         PRESETS.iter().find(|p| p.id == norm)
     }
 

@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct MediaInfo {
     pub player_name: String,
     pub is_playing: bool,
@@ -18,22 +19,6 @@ pub struct MediaInfo {
     pub shuffle: bool,
 }
 
-impl Default for MediaInfo {
-    fn default() -> Self {
-        Self {
-            player_name: String::new(),
-            is_playing: false,
-            title: String::new(),
-            artist: String::new(),
-            album: String::new(),
-            art_url: None,
-            position_secs: 0,
-            length_secs: 0,
-            loop_status: None,
-            shuffle: false,
-        }
-    }
-}
 
 static MEDIA_CACHE: Mutex<Option<(Instant, Option<MediaInfo>)>> = Mutex::new(None);
 static IS_FETCHING_MEDIA: AtomicBool = AtomicBool::new(false);
@@ -45,13 +30,11 @@ impl MediaMonitor {
     /// Returns cached state in ~0.001ms. Never blocks the UI thread on subprocesses.
     pub fn read() -> Option<MediaInfo> {
         // 1. Check in-memory cache (1.5-second TTL)
-        if let Ok(guard) = MEDIA_CACHE.lock() {
-            if let Some((instant, ref info)) = *guard {
-                if instant.elapsed() < Duration::from_millis(1500) {
+        if let Ok(guard) = MEDIA_CACHE.lock()
+            && let Some((instant, ref info)) = *guard
+                && instant.elapsed() < Duration::from_millis(1500) {
                     return info.clone();
                 }
-            }
-        }
 
         // 2. Spawn background thread if not already fetching
         if !IS_FETCHING_MEDIA.swap(true, Ordering::SeqCst) {
@@ -68,11 +51,10 @@ impl MediaMonitor {
         }
 
         // Return existing cached value (or None if very first frame)
-        if let Ok(guard) = MEDIA_CACHE.lock() {
-            if let Some((_, ref info)) = *guard {
+        if let Ok(guard) = MEDIA_CACHE.lock()
+            && let Some((_, ref info)) = *guard {
                 return info.clone();
             }
-        }
 
         None
     }
@@ -187,32 +169,29 @@ impl MediaMonitor {
     }
 
     pub fn play() {
-        if let Ok(mut guard) = MEDIA_CACHE.lock() {
-            if let Some((ref mut instant, Some(ref mut info))) = *guard {
+        if let Ok(mut guard) = MEDIA_CACHE.lock()
+            && let Some((ref mut instant, Some(ref mut info))) = *guard {
                 info.is_playing = true;
                 *instant = Instant::now();
             }
-        }
         let _ = Command::new("playerctl").arg("play").spawn();
     }
 
     pub fn pause() {
-        if let Ok(mut guard) = MEDIA_CACHE.lock() {
-            if let Some((ref mut instant, Some(ref mut info))) = *guard {
+        if let Ok(mut guard) = MEDIA_CACHE.lock()
+            && let Some((ref mut instant, Some(ref mut info))) = *guard {
                 info.is_playing = false;
                 *instant = Instant::now();
             }
-        }
         let _ = Command::new("playerctl").arg("pause").spawn();
     }
 
     pub fn play_pause() {
-        if let Ok(mut guard) = MEDIA_CACHE.lock() {
-            if let Some((ref mut instant, Some(ref mut info))) = *guard {
+        if let Ok(mut guard) = MEDIA_CACHE.lock()
+            && let Some((ref mut instant, Some(ref mut info))) = *guard {
                 info.is_playing = !info.is_playing;
                 *instant = Instant::now();
             }
-        }
         let _ = Command::new("playerctl").arg("play-pause").spawn();
     }
 

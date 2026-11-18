@@ -54,7 +54,7 @@ fn encode_hex(bytes: &[u8]) -> String {
 }
 
 fn decode_hex(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 != 0 {
+    if !s.len().is_multiple_of(2) {
         return None;
     }
     (0..s.len())
@@ -65,7 +65,7 @@ fn decode_hex(s: &str) -> Option<Vec<u8>> {
 
 impl IpcCommand {
     pub fn parse(s: &str) -> Self {
-        let parts: Vec<&str> = s.trim().split_whitespace().collect();
+        let parts: Vec<&str> = s.split_whitespace().collect();
         match parts.as_slice() {
             ["toggle", target] => IpcCommand::Toggle(target.to_string()),
             ["bar", "toggle"] | ["bar"] => IpcCommand::Toggle("bar".to_string()),
@@ -178,6 +178,12 @@ pub struct IpcServer {
     is_running: Arc<AtomicBool>,
 }
 
+impl Default for IpcServer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IpcServer {
     pub fn new() -> Self {
         Self {
@@ -216,8 +222,8 @@ impl IpcServer {
                     let mut buf_reader = BufReader::new(reader);
                     let mut line = String::new();
 
-                    if let Ok(bytes) = buf_reader.read_line(&mut line).await {
-                        if bytes > 0 {
+                    if let Ok(bytes) = buf_reader.read_line(&mut line).await
+                        && bytes > 0 {
                             let cmd = IpcCommand::parse(&line);
                             let resp = match &cmd {
                                 IpcCommand::Ping => "PONG\n".to_string(),
@@ -241,7 +247,6 @@ impl IpcServer {
                             let _ = writer.write_all(resp.as_bytes()).await;
                             let _ = writer.flush().await;
                         }
-                    }
                 });
             }
             let _ = std::fs::remove_file(socket_path_clone);

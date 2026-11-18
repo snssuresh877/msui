@@ -168,26 +168,22 @@ pub async fn query_tray_item_properties(
     if let Ok(Ok(msg)) = reply {
 
         if let Ok(dict) = msg.body().deserialize::<HashMap<String, OwnedValue>>() {
-            if let Some(val) = dict.get("Id") {
-                if let Ok(s) = <&str>::try_from(val) {
+            if let Some(val) = dict.get("Id")
+                && let Ok(s) = <&str>::try_from(val) {
                     id = s.to_string();
                 }
-            }
-            if let Some(val) = dict.get("Title") {
-                if let Ok(s) = <&str>::try_from(val) {
+            if let Some(val) = dict.get("Title")
+                && let Ok(s) = <&str>::try_from(val) {
                     title = s.to_string();
                 }
-            }
-            if let Some(val) = dict.get("IconName") {
-                if let Ok(s) = <&str>::try_from(val) {
+            if let Some(val) = dict.get("IconName")
+                && let Ok(s) = <&str>::try_from(val) {
                     icon_name = s.to_string();
                 }
-            }
-            if let Some(val) = dict.get("IconAccessibleDesc") {
-                if let Ok(s) = <&str>::try_from(val) {
+            if let Some(val) = dict.get("IconAccessibleDesc")
+                && let Ok(s) = <&str>::try_from(val) {
                     tooltip = s.to_string();
                 }
-            }
         }
     } else {
         // Fallback: Individual property gets
@@ -200,13 +196,10 @@ pub async fn query_tray_item_properties(
                 &("org.kde.StatusNotifierItem", "Id"),
             )
             .await
-        {
-            if let Ok(val) = msg.body().deserialize::<OwnedValue>() {
-                if let Ok(s) = <&str>::try_from(&val) {
+            && let Ok(val) = msg.body().deserialize::<OwnedValue>()
+                && let Ok(s) = <&str>::try_from(&val) {
                     id = s.to_string();
                 }
-            }
-        }
         if let Ok(msg) = conn
             .call_method(
                 Some(service),
@@ -216,13 +209,10 @@ pub async fn query_tray_item_properties(
                 &("org.kde.StatusNotifierItem", "Title"),
             )
             .await
-        {
-            if let Ok(val) = msg.body().deserialize::<OwnedValue>() {
-                if let Ok(s) = <&str>::try_from(&val) {
+            && let Ok(val) = msg.body().deserialize::<OwnedValue>()
+                && let Ok(s) = <&str>::try_from(&val) {
                     title = s.to_string();
                 }
-            }
-        }
         if let Ok(msg) = conn
             .call_method(
                 Some(service),
@@ -232,13 +222,10 @@ pub async fn query_tray_item_properties(
                 &("org.kde.StatusNotifierItem", "IconName"),
             )
             .await
-        {
-            if let Ok(val) = msg.body().deserialize::<OwnedValue>() {
-                if let Ok(s) = <&str>::try_from(&val) {
+            && let Ok(val) = msg.body().deserialize::<OwnedValue>()
+                && let Ok(s) = <&str>::try_from(&val) {
                     icon_name = s.to_string();
                 }
-            }
-        }
     }
 
     if title.is_empty() || title.starts_with(':') {
@@ -253,9 +240,9 @@ pub async fn query_tray_item_properties(
             )
             .await;
 
-        if let Ok(msg) = pid_reply {
-            if let Ok((pid,)) = msg.body().deserialize::<(u32,)>() {
-                if let Ok(comm) = std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
+        if let Ok(msg) = pid_reply
+            && let Ok((pid,)) = msg.body().deserialize::<(u32,)>()
+                && let Ok(comm) = std::fs::read_to_string(format!("/proc/{}/comm", pid)) {
                     let clean = comm.trim().to_string();
                     if !clean.is_empty() {
                         title = clean.clone();
@@ -264,8 +251,6 @@ pub async fn query_tray_item_properties(
                         }
                     }
                 }
-            }
-        }
     }
 
     if title.is_empty() {
@@ -306,21 +291,19 @@ pub async fn discover_existing_tray_items(conn: &Connection) {
         )
         .await;
 
-    if let Ok(msg) = reply {
-        if let Ok((names,)) = msg.body().deserialize::<(Vec<String>,)>() {
+    if let Ok(msg) = reply
+        && let Ok((names,)) = msg.body().deserialize::<(Vec<String>,)>() {
             for name in names {
-                if name.starts_with("org.kde.StatusNotifierItem-") {
-                    if let Some(item) =
+                if name.starts_with("org.kde.StatusNotifierItem-")
+                    && let Some(item) =
                         query_tray_item_properties(conn, &name, "/StatusNotifierItem").await
                     {
                         let mut items = GLOBAL_TRAY_ITEMS.write().unwrap();
                         items.retain(|i| i.service != item.service);
                         items.push(item);
                     }
-                }
             }
         }
-    }
 }
 
 /// Run the StatusNotifierWatcher service daemon

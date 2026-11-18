@@ -139,6 +139,12 @@ pub struct PolkitAgent {
     active_child_pid: Arc<AtomicU32>,
 }
 
+impl Default for PolkitAgent {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PolkitAgent {
     pub fn new() -> Self {
         Self {
@@ -163,14 +169,12 @@ impl PolkitAgent {
         // Resolve target user
         let mut target_user = "root".to_string();
         for (kind, dict) in &identities {
-            if kind == "unix-user" {
-                if let Some(uid_val) = dict.get("uid") {
-                    if let Ok(uid) = u32::try_from(uid_val) {
+            if kind == "unix-user"
+                && let Some(uid_val) = dict.get("uid")
+                    && let Ok(uid) = u32::try_from(uid_val) {
                         target_user = username_for_uid(uid);
                         break;
                     }
-                }
-            }
         }
 
         // Resolve command line
@@ -305,11 +309,10 @@ pub fn username_for_uid(uid: u32) -> String {
 
 /// Retrieve the current logind session ID
 pub async fn get_logind_session_id(conn: &Connection) -> Option<String> {
-    if let Ok(id) = env::var("XDG_SESSION_ID") {
-        if !id.is_empty() {
+    if let Ok(id) = env::var("XDG_SESSION_ID")
+        && !id.is_empty() {
             return Some(id);
         }
-    }
 
     // Fallback: Query systemd-logind over D-Bus for this process
     let pid = std::process::id();
@@ -323,14 +326,13 @@ pub async fn get_logind_session_id(conn: &Connection) -> Option<String> {
         )
         .await;
 
-    if let Ok(msg) = reply {
-        if let Ok(session_path) = msg.body().deserialize::<(zbus::zvariant::OwnedObjectPath,)>() {
+    if let Ok(msg) = reply
+        && let Ok(session_path) = msg.body().deserialize::<(zbus::zvariant::OwnedObjectPath,)>() {
             let path_str = session_path.0.to_string();
-            if let Some(id) = path_str.split('/').last() {
+            if let Some(id) = path_str.split('/').next_back() {
                 return Some(id.to_string());
             }
         }
-    }
 
     None
 }

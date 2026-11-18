@@ -561,8 +561,8 @@ impl SettingsPanel {
                 }
             }
             SettingsMessage::WallpaperNext => {
-                if let Some(next) = WallpaperManager::cycle() {
-                    if self.config.color.mode == "dynamic" {
+                if let Some(next) = WallpaperManager::cycle()
+                    && self.config.color.mode == "dynamic" {
                         let mode = if self.is_light_theme() {
                             ColorSchemeMode::Light
                         } else {
@@ -574,11 +574,10 @@ impl SettingsPanel {
                             let _ = self.config.save_to_default_path();
                         }
                     }
-                }
             }
             SettingsMessage::WallpaperRandom => {
-                if let Some(next) = WallpaperManager::random() {
-                    if self.config.color.mode == "dynamic" {
+                if let Some(next) = WallpaperManager::random()
+                    && self.config.color.mode == "dynamic" {
                         let mode = if self.is_light_theme() {
                             ColorSchemeMode::Light
                         } else {
@@ -590,7 +589,6 @@ impl SettingsPanel {
                             let _ = self.config.save_to_default_path();
                         }
                     }
-                }
             }
             SettingsMessage::SetBarPosition(pos) => {
                 self.config.bar.anchor = pos;
@@ -683,11 +681,7 @@ impl SettingsPanel {
             }
             SettingsMessage::SetGuiBorderWidth(w) => {
                 self.config.gui.border_width = w;
-                if w <= 0.0 {
-                    self.config.gui.border_enabled = false;
-                } else {
-                    self.config.gui.border_enabled = true;
-                }
+                self.config.gui.border_enabled = w > 0.0;
                 let _ = self.config.save_to_default_path();
             }
             SettingsMessage::SetGuiBackground(bg_hex) => {
@@ -814,7 +808,7 @@ impl SettingsPanel {
             return true;
         }
         msui_core::parse_hex_color(&self.config.gui.background)
-            .map_or(false, |(r, g, b)| (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.45)
+            .is_some_and(|(r, g, b)| (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.45)
     }
 
     pub fn text_primary(&self) -> Color {

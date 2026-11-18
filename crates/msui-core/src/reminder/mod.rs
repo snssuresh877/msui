@@ -103,11 +103,10 @@ impl ReminderManager {
         let mtime = fs::metadata(&path).ok().and_then(|m| m.modified().ok());
         {
             let cache = REMINDER_CACHE.lock().unwrap();
-            if let (Some(cur_mtime), Some(cached_mtime)) = (mtime, cache.last_mtime) {
-                if cur_mtime <= cached_mtime {
+            if let (Some(cur_mtime), Some(cached_mtime)) = (mtime, cache.last_mtime)
+                && cur_mtime <= cached_mtime {
                     return cache.items.clone();
                 }
-            }
         }
 
         let content = match fs::read_to_string(&path) {

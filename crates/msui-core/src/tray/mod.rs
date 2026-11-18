@@ -55,9 +55,9 @@ pub async fn fetch_tray_items_async() -> Vec<TrayItem> {
         )
         .await;
 
-        if let Ok(Ok(msg)) = reply {
-            if let Ok(val) = msg.body().deserialize::<zbus::zvariant::OwnedValue>() {
-                if let Ok(items) = <Vec<String>>::try_from(val) {
+        if let Ok(Ok(msg)) = reply
+            && let Ok(val) = msg.body().deserialize::<zbus::zvariant::OwnedValue>()
+                && let Ok(items) = <Vec<String>>::try_from(val) {
                     let mut result = Vec::new();
                     for item_str in items {
                         let (service, path) = if let Some(idx) = item_str.find('/') {
@@ -74,8 +74,6 @@ pub async fn fetch_tray_items_async() -> Vec<TrayItem> {
                     }
                     return result;
                 }
-            }
-        }
     }
     Vec::new()
 }

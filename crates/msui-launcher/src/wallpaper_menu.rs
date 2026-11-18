@@ -210,13 +210,11 @@ impl WallpaperMenu {
             Message::IcedEvent(Event::Keyboard(KeyboardEvent::KeyPressed {
                 key, modifiers, ..
             })) => {
-                if modifiers.contains(Modifiers::CTRL) {
-                    if let Key::Character(c) = &key {
-                        if c.eq_ignore_ascii_case("r") {
+                if modifiers.contains(Modifiers::CTRL)
+                    && let Key::Character(c) = &key
+                        && c.eq_ignore_ascii_case("r") {
                             return Command::done(Message::RandomWallpaper);
                         }
-                    }
-                }
 
                 match key {
                     Key::Named(Named::Escape) => {

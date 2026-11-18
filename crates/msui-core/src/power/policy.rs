@@ -97,7 +97,7 @@ impl PowerPolicyEngine {
     /// Returns a list of actions to execute (profile change, notifications, or emergency suspend).
     pub fn evaluate(&mut self, bat: Option<&BatteryInfo>, cpu_percent: f32) -> Vec<PolicyAction> {
         let mut actions = Vec::new();
-        let is_ac = bat.map_or(true, |b| b.is_ac_online);
+        let is_ac = bat.is_none_or(|b| b.is_ac_online);
         let bat_percent = bat.map(|b| b.percentage).unwrap_or(100);
 
         // Safety thresholds on battery ALWAYS evaluate regardless of mode or manual override

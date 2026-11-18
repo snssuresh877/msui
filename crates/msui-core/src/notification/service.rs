@@ -69,15 +69,12 @@ impl NotificationServer {
         if !IS_UNIFIED_DAEMON.load(std::sync::atomic::Ordering::Relaxed)
             && !crate::notification::DndManager::is_dnd_enabled()
             && !is_toast_running()
-        {
-            if let Ok(exe) = std::env::current_exe() {
-                if let Ok(mut child) = std::process::Command::new(exe).arg("toast").spawn() {
+            && let Ok(exe) = std::env::current_exe()
+                && let Ok(mut child) = std::process::Command::new(exe).arg("toast").spawn() {
                     std::thread::spawn(move || {
                         let _ = child.wait();
                     });
                 }
-            }
-        }
 
         notif_id
     }

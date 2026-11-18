@@ -384,13 +384,11 @@ impl UnifiedShell {
             tracing::info!("Closing active modal {:?}", self.active_modal.as_ref().map(|m| m.kind()));
             tasks.push(iced::window::close(id));
         }
-        if let Some(req) = self.polkit_request.take() {
-            if let Ok(mut guard) = req.responder.lock() {
-                if let Some(tx) = guard.take() {
+        if let Some(req) = self.polkit_request.take()
+            && let Ok(mut guard) = req.responder.lock()
+                && let Some(tx) = guard.take() {
                     let _ = tx.send(false);
                 }
-            }
-        }
         self.active_modal = None;
         #[cfg(target_os = "linux")]
         unsafe {
@@ -1080,21 +1078,18 @@ impl UnifiedShell {
                     _ => Task::none(),
                 };
 
-                if let Some(modal) = &self.active_modal {
-                    if modal.should_close() {
+                if let Some(modal) = &self.active_modal
+                    && modal.should_close() {
                         if let ActiveModal::Polkit(dlg) = modal {
                             let success = dlg.auth_success().unwrap_or(false);
-                            if let Some(req) = self.polkit_request.take() {
-                                if let Ok(mut guard) = req.responder.lock() {
-                                    if let Some(tx) = guard.take() {
+                            if let Some(req) = self.polkit_request.take()
+                                && let Ok(mut guard) = req.responder.lock()
+                                    && let Some(tx) = guard.take() {
                                         let _ = tx.send(success);
                                     }
-                                }
-                            }
                         }
                         return Task::batch([cmd, self.close_active_modal()]);
                     }
-                }
                 cmd
             }
             DaemonMessage::Toast(msg) => {
@@ -1136,11 +1131,10 @@ impl UnifiedShell {
             }
             DaemonMessage::Osd(msg) => {
                 let osd_cmd = self.osd.update(msg).map(DaemonMessage::Osd);
-                if !self.osd.is_active() {
-                    if let Some(oid) = self.osd_id.take() {
+                if !self.osd.is_active()
+                    && let Some(oid) = self.osd_id.take() {
                         return Task::batch([osd_cmd, iced::window::close(oid)]);
                     }
-                }
                 osd_cmd
             }
             DaemonMessage::Ipc(cmd) => {
@@ -1185,11 +1179,10 @@ impl UnifiedShell {
                             "settings" | "systemcontrol" | "control-panel" | "topbar" | "bar-settings" => "settings",
                             other => other,
                         };
-                        if let Some(ActiveModal::ControlCenter(_)) = &mut self.active_modal {
-                            if target == "control" || target == "quicksettings" || target == "cc" {
+                        if let Some(ActiveModal::ControlCenter(_)) = &mut self.active_modal
+                            && (target == "control" || target == "quicksettings" || target == "cc") {
                                 return Task::none();
                             }
-                        }
                         if self.active_modal.as_ref().map(|m| m.kind()) != Some(target_norm) {
                             self.toggle_modal(&target)
                         } else {
@@ -1363,13 +1356,11 @@ impl UnifiedShell {
                 if let Some(mid) = self.modal_id.take() {
                     tasks.push(iced::window::close(mid));
                 }
-                if let Some(old_req) = self.polkit_request.take() {
-                    if let Ok(mut guard) = old_req.responder.lock() {
-                        if let Some(tx) = guard.take() {
+                if let Some(old_req) = self.polkit_request.take()
+                    && let Ok(mut guard) = old_req.responder.lock()
+                        && let Some(tx) = guard.take() {
                             let _ = tx.send(false);
                         }
-                    }
-                }
                 self.polkit_request = Some(req.clone());
 
                 let output_option = OutputOption::Active;
@@ -1402,14 +1393,13 @@ impl UnifiedShell {
                 self.active_modal = Some(ActiveModal::Polkit(dlg));
                 tasks.push(open_task);
                 tasks.push(init_cmd.map(|m| DaemonMessage::Modal(ModalMessage::Polkit(m))));
-                return Task::batch(tasks);
+                Task::batch(tasks)
             }
             DaemonMessage::PolkitCancel(cookie) => {
-                if let Some(req) = &self.polkit_request {
-                    if req.cookie == cookie {
+                if let Some(req) = &self.polkit_request
+                    && req.cookie == cookie {
                         return self.close_active_modal();
                     }
-                }
                 Task::none()
             }
             DaemonMessage::WindowClosed(id) => {
@@ -1428,13 +1418,11 @@ impl UnifiedShell {
                 if Some(id) == self.modal_id {
                     self.modal_id = None;
                     self.active_modal = None;
-                    if let Some(req) = self.polkit_request.take() {
-                        if let Ok(mut guard) = req.responder.lock() {
-                            if let Some(tx) = guard.take() {
+                    if let Some(req) = self.polkit_request.take()
+                        && let Ok(mut guard) = req.responder.lock()
+                            && let Some(tx) = guard.take() {
                                 let _ = tx.send(false);
                             }
-                        }
-                    }
                 }
                 #[cfg(target_os = "linux")]
                 unsafe {
@@ -1445,12 +1433,11 @@ impl UnifiedShell {
             DaemonMessage::PowerTick => {
                 let bat = self.battery_monitor.read();
                 let is_ac = bat.as_ref().map(|b| b.is_ac_online).unwrap_or(true);
-                if let Some(last_ac) = self.last_is_ac_online {
-                    if last_ac != is_ac {
+                if let Some(last_ac) = self.last_is_ac_online
+                    && last_ac != is_ac {
                         tracing::info!("Power source changed: AC online = {}. Resetting power policy manual override.", is_ac);
                         self.power_policy_engine.on_power_source_change(is_ac);
                     }
-                }
                 self.last_is_ac_online = Some(is_ac);
 
                 let metrics = self.system_monitor.sample();
@@ -1565,18 +1552,16 @@ fn spawn_config_file_watcher() {
         }
 
         let mut watch_dirs = Vec::new();
-        if let Some(cfg_path) = MsuiConfig::default_config_path() {
-            if let Some(parent) = cfg_path.parent() {
+        if let Some(cfg_path) = MsuiConfig::default_config_path()
+            && let Some(parent) = cfg_path.parent() {
                 let _ = std::fs::create_dir_all(parent);
                 watch_dirs.push(parent.to_path_buf());
             }
-        }
-        if let Some(theme_path) = ThemeManager::cache_file_path() {
-            if let Some(parent) = theme_path.parent() {
+        if let Some(theme_path) = ThemeManager::cache_file_path()
+            && let Some(parent) = theme_path.parent() {
                 let _ = std::fs::create_dir_all(parent);
                 watch_dirs.push(parent.to_path_buf());
             }
-        }
 
         for dir in &watch_dirs {
             let mut c_path = dir.as_os_str().as_bytes().to_vec();

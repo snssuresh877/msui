@@ -40,13 +40,11 @@ impl AudioMonitor {
     /// Returns cached state in ~0.001ms. Never blocks the UI thread on subprocesses.
     pub fn read() -> AudioInfo {
         // 1. Check in-memory cache (1.5-second TTL)
-        if let Ok(guard) = AUDIO_CACHE.lock() {
-            if let Some((instant, ref info)) = *guard {
-                if instant.elapsed() < Duration::from_millis(1500) {
+        if let Ok(guard) = AUDIO_CACHE.lock()
+            && let Some((instant, ref info)) = *guard
+                && instant.elapsed() < Duration::from_millis(1500) {
                     return info.clone();
                 }
-            }
-        }
 
         // 2. Spawn background thread if not already fetching
         if !IS_FETCHING_AUDIO.swap(true, Ordering::SeqCst) {
@@ -68,11 +66,10 @@ impl AudioMonitor {
         }
 
         // Return existing cached value (or default if very first frame)
-        if let Ok(guard) = AUDIO_CACHE.lock() {
-            if let Some((_, ref info)) = *guard {
+        if let Ok(guard) = AUDIO_CACHE.lock()
+            && let Some((_, ref info)) = *guard {
                 return info.clone();
             }
-        }
 
         AudioInfo::default()
     }
@@ -301,15 +298,14 @@ impl AudioMonitor {
             if name.ends_with(".monitor") {
                 continue;
             }
-            if let Some(props) = item.get("properties") {
-                if props
+            if let Some(props) = item.get("properties")
+                && props
                     .get("device.class")
                     .and_then(|v| v.as_str())
                     == Some("monitor")
                 {
                     continue;
                 }
-            }
 
             let description = item
                 .get("description")

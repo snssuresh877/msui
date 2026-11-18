@@ -141,7 +141,7 @@ impl BatteryMenu {
             Message::ResetToAdaptive => {
                 self.auto_adaptive = true;
                 self.is_manual_override = false;
-                let is_ac = self.battery_info.as_ref().map_or(true, |b| b.is_ac_online);
+                let is_ac = self.battery_info.as_ref().is_none_or(|b| b.is_ac_online);
                 let target = if is_ac { PowerProfile::Balanced } else { PowerProfile::PowerSaver };
                 PowerProfileManager::set_profile(target);
                 self.profile = target;
@@ -265,7 +265,7 @@ impl BatteryMenu {
             );
         }
 
-        let is_ac = self.battery_info.as_ref().map_or(true, |b| b.is_ac_online);
+        let is_ac = self.battery_info.as_ref().is_none_or(|b| b.is_ac_online);
         let adaptive_banner: Element<'_, Message> = if self.is_manual_override {
             container(
                 row![

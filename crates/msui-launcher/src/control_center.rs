@@ -1080,11 +1080,10 @@ impl ControlCenter {
 }
 
 fn spawn_detached(cmd: &str) {
-    if let Ok(exe) = std::env::current_exe() {
-        if let Ok(mut child) = std::process::Command::new(exe).arg(cmd).spawn() {
+    if let Ok(exe) = std::env::current_exe()
+        && let Ok(mut child) = std::process::Command::new(exe).arg(cmd).spawn() {
             std::thread::spawn(move || {
                 let _ = child.wait();
             });
         }
-    }
 }

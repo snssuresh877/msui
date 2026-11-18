@@ -11,14 +11,12 @@ use tokio::time::sleep;
 /// back to low-frequency adaptive polling with idle backoff.
 pub async fn start_clipboard_watcher() {
     // Initial read of current clipboard content (skips passwords)
-    if !is_password_hint_active() {
-        if let Ok(Some(current)) = tokio::task::spawn_blocking(ClipboardStore::read_system).await {
-            if !current.trim().is_empty() {
+    if !is_password_hint_active()
+        && let Ok(Some(current)) = tokio::task::spawn_blocking(ClipboardStore::read_system).await
+            && !current.trim().is_empty() {
                 let mut store = GLOBAL_CLIPBOARD.lock().unwrap();
                 store.add(current);
             }
-        }
-    }
 
     // Attempt event-driven watcher via `wl-paste --watch <msui_exe> clipboard-ingest`
     let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("msui"));
@@ -50,8 +48,8 @@ pub async fn start_clipboard_watcher() {
 
     loop {
         sleep(poll_interval).await;
-        if !is_password_hint_active() {
-            if let Ok(Some(current)) = tokio::task::spawn_blocking(ClipboardStore::read_system).await {
+        if !is_password_hint_active()
+            && let Ok(Some(current)) = tokio::task::spawn_blocking(ClipboardStore::read_system).await {
                 if !current.trim().is_empty() && current != last_seen {
                     last_seen = current.clone();
                     let mut store = GLOBAL_CLIPBOARD.lock().unwrap();
@@ -61,6 +59,5 @@ pub async fn start_clipboard_watcher() {
                     poll_interval = (poll_interval + Duration::from_millis(500)).min(Duration::from_secs(5));
                 }
             }
-        }
     }
 }

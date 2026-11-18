@@ -153,11 +153,10 @@ impl ReminderMenu {
             }
             Message::Tick => {
                 let newly_expired = ReminderManager::check_and_trigger_expired();
-                if !newly_expired.is_empty() {
-                    if let Some(first) = newly_expired.first() {
+                if !newly_expired.is_empty()
+                    && let Some(first) = newly_expired.first() {
                         self.status_msg = Some(format!("󰥔 Expired: \"{}\"!", first.title));
                     }
-                }
                 self.reminders = ReminderManager::list_active();
             }
             Message::Close => {

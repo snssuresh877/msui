@@ -259,7 +259,7 @@ impl NotificationCenter {
             for (idx, notif) in self.filtered.iter().enumerate() {
                 let is_selected = idx == self.selected_idx;
 
-                let app_title = text(format!("󰂚 {}", &notif.app_name)).size(11);
+                let app_title = text(format!("󰂚 {}", notif.app_name)).size(11);
                 let time_str = text(&notif.timestamp).size(11);
 
                 let close_btn = button(text("✕").size(11))

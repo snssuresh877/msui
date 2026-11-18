@@ -57,7 +57,7 @@ impl WallpaperDaemon {
         let current_path = WallpaperManager::get_current();
         let image_handle = current_path
             .as_ref()
-            .map(|p| image::Handle::from_path(p));
+            .map(image::Handle::from_path);
 
         (
             Self {
@@ -82,7 +82,7 @@ impl WallpaperDaemon {
                 let latest = WallpaperManager::get_current();
                 if latest != self.current_path {
                     self.current_path = latest.clone();
-                    self.image_handle = latest.as_ref().map(|p| image::Handle::from_path(p));
+                    self.image_handle = latest.as_ref().map(image::Handle::from_path);
                 }
             }
         }

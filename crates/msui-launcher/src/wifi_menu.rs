@@ -191,7 +191,7 @@ impl WifiMenu {
                         return Command::done(Message::PromptPassword(net.ssid.clone()));
                     } else {
                         let ssid = net.ssid.clone();
-                        self.status_msg = Some((format!("Connecting to {}...", &ssid), false));
+                        self.status_msg = Some((format!("Connecting to {}...", ssid), false));
                         return Command::perform(
                             async move {
                                 NetworkMonitor::connect_wifi(&ssid, None)
@@ -218,7 +218,7 @@ impl WifiMenu {
                 if let Some(ssid) = self.password_prompt_ssid.take() {
                     let pwd = self.password_input.clone();
                     self.password_input.clear();
-                    self.status_msg = Some((format!("Connecting to \"{}\"...", &ssid), false));
+                    self.status_msg = Some((format!("Connecting to \"{}\"...", ssid), false));
                     return Command::perform(
                         async move {
                             NetworkMonitor::connect_wifi(&ssid, Some(&pwd))
@@ -397,7 +397,7 @@ impl WifiMenu {
                 let ssid = text(&net.ssid).size(14);
 
                 let security_str = if net.is_secure {
-                    format!("󰌾 {}", &net.security)
+                    format!("󰌾 {}", net.security)
                 } else {
                     "Open".to_string()
                 };

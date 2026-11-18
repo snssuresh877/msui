@@ -134,12 +134,12 @@ impl AudioMenu {
             }
             Message::SetDefaultSink(name) => {
                 AudioMonitor::set_default_sink(&name);
-                self.status_msg = Some(format!("Set default output: {}", &name));
+                self.status_msg = Some(format!("Set default output: {}", name));
                 self.sinks = AudioMonitor::list_sinks();
             }
             Message::SetDefaultSource(name) => {
                 AudioMonitor::set_default_source(&name);
-                self.status_msg = Some(format!("Set default input: {}", &name));
+                self.status_msg = Some(format!("Set default input: {}", name));
                 self.sources = AudioMonitor::list_sources();
             }
             Message::SetSinkVolume(name, vol) => {

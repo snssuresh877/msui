@@ -46,18 +46,14 @@ impl ModalManager {
                     return;
                 }
 
-                if let Some((current_target, mut child)) = self.current.take() {
-                    match child.try_wait() {
-                        Ok(None) => {
-                            let _ = child.kill().await;
-                            let _ = child.wait().await;
-                            if current_target == target {
-                                return;
-                            }
+                if let Some((current_target, mut child)) = self.current.take()
+                    && let Ok(None) = child.try_wait() {
+                        let _ = child.kill().await;
+                        let _ = child.wait().await;
+                        if current_target == target {
+                            return;
                         }
-                        _ => {}
                     }
-                }
 
                 let bin = env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("msui"));
                 let mut cmd = tokio::process::Command::new(bin);
@@ -77,19 +73,15 @@ impl ModalManager {
                     return;
                 }
 
-                if let Some((current_target, mut child)) = self.current.take() {
-                    match child.try_wait() {
-                        Ok(None) => {
-                            if current_target == target {
-                                self.current = Some((current_target, child));
-                                return;
-                            }
-                            let _ = child.kill().await;
-                            let _ = child.wait().await;
+                if let Some((current_target, mut child)) = self.current.take()
+                    && let Ok(None) = child.try_wait() {
+                        if current_target == target {
+                            self.current = Some((current_target, child));
+                            return;
                         }
-                        _ => {}
+                        let _ = child.kill().await;
+                        let _ = child.wait().await;
                     }
-                }
 
                 let bin = env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("msui"));
                 let mut cmd = tokio::process::Command::new(bin);
@@ -443,8 +435,8 @@ fn main() -> anyhow::Result<()> {
             return Ok(());
         }
         "bg" | "wallpaper-daemon" => {
-            if let Some(arg2) = args.get(2) {
-                if arg2.starts_with('#') || (arg2.len() == 6 && arg2.chars().all(|c| c.is_ascii_hexdigit())) {
+            if let Some(arg2) = args.get(2)
+                && (arg2.starts_with('#') || (arg2.len() == 6 && arg2.chars().all(|c| c.is_ascii_hexdigit()))) {
                     let mut config = MsuiConfig::load_or_default();
                     config.gui.background = arg2.to_string();
                     config.save_to_default_path()?;
@@ -452,7 +444,6 @@ fn main() -> anyhow::Result<()> {
                     println!("✓ MSUI Universal Background set to: {}", arg2);
                     return Ok(());
                 }
-            }
             if IpcClient::send_blocking(&IpcCommand::Ping).is_ok() {
                 println!("msUI unified daemon is already running (native wallpaper engine active).");
                 return Ok(());
@@ -488,7 +479,7 @@ fn main() -> anyhow::Result<()> {
             match sub {
                 Some("sinks") => {
                     let sinks = msui_core::AudioMonitor::list_sinks();
-                    println!("{:<4} {:<4} {:<6} {:<6} {:<32} {}", "USE", "IDX", "VOL", "MUTE", "NAME", "DESCRIPTION");
+                    println!("{:<4} {:<4} {:<6} {:<6} {:<32} DESCRIPTION", "USE", "IDX", "VOL", "MUTE", "NAME");
                     println!("{}", "-".repeat(75));
                     for s in sinks {
                         let active = if s.is_default { "*" } else { " " };
@@ -498,7 +489,7 @@ fn main() -> anyhow::Result<()> {
                 }
                 Some("sources") => {
                     let sources = msui_core::AudioMonitor::list_sources();
-                    println!("{:<4} {:<4} {:<6} {:<6} {:<32} {}", "USE", "IDX", "VOL", "MUTE", "NAME", "DESCRIPTION");
+                    println!("{:<4} {:<4} {:<6} {:<6} {:<32} DESCRIPTION", "USE", "IDX", "VOL", "MUTE", "NAME");
                     println!("{}", "-".repeat(75));
                     for s in sources {
                         let active = if s.is_default { "*" } else { " " };
@@ -694,7 +685,7 @@ fn main() -> anyhow::Result<()> {
             match sub {
                 Some("list") => {
                     let monitors = msui_core::DisplayManager::list_monitors();
-                    println!("{:<4} {:<8} {:<18} {:<8} {:<10} {}", "IDX", "NAME", "RESOLUTION", "SCALE", "ROTATION", "MODEL");
+                    println!("{:<4} {:<8} {:<18} {:<8} {:<10} MODEL", "IDX", "NAME", "RESOLUTION", "SCALE", "ROTATION");
                     println!("{}", "-".repeat(70));
                     for m in monitors {
                         let res = format!("{}x{}@{:.0}Hz", m.width, m.height, m.refresh_rate);
@@ -1179,7 +1170,7 @@ fn main() -> anyhow::Result<()> {
                     if history.is_empty() {
                         println!("No FShare transfers found in history.");
                     } else {
-                        println!("{:<6} {:<32} {:<12} {}", "DIR", "FILENAME", "SIZE", "TIMESTAMP");
+                        println!("{:<6} {:<32} {:<12} TIMESTAMP", "DIR", "FILENAME", "SIZE");
                         println!("{}", "-".repeat(70));
                         for h in history {
                             let size_mb = h.size_bytes as f64 / (1024.0 * 1024.0);
@@ -1364,11 +1355,10 @@ fn main() -> anyhow::Result<()> {
                         }
                     }
 
-                    if initial_files.is_empty() {
-                        if try_ipc_toggle("fshare") {
+                    if initial_files.is_empty()
+                        && try_ipc_toggle("fshare") {
                             return Ok(());
                         }
-                    }
 
                     tracing::info!("Starting msUI FShare Hub with {} initial file(s)...", initial_files.len());
                     if let Err(e) = msui_launcher::run_fshare_modal(initial_files) {
@@ -1564,11 +1554,7 @@ fn main() -> anyhow::Result<()> {
                     if let Some(w_str) = args.get(3) {
                         if let Ok(w) = w_str.parse::<f32>() {
                             config.gui.border_width = w;
-                            if w <= 0.0 {
-                                config.gui.border_enabled = false;
-                            } else {
-                                config.gui.border_enabled = true;
-                            }
+                            config.gui.border_enabled = w > 0.0;
                             config.save_to_default_path()?;
                             let _ = IpcClient::send_blocking(&IpcCommand::ReloadConfig);
                             println!("✓ MSUI Universal Border Width set to: {}px", w);

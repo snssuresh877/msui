@@ -37,9 +37,9 @@ impl WallpaperManager {
             if let Ok(entries) = fs::read_dir(&dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    if path.is_file() {
-                        if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-                            if valid_extensions.contains(&ext.to_lowercase().as_str()) {
+                    if path.is_file()
+                        && let Some(ext) = path.extension().and_then(|s| s.to_str())
+                            && valid_extensions.contains(&ext.to_lowercase().as_str()) {
                                 let name = path
                                     .file_stem()
                                     .and_then(|s| s.to_str())
@@ -57,14 +57,12 @@ impl WallpaperManager {
                                     size_mb,
                                 });
                             }
-                        }
-                    }
                 }
             }
         }
 
         // Sort alphabetically by name
-        items.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        items.sort_by_key(|a| a.name.to_lowercase());
         items.dedup_by(|a, b| a.path == b.path);
         items
     }
@@ -80,17 +78,15 @@ impl WallpaperManager {
     }
 
     pub fn get_current() -> Option<PathBuf> {
-        if let Some(cache_path) = Self::cache_file_path() {
-            if cache_path.exists() {
-                if let Ok(content) = fs::read_to_string(&cache_path) {
+        if let Some(cache_path) = Self::cache_file_path()
+            && cache_path.exists()
+                && let Ok(content) = fs::read_to_string(&cache_path) {
                     let trimmed = content.trim();
                     let p = PathBuf::from(trimmed);
                     if p.exists() {
                         return Some(p);
                     }
                 }
-            }
-        }
 
         // Fallback to first available wallpaper
         let all = Self::list();
