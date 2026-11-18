@@ -343,7 +343,7 @@ pub fn find_icon_for_class(class: &str) -> Option<PathBuf> {
     None
 }
 
-static APP_CACHE: LazyLock<std::sync::RwLock<Option<Vec<DesktopApp>>>> =
+static APP_CACHE: LazyLock<std::sync::RwLock<Option<(std::time::Instant, Vec<DesktopApp>)>>> =
     LazyLock::new(|| std::sync::RwLock::new(None));
 
 pub fn invalidate_desktop_cache() {
@@ -354,8 +354,10 @@ pub fn invalidate_desktop_cache() {
 
 pub fn scan_desktop_apps() -> Vec<DesktopApp> {
     if let Ok(guard) = APP_CACHE.read() {
-        if let Some(ref cached) = *guard {
-            return cached.clone();
+        if let Some((instant, ref cached)) = *guard {
+            if instant.elapsed() < std::time::Duration::from_secs(60) {
+                return cached.clone();
+            }
         }
     }
 
@@ -430,7 +432,7 @@ pub fn scan_desktop_apps() -> Vec<DesktopApp> {
 
     apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     if let Ok(mut guard) = APP_CACHE.write() {
-        *guard = Some(apps.clone());
+        *guard = Some((std::time::Instant::now(), apps.clone()));
     }
     apps
 }

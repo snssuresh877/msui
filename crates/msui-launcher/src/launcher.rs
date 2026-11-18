@@ -117,8 +117,9 @@ impl Launcher {
 
     pub fn reset(&mut self) -> Command<Message> {
         self.query.clear();
-        msui_core::invalidate_desktop_cache();
-        self.all_apps = scan_desktop_apps();
+        if self.all_apps.is_empty() {
+            self.all_apps = scan_desktop_apps();
+        }
         self.update_filtered();
         self.selected_idx = None;
         self.should_close = false;

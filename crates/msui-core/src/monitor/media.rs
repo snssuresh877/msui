@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MediaInfo {
@@ -32,11 +35,52 @@ impl Default for MediaInfo {
     }
 }
 
+static MEDIA_CACHE: Mutex<Option<(Instant, Option<MediaInfo>)>> = Mutex::new(None);
+static IS_FETCHING_MEDIA: AtomicBool = AtomicBool::new(false);
+
 pub struct MediaMonitor;
 
 impl MediaMonitor {
+    /// Ultra-fast non-blocking media query for the GUI event loop.
+    /// Returns cached state in ~0.001ms. Never blocks the UI thread on subprocesses.
     pub fn read() -> Option<MediaInfo> {
-        Self::read_player(None)
+        // 1. Check in-memory cache (1.5-second TTL)
+        if let Ok(guard) = MEDIA_CACHE.lock() {
+            if let Some((instant, ref info)) = *guard {
+                if instant.elapsed() < Duration::from_millis(1500) {
+                    return info.clone();
+                }
+            }
+        }
+
+        // 2. Spawn background thread if not already fetching
+        if !IS_FETCHING_MEDIA.swap(true, Ordering::SeqCst) {
+            std::thread::Builder::new()
+                .name("msui-media-mon".into())
+                .spawn(move || {
+                    let info = Self::read_player(None);
+                    if let Ok(mut guard) = MEDIA_CACHE.lock() {
+                        *guard = Some((Instant::now(), info));
+                    }
+                    IS_FETCHING_MEDIA.store(false, Ordering::SeqCst);
+                })
+                .ok();
+        }
+
+        // Return existing cached value (or None if very first frame)
+        if let Ok(guard) = MEDIA_CACHE.lock() {
+            if let Some((_, ref info)) = *guard {
+                return info.clone();
+            }
+        }
+
+        None
+    }
+
+    pub fn invalidate_cache() {
+        if let Ok(mut guard) = MEDIA_CACHE.lock() {
+            *guard = None;
+        }
     }
 
     pub fn list_players() -> Vec<String> {
@@ -143,32 +187,54 @@ impl MediaMonitor {
     }
 
     pub fn play() {
+        if let Ok(mut guard) = MEDIA_CACHE.lock() {
+            if let Some((ref mut instant, Some(ref mut info))) = *guard {
+                info.is_playing = true;
+                *instant = Instant::now();
+            }
+        }
         let _ = Command::new("playerctl").arg("play").spawn();
     }
 
     pub fn pause() {
+        if let Ok(mut guard) = MEDIA_CACHE.lock() {
+            if let Some((ref mut instant, Some(ref mut info))) = *guard {
+                info.is_playing = false;
+                *instant = Instant::now();
+            }
+        }
         let _ = Command::new("playerctl").arg("pause").spawn();
     }
 
     pub fn play_pause() {
+        if let Ok(mut guard) = MEDIA_CACHE.lock() {
+            if let Some((ref mut instant, Some(ref mut info))) = *guard {
+                info.is_playing = !info.is_playing;
+                *instant = Instant::now();
+            }
+        }
         let _ = Command::new("playerctl").arg("play-pause").spawn();
     }
 
     pub fn next() {
+        Self::invalidate_cache();
         let _ = Command::new("playerctl").arg("next").spawn();
     }
 
     pub fn previous() {
+        Self::invalidate_cache();
         let _ = Command::new("playerctl").arg("previous").spawn();
     }
 
     pub fn seek(position_secs: u64) {
+        Self::invalidate_cache();
         let _ = Command::new("playerctl")
             .args(["position", &position_secs.to_string()])
             .spawn();
     }
 
     pub fn seek_relative(offset_secs: i64) {
+        Self::invalidate_cache();
         let arg = if offset_secs >= 0 {
             format!("{}+", offset_secs)
         } else {
@@ -180,12 +246,14 @@ impl MediaMonitor {
     }
 
     pub fn toggle_shuffle() {
+        Self::invalidate_cache();
         let _ = Command::new("playerctl")
             .args(["shuffle", "Toggle"])
             .spawn();
     }
 
     pub fn cycle_loop() {
+        Self::invalidate_cache();
         // Playerctl loop can be None, Track, Playlist
         let _ = Command::new("playerctl")
             .args(["loop", "Track"])
