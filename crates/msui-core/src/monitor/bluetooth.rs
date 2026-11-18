@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -20,18 +21,34 @@ pub struct BluetoothInfo {
     pub paired_devices: Vec<BluetoothDevice>,
 }
 
+impl Default for BluetoothInfo {
+    fn default() -> Self {
+        Self {
+            is_available: true,
+            is_powered: false,
+            connected_devices: Vec::new(),
+            paired_devices: Vec::new(),
+        }
+    }
+}
+
 static BLUETOOTH_CACHE: Mutex<Option<(Instant, BluetoothInfo)>> = Mutex::new(None);
+static IS_FETCHING_BLUETOOTH: AtomicBool = AtomicBool::new(false);
 
 pub struct BluetoothManager;
 
 impl BluetoothManager {
+    /// Ultra-fast non-blocking bluetooth query for the GUI event loop.
+    /// Returns cached state in ~0.001ms. Never blocks the UI thread on subprocesses.
     pub fn read() -> BluetoothInfo {
-        // 1. Check in-memory cache (2-second TTL to avoid re-querying in the same frame)
-        if let Ok(guard) = BLUETOOTH_CACHE.lock()
-            && let Some((instant, ref info)) = *guard
-                && instant.elapsed() < Duration::from_secs(2) {
+        // 1. Check in-memory cache (2-second TTL)
+        if let Ok(guard) = BLUETOOTH_CACHE.lock() {
+            if let Some((instant, ref info)) = *guard {
+                if instant.elapsed() < Duration::from_secs(2) {
                     return info.clone();
                 }
+            }
+        }
 
         // 2. Ultra-fast sysfs rfkill check (< 0.05ms, 0 subprocesses)
         if let Ok(entries) = std::fs::read_dir("/sys/class/rfkill") {
@@ -64,7 +81,42 @@ impl BluetoothManager {
             }
         }
 
-        // 3. Bluetooth is unblocked / powered on: query connected and paired devices without timeout sleep
+        // 3. Bluetooth is unblocked / powered on: trigger background fetch if not already in flight
+        if !IS_FETCHING_BLUETOOTH.swap(true, Ordering::SeqCst) {
+            std::thread::Builder::new()
+                .name("msui-bt-mon".into())
+                .spawn(move || {
+                    let info = Self::fetch_bluetooth_info();
+                    if let Ok(mut guard) = BLUETOOTH_CACHE.lock() {
+                        *guard = Some((Instant::now(), info));
+                    }
+                    IS_FETCHING_BLUETOOTH.store(false, Ordering::SeqCst);
+                })
+                .ok();
+        }
+
+        // Return existing cached value (or default if very first frame)
+        if let Ok(guard) = BLUETOOTH_CACHE.lock() {
+            if let Some((_, ref info)) = *guard {
+                return info.clone();
+            }
+        }
+
+        BluetoothInfo {
+            is_available: true,
+            is_powered: true,
+            connected_devices: Vec::new(),
+            paired_devices: Vec::new(),
+        }
+    }
+
+    pub fn invalidate_cache() {
+        if let Ok(mut guard) = BLUETOOTH_CACHE.lock() {
+            *guard = None;
+        }
+    }
+
+    fn fetch_bluetooth_info() -> BluetoothInfo {
         let mut connected_devices = Vec::new();
         let mut paired_devices = Vec::new();
         let mut is_powered = false;
@@ -130,18 +182,12 @@ impl BluetoothManager {
                 }
         }
 
-        let info = BluetoothInfo {
+        BluetoothInfo {
             is_available: true,
             is_powered,
             connected_devices,
             paired_devices,
-        };
-
-        if let Ok(mut guard) = BLUETOOTH_CACHE.lock() {
-            *guard = Some((Instant::now(), info.clone()));
         }
-
-        info
     }
 
     fn guess_icon(name: &str) -> String {
@@ -162,6 +208,7 @@ impl BluetoothManager {
     }
 
     pub fn toggle_power() {
+        Self::invalidate_cache();
         let info = Self::read();
         if info.is_powered {
             let _ = Command::new("bluetoothctl").arg("power").arg("off").status();
@@ -172,6 +219,7 @@ impl BluetoothManager {
     }
 
     pub fn set_power(on: bool) {
+        Self::invalidate_cache();
         if on {
             let _ = Command::new("rfkill").arg("unblock").arg("bluetooth").status();
             let _ = Command::new("bluetoothctl").arg("power").arg("on").status();
@@ -181,6 +229,7 @@ impl BluetoothManager {
     }
 
     pub fn connect(mac: &str) -> bool {
+        Self::invalidate_cache();
         let _ = Command::new("rfkill").arg("unblock").arg("bluetooth").status();
         let _ = Command::new("bluetoothctl").arg("power").arg("on").status();
         if let Ok(status) = Command::new("bluetoothctl").arg("connect").arg(mac).status() {
@@ -191,6 +240,7 @@ impl BluetoothManager {
     }
 
     pub fn disconnect(mac: &str) -> bool {
+        Self::invalidate_cache();
         if let Ok(status) = Command::new("bluetoothctl").arg("disconnect").arg(mac).status() {
             status.success()
         } else {
