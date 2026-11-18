@@ -296,9 +296,7 @@ impl BatteryMonitor {
             "echo {val} > '{p}' && chmod 0666 '{p}' 2>/dev/null; \
              mkdir -p /etc/tmpfiles.d && \
              echo 'z /sys/bus/platform/drivers/ideapad_acpi/*/conservation_mode 0666 root root - -' > /etc/tmpfiles.d/lenovo-conservation.conf 2>/dev/null; \
-             systemd-tmpfiles --create /etc/tmpfiles.d/lenovo-conservation.conf 2>/dev/null || true; \
-             echo 'ACTION==\"add|change\", SUBSYSTEM==\"platform\", RUN+=\"/bin/chmod 0666 /sys/bus/platform/drivers/ideapad_acpi/*/conservation_mode\"' > /etc/udev/rules.d/99-lenovo-conservation.rules 2>/dev/null || true",
-            val = val,
+             echo 'ACTION==\"add|change\", SUBSYSTEM==\"platform\", RUN+=\"/bin/sh -c \\'chmod 0666 /sys/bus/platform/drivers/ideapad_acpi/*/conservation_mode 2>/dev/null || true\\'\"' > /etc/udev/rules.d/99-lenovo-conservation.rules 2>/dev/null || true",
             p = path.display()
         );
 
