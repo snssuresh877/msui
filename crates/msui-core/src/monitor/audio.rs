@@ -33,43 +33,90 @@ pub struct AudioDevice {
 static AUDIO_CACHE: Mutex<Option<(Instant, AudioInfo)>> = Mutex::new(None);
 static IS_FETCHING_AUDIO: AtomicBool = AtomicBool::new(false);
 
+pub(crate) fn update_audio_cache(info: AudioInfo) {
+    if let Ok(mut guard) = AUDIO_CACHE.lock() {
+        *guard = Some((Instant::now(), info));
+    }
+}
+
+pub async fn run_audio_subscriber() -> anyhow::Result<()> {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    use tokio::process::Command;
+
+    tracing::info!("Starting msUI Reactive Audio Subscriber (pactl subscribe)...");
+
+    loop {
+        // Initial sync on start/reconnect
+        let vol = AudioMonitor::read_volume().unwrap_or(50);
+        let mute = AudioMonitor::read_mute().unwrap_or(false);
+        update_audio_cache(AudioInfo {
+            volume_percent: vol,
+            is_muted: mute,
+        });
+
+        let mut child = match Command::new("pactl")
+            .arg("subscribe")
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!("Failed to spawn pactl subscribe: {:?}. Retrying in 5s...", e);
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                continue;
+            }
+        };
+
+        if let Some(stdout) = child.stdout.take() {
+            let reader = BufReader::new(stdout);
+            let mut lines = reader.lines();
+
+            while let Ok(Some(line)) = lines.next_line().await {
+                if line.contains("sink") || line.contains("server") {
+                    let vol = AudioMonitor::read_volume().unwrap_or(50);
+                    let mute = AudioMonitor::read_mute().unwrap_or(false);
+                    update_audio_cache(AudioInfo {
+                        volume_percent: vol,
+                        is_muted: mute,
+                    });
+                }
+            }
+        }
+
+        let _ = child.wait().await;
+        tracing::warn!("pactl subscribe disconnected. Reconnecting in 2s...");
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
+}
+
 pub struct AudioMonitor;
 
 impl AudioMonitor {
     /// Ultra-fast non-blocking audio query for the GUI event loop.
     /// Returns cached state in ~0.001ms. Never blocks the UI thread on subprocesses.
     pub fn read() -> AudioInfo {
-        // 1. Check in-memory cache (1.5-second TTL)
+        // 1. Return in-memory cache maintained by reactive audio subscriber
         if let Ok(guard) = AUDIO_CACHE.lock()
-            && let Some((instant, ref info)) = *guard
-                && instant.elapsed() < Duration::from_millis(1500) {
-                    return info.clone();
-                }
+            && let Some((_, ref info)) = *guard {
+                return info.clone();
+            }
 
-        // 2. Spawn background thread if not already fetching
+        // 2. Initial cold-start fetch if cache is empty
         if !IS_FETCHING_AUDIO.swap(true, Ordering::SeqCst) {
             std::thread::Builder::new()
                 .name("msui-audio-mon".into())
                 .spawn(move || {
                     let volume_percent = Self::read_volume().unwrap_or(50);
                     let is_muted = Self::read_mute().unwrap_or(false);
-                    let info = AudioInfo {
+                    update_audio_cache(AudioInfo {
                         volume_percent,
                         is_muted,
-                    };
-                    if let Ok(mut guard) = AUDIO_CACHE.lock() {
-                        *guard = Some((Instant::now(), info));
-                    }
+                    });
                     IS_FETCHING_AUDIO.store(false, Ordering::SeqCst);
                 })
                 .ok();
         }
-
-        // Return existing cached value (or default if very first frame)
-        if let Ok(guard) = AUDIO_CACHE.lock()
-            && let Some((_, ref info)) = *guard {
-                return info.clone();
-            }
 
         AudioInfo::default()
     }

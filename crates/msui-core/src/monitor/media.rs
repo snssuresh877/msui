@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[derive(Default)]
@@ -23,38 +23,35 @@ pub struct MediaInfo {
 static MEDIA_CACHE: Mutex<Option<(Instant, Option<MediaInfo>)>> = Mutex::new(None);
 static IS_FETCHING_MEDIA: AtomicBool = AtomicBool::new(false);
 
+pub(crate) fn update_media_cache(info: Option<MediaInfo>) {
+    if let Ok(mut guard) = MEDIA_CACHE.lock() {
+        *guard = Some((Instant::now(), info));
+    }
+}
+
 pub struct MediaMonitor;
 
 impl MediaMonitor {
     /// Ultra-fast non-blocking media query for the GUI event loop.
     /// Returns cached state in ~0.001ms. Never blocks the UI thread on subprocesses.
     pub fn read() -> Option<MediaInfo> {
-        // 1. Check in-memory cache (1.5-second TTL)
+        // 1. Return in-memory cache populated by native D-Bus event stream
         if let Ok(guard) = MEDIA_CACHE.lock()
-            && let Some((instant, ref info)) = *guard
-                && instant.elapsed() < Duration::from_millis(1500) {
-                    return info.clone();
-                }
+            && let Some((_, ref info)) = *guard {
+                return info.clone();
+            }
 
-        // 2. Spawn background thread if not already fetching
+        // 2. Initial cold-start fetch if cache is not yet populated
         if !IS_FETCHING_MEDIA.swap(true, Ordering::SeqCst) {
             std::thread::Builder::new()
                 .name("msui-media-mon".into())
                 .spawn(move || {
                     let info = Self::read_player(None);
-                    if let Ok(mut guard) = MEDIA_CACHE.lock() {
-                        *guard = Some((Instant::now(), info));
-                    }
+                    update_media_cache(info);
                     IS_FETCHING_MEDIA.store(false, Ordering::SeqCst);
                 })
                 .ok();
         }
-
-        // Return existing cached value (or None if very first frame)
-        if let Ok(guard) = MEDIA_CACHE.lock()
-            && let Some((_, ref info)) = *guard {
-                return info.clone();
-            }
 
         None
     }
@@ -174,7 +171,11 @@ impl MediaMonitor {
                 info.is_playing = true;
                 *instant = Instant::now();
             }
-        let _ = Command::new("playerctl").arg("play").spawn();
+        tokio::spawn(async {
+            if super::mpris::send_mpris_command("Play").await.is_err() {
+                let _ = Command::new("playerctl").arg("play").spawn();
+            }
+        });
     }
 
     pub fn pause() {
@@ -183,7 +184,11 @@ impl MediaMonitor {
                 info.is_playing = false;
                 *instant = Instant::now();
             }
-        let _ = Command::new("playerctl").arg("pause").spawn();
+        tokio::spawn(async {
+            if super::mpris::send_mpris_command("Pause").await.is_err() {
+                let _ = Command::new("playerctl").arg("pause").spawn();
+            }
+        });
     }
 
     pub fn play_pause() {
@@ -192,17 +197,29 @@ impl MediaMonitor {
                 info.is_playing = !info.is_playing;
                 *instant = Instant::now();
             }
-        let _ = Command::new("playerctl").arg("play-pause").spawn();
+        tokio::spawn(async {
+            if super::mpris::send_mpris_command("PlayPause").await.is_err() {
+                let _ = Command::new("playerctl").arg("play-pause").spawn();
+            }
+        });
     }
 
     pub fn next() {
         Self::invalidate_cache();
-        let _ = Command::new("playerctl").arg("next").spawn();
+        tokio::spawn(async {
+            if super::mpris::send_mpris_command("Next").await.is_err() {
+                let _ = Command::new("playerctl").arg("next").spawn();
+            }
+        });
     }
 
     pub fn previous() {
         Self::invalidate_cache();
-        let _ = Command::new("playerctl").arg("previous").spawn();
+        tokio::spawn(async {
+            if super::mpris::send_mpris_command("Previous").await.is_err() {
+                let _ = Command::new("playerctl").arg("previous").spawn();
+            }
+        });
     }
 
     pub fn seek(position_secs: u64) {

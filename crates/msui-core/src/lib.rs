@@ -27,6 +27,7 @@ pub use polkit::{
     verify_polkit_credentials, PolkitAgent, PolkitRequest,
 };
 pub use monitor::{
+    run_audio_subscriber, run_mpris_listener, get_active_player,
     AudioDevice, AudioInfo, AudioMonitor, BatteryInfo, BatteryMonitor, BatteryStatus, BluetoothDevice,
     BluetoothInfo, BluetoothManager, BrightnessInfo, BrightnessMonitor, DisplayManager, DisplayMonitorInfo,
     MediaInfo, MediaMonitor, NetworkInfo, NetworkMonitor, NightLightConfig, NightLightManager,

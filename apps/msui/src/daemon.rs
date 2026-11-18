@@ -1608,6 +1608,16 @@ pub fn run_daemon(config: MsuiConfig) -> anyhow::Result<()> {
             tokio::spawn(msui_core::start_clipboard_watcher());
             tokio::spawn(msui_core::run_notification_service());
             tokio::spawn(msui_core::run_tray_watcher());
+            tokio::spawn(async {
+                if let Err(e) = msui_core::run_mpris_listener().await {
+                    tracing::warn!("msUI MPRIS listener error: {:?}", e);
+                }
+            });
+            tokio::spawn(async {
+                if let Err(e) = msui_core::run_audio_subscriber().await {
+                    tracing::warn!("msUI Audio subscriber error: {:?}", e);
+                }
+            });
             spawn_config_file_watcher();
             tokio::spawn(async {
                 if let Err(e) = msui_core::run_polkit_agent().await {
