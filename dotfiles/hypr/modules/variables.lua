@@ -32,7 +32,7 @@ Apps = {
 
 	browser = "firefox",
 
-	fileManager = "thunar",
+	fileManager = "flea",
 
 	codeEditor = "foot -e nvim",
 
