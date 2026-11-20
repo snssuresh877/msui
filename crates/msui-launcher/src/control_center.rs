@@ -447,12 +447,23 @@ impl ControlCenter {
                 let _ = self.config.save_to_default_path();
             }
             Message::ToggleWifi => {
-                let turn_on = !self.network_info.is_connected && self.network_info.ssid.is_none();
-                let _ = std::process::Command::new("nmcli")
-                    .args(["radio", "wifi", if turn_on { "on" } else { "off" }])
-                    .output();
-                std::thread::sleep(std::time::Duration::from_millis(150));
-                return Command::done(Message::Refresh);
+                let turn_on = !self.network_info.wifi_enabled;
+                self.network_info.wifi_enabled = turn_on;
+                if !turn_on {
+                    self.network_info.is_connected = false;
+                    self.network_info.ssid = None;
+                }
+                return Command::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            NetworkMonitor::set_wifi_enabled(turn_on);
+                            std::thread::sleep(std::time::Duration::from_millis(250));
+                        })
+                        .await
+                        .ok();
+                    },
+                    |_| Message::Refresh,
+                );
             }
             Message::OpenWifiManager => {
                 spawn_detached("wifi");
@@ -463,9 +474,18 @@ impl ControlCenter {
                 }
             }
             Message::ToggleBluetooth => {
-                BluetoothManager::toggle_power();
-                std::thread::sleep(std::time::Duration::from_millis(150));
-                return Command::done(Message::Refresh);
+                self.bluetooth_info.is_powered = !self.bluetooth_info.is_powered;
+                return Command::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            BluetoothManager::toggle_power();
+                            std::thread::sleep(std::time::Duration::from_millis(250));
+                        })
+                        .await
+                        .ok();
+                    },
+                    |_| Message::Refresh,
+                );
             }
             Message::OpenBluetoothManager => {
                 spawn_detached("bluetooth");

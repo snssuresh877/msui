@@ -568,13 +568,11 @@ impl UnifiedShell {
                     blur_option,
                     ..Default::default()
                 });
-                let (mut wifi, init_cmd) = WifiMenu::new_embedded();
-                let reset_cmd = wifi.reset().map(|m| DaemonMessage::Modal(ModalMessage::Wifi(m)));
+                let (wifi, init_cmd) = WifiMenu::new_embedded();
                 self.modal_id = Some(mid);
                 self.active_modal = Some(ActiveModal::Wifi(wifi));
                 tasks.push(open_task);
                 tasks.push(init_cmd.map(|m| DaemonMessage::Modal(ModalMessage::Wifi(m))));
-                tasks.push(reset_cmd);
             }
             "bluetooth" => {
                 let (mid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {

@@ -172,8 +172,22 @@ mod tests {
 
     #[test]
     fn test_network_wifi_scan() {
-        let networks = NetworkMonitor::scan_wifi();
-        assert!(networks.len() < usize::MAX);
+        let gen1 = NetworkMonitor::current_generation();
+        let gen2 = NetworkMonitor::next_generation();
+        assert!(gen2 > gen1);
+
+        let cached = NetworkMonitor::cached_access_points();
+        assert!(cached.len() < usize::MAX);
+
+        NetworkMonitor::invalidate_cache();
+        let net = NetworkMonitor::read();
+        let _ = net.is_connected;
+        let _ = net.wifi_enabled;
+        let _ = net.connectivity;
+
+        let _ = NetworkMonitor::has_active_interface();
+        let _ = NetworkMonitor::has_active_ethernet();
+        let _ = NetworkMonitor::is_wifi_enabled();
     }
 
     #[test]

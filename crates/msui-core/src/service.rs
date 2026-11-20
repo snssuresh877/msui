@@ -162,11 +162,7 @@ impl SystemServiceManager {
 
     /// Wi-Fi Radio info
     pub fn wifi_info() -> SystemServiceInfo {
-        let is_active = Command::new("nmcli")
-            .args(["radio", "wifi"])
-            .output()
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim() == "enabled")
-            .unwrap_or(true);
+        let is_active = crate::monitor::NetworkMonitor::is_wifi_enabled();
 
         SystemServiceInfo {
             id: "wifi".to_string(),

@@ -40,6 +40,7 @@ pub fn run_wifi_menu() -> Result<(), iced_exwlshell::Error> {
 pub struct WifiMenu {
     networks: Vec<WifiNetwork>,
     is_enabled: bool,
+    is_scanning: bool,
     selected_idx: usize,
     password_prompt_ssid: Option<String>,
     password_input: String,
@@ -51,8 +52,9 @@ pub struct WifiMenu {
 #[derive(Debug, Clone)]
 pub enum Message {
     ToggleRadio,
+    RadioToggled(bool),
     Rescan,
-    ScanDone(Vec<WifiNetwork>),
+    ScanDone(u64, Vec<WifiNetwork>),
     SelectPrevious,
     SelectNext,
     SelectNetwork(usize),
@@ -62,6 +64,7 @@ pub enum Message {
     CancelPassword,
     ConnectDone(Result<String, String>),
     Disconnect,
+    DisconnectDone(bool),
     Close,
     IcedEvent(Event),
 }
@@ -85,15 +88,35 @@ impl WifiMenu {
     fn new_internal(is_standalone: bool) -> (Self, Command<Message>) {
         let is_enabled = NetworkMonitor::is_wifi_enabled();
         let networks = if is_enabled {
-            NetworkMonitor::scan_wifi()
+            NetworkMonitor::cached_access_points()
         } else {
             Vec::new()
+        };
+
+        let (cmd, is_scanning) = if is_enabled {
+            let gen_id = NetworkMonitor::next_generation();
+            (
+                Command::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            (gen_id, NetworkMonitor::scan_wifi_guarded(gen_id, false))
+                        })
+                        .await
+                        .unwrap_or_else(|_| (gen_id, Vec::new()))
+                    },
+                    |(gen_id, nets)| Message::ScanDone(gen_id, nets),
+                ),
+                true,
+            )
+        } else {
+            (Command::none(), false)
         };
 
         (
             Self {
                 networks,
                 is_enabled,
+                is_scanning,
                 selected_idx: 0,
                 password_prompt_ssid: None,
                 password_input: String::new(),
@@ -101,7 +124,7 @@ impl WifiMenu {
                 is_standalone,
                 should_close: false,
             },
-            Command::none(),
+            cmd,
         )
     }
 
@@ -116,7 +139,7 @@ impl WifiMenu {
     pub fn reset(&mut self) -> Command<Message> {
         self.is_enabled = NetworkMonitor::is_wifi_enabled();
         self.networks = if self.is_enabled {
-            NetworkMonitor::scan_wifi()
+            NetworkMonitor::cached_access_points()
         } else {
             Vec::new()
         };
@@ -124,7 +147,24 @@ impl WifiMenu {
         self.password_input.clear();
         self.status_msg = None;
         self.should_close = false;
-        Command::none()
+
+        if self.is_enabled {
+            self.is_scanning = true;
+            let gen_id = NetworkMonitor::next_generation();
+            Command::perform(
+                async move {
+                    tokio::task::spawn_blocking(move || {
+                        (gen_id, NetworkMonitor::scan_wifi_guarded(gen_id, false))
+                    })
+                    .await
+                    .unwrap_or_else(|_| (gen_id, Vec::new()))
+                },
+                |(gen_id, nets)| Message::ScanDone(gen_id, nets),
+            )
+        } else {
+            self.is_scanning = false;
+            Command::none()
+        }
     }
 
     pub fn namespace() -> String {
@@ -133,38 +173,77 @@ impl WifiMenu {
 
     pub fn subscription(&self) -> iced::Subscription<Message> {
         let events = event::listen().map(Message::IcedEvent);
-        let tick = iced::time::every(Duration::from_secs(6)).map(|_| Message::Rescan);
+        let tick = iced::time::every(Duration::from_secs(12)).map(|_| Message::Rescan);
         iced::Subscription::batch([events, tick])
     }
 
     pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::ToggleRadio => {
-                NetworkMonitor::toggle_wifi_radio();
-                self.is_enabled = NetworkMonitor::is_wifi_enabled();
-                if self.is_enabled {
-                    self.networks = NetworkMonitor::scan_wifi();
-                    self.status_msg = Some(("Wi-Fi enabled".into(), false));
+                let will_enable = !self.is_enabled;
+                self.is_enabled = will_enable;
+                if will_enable {
+                    self.is_scanning = true;
+                    self.status_msg = Some(("Enabling Wi-Fi...".into(), false));
+                    let gen_id = NetworkMonitor::next_generation();
+                    return Command::perform(
+                        async move {
+                            tokio::task::spawn_blocking(move || {
+                                NetworkMonitor::set_wifi_enabled(true);
+                                std::thread::sleep(Duration::from_millis(500));
+                                (gen_id, NetworkMonitor::scan_wifi_guarded(gen_id, true))
+                            })
+                            .await
+                            .unwrap_or_else(|_| (gen_id, Vec::new()))
+                        },
+                        |(gen_id, nets)| Message::ScanDone(gen_id, nets),
+                    );
                 } else {
                     self.networks.clear();
+                    self.is_scanning = false;
                     self.status_msg = Some(("Wi-Fi disabled".into(), false));
-                }
-            }
-            Message::Rescan => {
-                if self.is_enabled {
-                    NetworkMonitor::rescan_wifi();
                     return Command::perform(
-                        async {
-                            tokio::time::sleep(Duration::from_millis(800)).await;
-                            NetworkMonitor::scan_wifi()
+                        async move {
+                            tokio::task::spawn_blocking(move || {
+                                NetworkMonitor::set_wifi_enabled(false);
+                            })
+                            .await
+                            .ok();
                         },
-                        Message::ScanDone,
+                        |_| Message::RadioToggled(false),
                     );
                 }
             }
-            Message::ScanDone(scanned) => {
+            Message::RadioToggled(is_on) => {
+                self.is_enabled = is_on;
+            }
+            Message::Rescan => {
+                if self.is_enabled {
+                    self.is_scanning = true;
+                    let gen_id = NetworkMonitor::next_generation();
+                    return Command::perform(
+                        async move {
+                            tokio::task::spawn_blocking(move || {
+                                NetworkMonitor::rescan_wifi();
+                                std::thread::sleep(Duration::from_millis(400));
+                                (gen_id, NetworkMonitor::scan_wifi_guarded(gen_id, true))
+                            })
+                            .await
+                            .unwrap_or_else(|_| (gen_id, Vec::new()))
+                        },
+                        |(gen_id, nets)| Message::ScanDone(gen_id, nets),
+                    );
+                }
+            }
+            Message::ScanDone(gen_id, scanned) => {
+                if gen_id != NetworkMonitor::current_generation() || !self.is_enabled {
+                    return Command::none();
+                }
+                self.is_scanning = false;
                 self.networks = scanned;
-                self.is_enabled = NetworkMonitor::is_wifi_enabled();
+                if self.selected_idx >= self.networks.len() && !self.networks.is_empty() {
+                    self.selected_idx = 0;
+                }
             }
             Message::SelectNext => {
                 if !self.networks.is_empty() && self.password_prompt_ssid.is_none() {
@@ -194,8 +273,11 @@ impl WifiMenu {
                         self.status_msg = Some((format!("Connecting to {}...", ssid), false));
                         return Command::perform(
                             async move {
-                                NetworkMonitor::connect_wifi(&ssid, None)
-                                    .map(|_| ssid)
+                                tokio::task::spawn_blocking(move || {
+                                    NetworkMonitor::connect_wifi(&ssid, None).map(|_| ssid)
+                                })
+                                .await
+                                .unwrap_or_else(|_| Err("Task cancelled".into()))
                             },
                             Message::ConnectDone,
                         );
@@ -221,8 +303,11 @@ impl WifiMenu {
                     self.status_msg = Some((format!("Connecting to \"{}\"...", ssid), false));
                     return Command::perform(
                         async move {
-                            NetworkMonitor::connect_wifi(&ssid, Some(&pwd))
-                                .map(|_| ssid)
+                            tokio::task::spawn_blocking(move || {
+                                NetworkMonitor::connect_wifi(&ssid, Some(&pwd)).map(|_| ssid)
+                            })
+                            .await
+                            .unwrap_or_else(|_| Err("Task cancelled".into()))
                         },
                         Message::ConnectDone,
                     );
@@ -232,7 +317,18 @@ impl WifiMenu {
                 match result {
                     Ok(ssid) => {
                         self.status_msg = Some((format!("Successfully connected to \"{}\"", ssid), false));
-                        self.networks = NetworkMonitor::scan_wifi();
+                        self.is_scanning = true;
+                        let gen_id = NetworkMonitor::next_generation();
+                        return Command::perform(
+                            async move {
+                                tokio::task::spawn_blocking(move || {
+                                    (gen_id, NetworkMonitor::scan_wifi_guarded(gen_id, true))
+                                })
+                                .await
+                                .unwrap_or_else(|_| (gen_id, Vec::new()))
+                            },
+                            |(gen_id, nets)| Message::ScanDone(gen_id, nets),
+                        );
                     }
                     Err(err) => {
                         self.status_msg = Some((format!("Connection failed: {}", err), true));
@@ -240,9 +336,33 @@ impl WifiMenu {
                 }
             }
             Message::Disconnect => {
-                if NetworkMonitor::disconnect_wifi() {
+                self.status_msg = Some(("Disconnecting...".into(), false));
+                return Command::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            NetworkMonitor::disconnect_wifi()
+                        })
+                        .await
+                        .unwrap_or(false)
+                    },
+                    Message::DisconnectDone,
+                );
+            }
+            Message::DisconnectDone(success) => {
+                if success {
                     self.status_msg = Some(("Disconnected from Wi-Fi".into(), false));
-                    self.networks = NetworkMonitor::scan_wifi();
+                    self.is_scanning = true;
+                    let gen_id = NetworkMonitor::next_generation();
+                    return Command::perform(
+                        async move {
+                            tokio::task::spawn_blocking(move || {
+                                (gen_id, NetworkMonitor::scan_wifi_guarded(gen_id, true))
+                            })
+                            .await
+                            .unwrap_or_else(|_| (gen_id, Vec::new()))
+                        },
+                        |(gen_id, nets)| Message::ScanDone(gen_id, nets),
+                    );
                 } else {
                     self.status_msg = Some(("Failed to disconnect".into(), true));
                 }
@@ -291,10 +411,19 @@ impl WifiMenu {
     pub fn view(&self) -> Element<'_, Message> {
         let title = text("󰤨 Wi-Fi Network Manager").size(18);
 
-        let rescan_btn = button(text("󰑐 Rescan").size(12))
+        let rescan_label = if self.is_scanning {
+            "󰑐 Scanning..."
+        } else {
+            "󰑐 Rescan"
+        };
+        let rescan_btn = button(text(rescan_label).size(12))
             .style(button::secondary)
             .padding([5, 12])
-            .on_press(Message::Rescan);
+            .on_press_maybe(if self.is_scanning || !self.is_enabled {
+                None
+            } else {
+                Some(Message::Rescan)
+            });
 
         let power_label = if self.is_enabled {
             "󰤨 Wi-Fi: ON"
@@ -370,8 +499,13 @@ impl WifiMenu {
                     .align_x(Alignment::Center),
             );
         } else if self.networks.is_empty() {
+            let empty_text = if self.is_scanning {
+                "Scanning for Wi-Fi networks..."
+            } else {
+                "No Wi-Fi networks found. Click 'Rescan' to scan."
+            };
             list_col = list_col.push(
-                container(text("No Wi-Fi networks found. Scanning...").size(13))
+                container(text(empty_text).size(13))
                     .padding(32)
                     .align_x(Alignment::Center),
             );
