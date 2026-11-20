@@ -785,11 +785,7 @@ fn main() -> anyhow::Result<()> {
                         println!("{:<16} {:<6} {:<8} {:<24} {:<32}", "ADDRESS", "WS", "PID", "CLASS", "TITLE");
                         println!("{}", "-".repeat(88));
                         for c in clients {
-                            let title = if c.title.len() > 30 {
-                                format!("{}…", &c.title[..30])
-                            } else {
-                                c.title
-                            };
+                            let title = msui_core::safe_truncate_chars(&c.title, 30);
                             let active_mark = if c.focus_history_id == 0 { "*" } else { " " };
                             println!("{:<16} {:<1}{:<5} {:<8} {:<24} {:<32}", c.address, active_mark, c.workspace.id, c.pid, c.class, title);
                         }

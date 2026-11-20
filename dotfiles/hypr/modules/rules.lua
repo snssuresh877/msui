@@ -53,6 +53,26 @@ hl.window_rule({
 -- 02. SYSTEM UTILITIES & DIALOGS (FLOATING)
 ------------------------------------------------------------
 
+-- msUI Wi-Fi Popdown TUI (wifitui)
+hl.window_rule({
+	match = {
+		class = "^(msui-wifi-tui)$",
+	},
+
+	float = true,
+	pin = true,
+	size = {
+		680,
+		500,
+	},
+	move = {
+		"(monitor_w - 700)",
+		48,
+	},
+	rounding = 14,
+	opacity = "0.98 override 0.95 override 1.0 override",
+})
+
 -- Bluetooth Manager
 hl.window_rule({
 	match = {

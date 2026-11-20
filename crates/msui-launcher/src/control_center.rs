@@ -455,12 +455,7 @@ impl ControlCenter {
                 }
                 return Command::perform(
                     async move {
-                        tokio::task::spawn_blocking(move || {
-                            NetworkMonitor::set_wifi_enabled(turn_on);
-                            std::thread::sleep(std::time::Duration::from_millis(250));
-                        })
-                        .await
-                        .ok();
+                        let _ = msui_core::network::WifiManager::set_radio_enabled(turn_on).await;
                     },
                     |_| Message::Refresh,
                 );

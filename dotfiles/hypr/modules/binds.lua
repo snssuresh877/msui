@@ -31,15 +31,7 @@ hl.bind(MOD .. " + SPACE", hl.dsp.exec_cmd("msui launcher"), {
 	description = "Application launcher",
 })
 
-hl.bind("ALT + TAB", hl.dsp.exec_cmd("msui drawer"), {
-	description = "App Drawer & Task Switcher",
-})
-
 hl.bind(MOD .. " + TAB", hl.dsp.exec_cmd("msui drawer"), {
-	description = "App Drawer & Task Switcher",
-})
-
-hl.bind(MOD .. " + K", hl.dsp.exec_cmd("msui drawer"), {
 	description = "App Drawer & Task Switcher",
 })
 
@@ -47,12 +39,12 @@ hl.bind(MOD .. " + I", hl.dsp.exec_cmd("msui wifi"), {
 	description = "msUI Wi-Fi & Internet Network Manager",
 })
 
-hl.bind("CTRL + SPACE", hl.dsp.exec_cmd("msui settings"), {
-	description = "msUI System Control Panel GUI",
+hl.bind(MOD .. " + SHIFT + I", hl.dsp.exec_cmd("~/.config/hypr/scripts/ui/open_wifi_tui.sh"), {
+	description = "msUI Wi-Fi Popdown TUI (wifitui)",
 })
 
 hl.bind(MOD .. " + CTRL + SPACE", hl.dsp.exec_cmd("msui settings"), {
-	description = "msUI System Control Panel GUI (Super+Ctrl+Space fallback)",
+	description = "msUI System Settings Control Panel",
 })
 
 hl.bind(MOD .. " + S", hl.dsp.exec_cmd("localsend"), {
@@ -156,7 +148,7 @@ hl.bind(MOD .. " + D", hl.dsp.layout("layout dwindle"), {
 	description = "Dwindle layout",
 })
 
-hl.bind(MOD .. " + M", hl.dsp.layout("layout master"), {
+hl.bind(MOD .. " + ALT + M", hl.dsp.layout("layout master"), {
 	description = "Master layout",
 })
 
@@ -180,7 +172,7 @@ hl.bind(MOD .. " + ALT + U", hl.dsp.exec_cmd("msui theme"), {
 
 -- WALLPAPER
 
-hl.bind(MOD .. " + SHIFT + W", hl.dsp.exec_cmd(Wallpaper.script), {
+hl.bind(MOD .. " + ALT + W", hl.dsp.exec_cmd(Wallpaper.script), {
 	description = "Change wallpaper",
 })
 
@@ -279,7 +271,7 @@ grim -g "$(slurp)" - | tesseract stdin stdout -l eng --oem 1 --psm 6 2>/dev/null
 -- SCREEN RECORDING
 
 hl.bind(
-	MOD .. " + SHIFT + R",
+	MOD .. " + ALT + R",
 	hl.dsp.exec_cmd([[
 sh -c '
 PIDFILE="/tmp/wf-recorder.pid"
@@ -599,6 +591,6 @@ end, {
 
 
 -- SMART CLIPBOARD
-hl.bind(MOD .. " + V", hl.dsp.exec_cmd("msui clipboard"), {
+hl.bind(MOD .. " + SHIFT + V", hl.dsp.exec_cmd("msui clipboard"), {
 	description = "Clipboard Manager",
 })

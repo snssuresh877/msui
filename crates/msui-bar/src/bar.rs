@@ -957,11 +957,7 @@ impl Bar {
             let (bt_icon, bt_label) = if !self.bluetooth_info.is_powered {
                 ("󰂲", " Off".to_string())
             } else if let Some(first_conn) = self.bluetooth_info.connected_devices.first() {
-                let name = if first_conn.name.len() > 10 {
-                    format!(" {}", &first_conn.name[..10])
-                } else {
-                    format!(" {}", first_conn.name)
-                };
+                let name = format!(" {}", msui_core::safe_truncate_chars(&first_conn.name, 10));
                 ("󰂱", name)
             } else {
                 ("󰂯", "".to_string())

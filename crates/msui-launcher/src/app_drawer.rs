@@ -666,10 +666,8 @@ impl AppDrawer {
 
                         let title_str = if client.title.is_empty() {
                             client.class.clone()
-                        } else if client.title.len() > 50 {
-                            format!("{}…", &client.title[..50])
                         } else {
-                            client.title.clone()
+                            msui_core::safe_truncate_chars(&client.title, 50)
                         };
                         let win_title = text(title_str).size(14);
 
@@ -834,10 +832,8 @@ impl AppDrawer {
                         let app_name = text(&app.name).size(14);
                         let comment_str = if app.comment.is_empty() {
                             format!("Launch {}", app.name)
-                        } else if app.comment.len() > 60 {
-                            format!("{}…", &app.comment[..60])
                         } else {
-                            app.comment.clone()
+                            msui_core::safe_truncate_chars(&app.comment, 60)
                         };
                         let app_comment = text(comment_str).size(11);
 

@@ -41,7 +41,7 @@ DESKTOP_EOF
 cat << DESKTOP_EOF > "$TARGET_DIR/keybind-4.desktop"
 [Desktop Entry]
 Type=Application
-Name=SUPER + V : Open Clipboard History
+Name=SUPER + SHIFT + V : Open Clipboard History
 Comment=Hyprland System Keybinding
 Exec=$SCRIPTS_DIR/open_clipboard.sh
 Icon=edit-paste

@@ -559,11 +559,22 @@ impl UnifiedShell {
                 tasks.push(reset_cmd);
             }
             "wifi" => {
+                let top_margin = if self.config.bar.is_modern() {
+                    (self.config.bar.height + self.config.bar.margin_top + 8) as i32
+                } else {
+                    self.config.bar.height as i32 + 8
+                };
                 let (mid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
-                    size: LayerSize::px(680, 560),
+                    size: LayerSize::px(440, 620),
                     layer: Layer::Overlay,
-                    anchor: Anchor::empty(),
-                    keyboard_interactivity: KeyboardInteractivity::Exclusive,
+                    anchor: Anchor::Top | Anchor::Right,
+                    margin: Some(Margin {
+                        top: top_margin,
+                        right: 12,
+                        bottom: 0,
+                        left: 0,
+                    }),
+                    keyboard_interactivity: KeyboardInteractivity::OnDemand,
                     output_option,
                     blur_option,
                     ..Default::default()
@@ -1601,6 +1612,7 @@ pub fn run_daemon(config: MsuiConfig) -> anyhow::Result<()> {
                     tracing::error!("msUI Polkit Agent error: {:?}", e);
                 }
             });
+            msui_core::network::SignalManager::start_listener();
 
             let (tx, mut rx) = tokio::sync::mpsc::channel(32);
             let server = IpcServer::new();

@@ -14,6 +14,7 @@ pub mod wallpaper;
 pub mod service;
 pub mod color;
 pub mod ai;
+pub mod network;
 
 pub use ai::{AiConfig, LlamaRuntime, MemorySentinel, MemoryStatus, ModelInfo, ModelStore, RuntimeStatus};
 pub use clipboard::{is_password_hint_active, ClipboardEntry, ClipboardStore, GLOBAL_CLIPBOARD, watcher::start_clipboard_watcher};
@@ -46,6 +47,17 @@ pub use theme::{ThemeDefinition, ThemeManager, BUILTIN_THEMES};
 pub use tray::{activate_tray_item, activate_tray_item_async, activate_tray_item_blocking, get_tray_items, watcher::run_tray_watcher, TrayItem};
 pub use wallpaper::{WallpaperItem, WallpaperManager};
 pub use color::{ColorEngine, ColorPreset, ColorSchemeMode, CorePalette, Hct, SemanticTokens, Srgb, ThemeExporter, WallpaperExtractor, PRESETS};
+
+/// Truncate a UTF-8 string safely by character count without slicing across character boundaries
+pub fn safe_truncate_chars(s: &str, max_chars: usize) -> String {
+    let mut chars = s.chars();
+    let truncated: String = chars.by_ref().take(max_chars).collect();
+    if chars.next().is_some() {
+        format!("{truncated}…")
+    } else {
+        s.to_string()
+    }
+}
 
 
 #[cfg(test)]
@@ -379,6 +391,23 @@ mod tests {
         assert_eq!(mode, 0o600, "notification cache file mode must be 0600");
 
         let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_safe_truncate_chars() {
+        assert_eq!(safe_truncate_chars("", 10), "");
+        assert_eq!(safe_truncate_chars("hello", 10), "hello");
+        assert_eq!(safe_truncate_chars("hello world", 5), "hello…");
+        // Em-dash multibyte UTF-8 boundary test (same as Firefox window title crash)
+        let firefox_title = "Networking - Omarchy Manual — Original profile — Mozilla Firefox";
+        let truncated = safe_truncate_chars(firefox_title, 28);
+        assert!(truncated.ends_with("…"));
+        // Chinese multibyte characters
+        let cjk = "这是一个关于系统配置的长标题测试内容";
+        assert_eq!(safe_truncate_chars(cjk, 5), "这是一个关…");
+        // Emoji (4-byte characters)
+        let emoji = "🚀🔥🎉💻🌟✨🎯";
+        assert_eq!(safe_truncate_chars(emoji, 3), "🚀🔥🎉…");
     }
 }
 
