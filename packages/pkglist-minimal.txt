@@ -28,6 +28,7 @@ noto-fonts-cjk
 noto-fonts-emoji
 awesome-terminal-fonts
 adobe-source-code-pro-fonts
+ttf-jetbrains-mono-nerd
 qt5-wayland
 qt6-wayland
 libxkbcommon

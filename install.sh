@@ -74,7 +74,7 @@ install_system_packages() {
         xdg-desktop-portal-hyprland xdg-desktop-portal-gtk \
         pipewire pipewire-pulse wireplumber networkmanager \
         bluez bluez-utils grim slurp wl-clipboard kitty foot \
-        noto-fonts awesome-terminal-fonts
+        noto-fonts awesome-terminal-fonts ttf-jetbrains-mono-nerd
     fi
   elif [[ "$mode" == "full" ]]; then
     local pkg_file="$PACKAGES_DIR/pkglist-pacman.txt"
@@ -127,7 +127,7 @@ install_msui_binary() {
   fi
 
   info "Installing msui to $HOME/.local/bin/msui..."
-  cp -f "$binary_path" "$HOME/.local/bin/msui"
+  cp --remove-destination -f "$binary_path" "$HOME/.local/bin/msui"
   chmod +x "$HOME/.local/bin/msui"
 
   # Also install bundled CLI utilities from dotfiles/bin
@@ -226,6 +226,13 @@ deploy_dotfiles() {
   if [[ -d "$HOME/.config/hypr/scripts" ]]; then
     info "Setting executable permissions on Hyprland scripts..."
     find "$HOME/.config/hypr/scripts" -type f -name "*.sh" -exec chmod +x {} +
+  fi
+
+  # Generate keybinding desktop entries for application launcher / app drawer
+  local sync_keybinds="$HOME/.config/hypr/scripts/ui/sync_keybind_desktop_entries.sh"
+  if [[ -f "$sync_keybinds" ]]; then
+    info "Generating keybinding desktop entries..."
+    bash "$sync_keybinds" 2>/dev/null || true
   fi
 
   # Deploy systemd user services (Aria2 RPC daemon)

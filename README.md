@@ -376,26 +376,40 @@ hl.layer_rule({
 
 ## Building & Installation
 
-### Requirements
-- **Rust Toolchain**: `1.85+` (Rust edition 2024).
-- **Cargo**: Standard package manager.
+### Option 1: Automated 1-Command Setup (Recommended)
 
-### Compile
+Run the included automated installer to configure dependencies, build the release binary, deploy dotfiles, set up keybindings, configure UFW firewall, and link wallpapers:
+
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/msui.git
+git clone https://github.com/snssuresh877/msui.git
+cd msui
+./install.sh
+```
+
+The script automatically:
+1. Installs minimal system packages via `pacman` (Hyprland, Wayland, PipeWire, BlueZ, NetworkManager, Nerd Fonts).
+2. Builds the optimized `msui` release binary and installs it to `~/.local/bin/msui`.
+3. Adds `~/.local/bin` to your `$PATH` across shells (`.bashrc`, `.bash_profile`, `config.fish`).
+4. Deploys full desktop configurations (`~/.config/hypr`, `~/.config/msui`, `~/.config/foot`, etc.).
+5. Generates application launcher desktop entries and syncs wallpapers.
+6. Starts `msui daemon` automatically on Hyprland login.
+
+---
+
+### Option 2: Manual Build & Install
+
+If you prefer building manually with Cargo:
+
+```bash
+git clone https://github.com/snssuresh877/msui.git
 cd msui
 
 # Build optimized release binary
 cargo build --release
-```
 
-### Install
-Link or copy the compiled binary into your `$PATH`:
-
-```bash
+# Install binary to ~/.local/bin
 mkdir -p ~/.local/bin
-ln -sf $(pwd)/target/release/msui ~/.local/bin/msui
+cp --remove-destination target/release/msui ~/.local/bin/msui
 ```
 
 Verify installation:
