@@ -1581,6 +1581,17 @@ fn spawn_config_file_watcher() {
                 watch_dirs.push(parent.to_path_buf());
             }
 
+        if let Ok(home) = std::env::var("HOME") {
+            let hypr_dir = std::path::PathBuf::from(&home).join(".config/hypr");
+            let hypr_modules = hypr_dir.join("modules");
+            if hypr_modules.exists() {
+                watch_dirs.push(hypr_modules);
+            }
+            if hypr_dir.exists() {
+                watch_dirs.push(hypr_dir);
+            }
+        }
+
         for dir in &watch_dirs {
             let mut c_path = dir.as_os_str().as_bytes().to_vec();
             c_path.push(0);
@@ -1598,8 +1609,15 @@ fn spawn_config_file_watcher() {
                 // Debounce rapid writes from text editors (swap files, multi-writes, atomic renames)
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 while unsafe { libc::read(inotify_fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len()) } > 0 {}
-                tracing::info!("Auto-detected msui.toml / theme changes on disk! Live hot-reloading...");
+                tracing::info!("Auto-detected config / keybind changes on disk! Live hot-reloading Hyprland & msUI...");
                 let _ = IPC_BROADCAST_TX.send(IpcCommand::ReloadConfig);
+
+                // Auto-reload Hyprland so modified binds.lua or rules take effect instantly in the compositor
+                let _ = tokio::process::Command::new("hyprctl")
+                    .arg("reload")
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn();
             } else {
                 tokio::time::sleep(std::time::Duration::from_millis(300)).await;
             }

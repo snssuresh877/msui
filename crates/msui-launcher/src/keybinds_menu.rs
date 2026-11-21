@@ -157,6 +157,7 @@ impl KeybindsMenu {
     }
 
     pub fn reset(&mut self) -> Command<Message> {
+        self.all_items = Self::load_keybinds();
         self.query.clear();
         self.category = KeybindCategory::All;
         self.rebuild_filtered();
@@ -176,7 +177,203 @@ impl KeybindsMenu {
         event::listen().map(Message::IcedEvent)
     }
 
+    fn find_binds_lua_path() -> Option<std::path::PathBuf> {
+        if let Ok(home) = std::env::var("HOME") {
+            let p = std::path::PathBuf::from(home).join(".config/hypr/modules/binds.lua");
+            if p.exists() {
+                return Some(p);
+            }
+        }
+        let dotfiles_path = std::path::PathBuf::from("dotfiles/hypr/modules/binds.lua");
+        if dotfiles_path.exists() {
+            return Some(dotfiles_path);
+        }
+        None
+    }
+
+    fn categorize_bind(keys: &[String], desc: &str) -> KeybindCategory {
+        let desc_l = desc.to_lowercase();
+        let raw = keys.join(" ").to_lowercase();
+
+        if raw == "super a"
+            || raw == "super space"
+            || raw == "super tab"
+            || raw == "super k"
+            || raw == "super i"
+            || raw == "super shift i"
+            || raw == "super ctrl space"
+            || desc_l.contains("launcher")
+            || desc_l.contains("control center")
+            || desc_l.contains("app drawer")
+            || desc_l.contains("cheatsheet")
+        {
+            return KeybindCategory::Launchers;
+        }
+
+        if desc_l.contains("screenshot")
+            || desc_l.contains("color picker")
+            || desc_l.contains("ocr")
+            || desc_l.contains("recording")
+            || desc_l.contains("capture")
+        {
+            return KeybindCategory::CaptureUtil;
+        }
+
+        if desc_l.contains("workspace")
+            || desc_l.contains("scratchpad")
+            || desc_l.contains("minimize")
+            || desc_l.contains("focus")
+            || desc_l.contains("move window")
+            || raw.contains("left")
+            || raw.contains("right")
+            || raw.contains("up")
+            || raw.contains("down")
+            || raw.contains("mouse")
+        {
+            return KeybindCategory::Navigation;
+        }
+
+        if keys.iter().any(|k| k.eq_ignore_ascii_case("ctrl"))
+            && keys.iter().any(|k| k.eq_ignore_ascii_case("super"))
+        {
+            return KeybindCategory::System;
+        }
+
+        if desc_l.contains("terminal")
+            || desc_l.contains("browser")
+            || desc_l.contains("file manager")
+            || desc_l.contains("yazi")
+            || desc_l.contains("ai")
+            || desc_l.contains("editor")
+            || desc_l.contains("obsidian")
+            || desc_l.contains("wechat")
+        {
+            return KeybindCategory::Apps;
+        }
+
+        if desc_l.contains("power")
+            || desc_l.contains("reboot")
+            || desc_l.contains("logout")
+            || desc_l.contains("lock")
+            || desc_l.contains("mixer")
+            || desc_l.contains("audio")
+            || desc_l.contains("bluetooth")
+            || desc_l.contains("battery")
+            || desc_l.contains("media")
+            || desc_l.contains("storage")
+            || desc_l.contains("cleanup")
+            || desc_l.contains("updates")
+            || desc_l.contains("disturb")
+        {
+            return KeybindCategory::System;
+        }
+
+        KeybindCategory::WindowLayout
+    }
+
+    fn parse_binds_lua(content: &str) -> Vec<KeybindItem> {
+        let mut items = Vec::new();
+        let mut current_keys: Option<Vec<String>> = None;
+
+        for line in content.lines() {
+            let trimmed = line.trim();
+
+            if let Some(pos) = trimmed.find("hl.bind(") {
+                let after = &trimmed[pos + "hl.bind(".len()..];
+                let key_part = if let Some(comma_pos) = after.find(',') {
+                    &after[..comma_pos]
+                } else {
+                    after
+                };
+
+                let cleaned = key_part
+                    .replace("MOD", "SUPER")
+                    .replace("..", "")
+                    .replace('"', "")
+                    .replace('\'', "")
+                    .trim()
+                    .to_string();
+
+                if !cleaned.is_empty() {
+                    let parts: Vec<String> = cleaned
+                        .split('+')
+                        .map(|s| s.trim())
+                        .filter(|s| !s.is_empty())
+                        .map(|s| {
+                            if s.contains("numberkey") {
+                                "1..9".to_string()
+                            } else if s.eq_ignore_ascii_case("return") {
+                                "RETURN".to_string()
+                            } else if s.eq_ignore_ascii_case("left") {
+                                "Left".to_string()
+                            } else if s.eq_ignore_ascii_case("right") {
+                                "Right".to_string()
+                            } else if s.eq_ignore_ascii_case("up") {
+                                "Up".to_string()
+                            } else if s.eq_ignore_ascii_case("down") {
+                                "Down".to_string()
+                            } else {
+                                s.to_string()
+                            }
+                        })
+                        .collect();
+
+                    if !parts.is_empty() {
+                        current_keys = Some(parts);
+                    }
+                }
+            }
+
+            if let Some(keys) = &current_keys {
+                if let Some(desc_idx) = trimmed.find("description =") {
+                    let rest = &trimmed[desc_idx + "description =".len()..];
+                    let desc = rest
+                        .trim()
+                        .trim_matches(|c| c == '"' || c == '\'' || c == ',' || c == '{' || c == '}')
+                        .trim();
+
+                    if !desc.is_empty() {
+                        let desc_str = if desc.starts_with("Workspace ") {
+                            "Switch to workspace 1..9".to_string()
+                        } else if desc.starts_with("Move window to workspace ") {
+                            "Move window to workspace 1..9".to_string()
+                        } else {
+                            desc.to_string()
+                        };
+
+                        let category = Self::categorize_bind(keys, &desc_str);
+                        let raw_keys = format!("{} {}", keys.join(" ").to_lowercase(), desc_str.to_lowercase());
+
+                        if !items.iter().any(|it: &KeybindItem| it.keys == *keys && it.description == desc_str) {
+                            items.push(KeybindItem {
+                                keys: keys.clone(),
+                                description: desc_str,
+                                category,
+                                raw_keys,
+                            });
+                        }
+                        current_keys = None;
+                    }
+                }
+            }
+        }
+
+        items
+    }
+
     fn load_keybinds() -> Vec<KeybindItem> {
+        if let Some(path) = Self::find_binds_lua_path() {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                let parsed = Self::parse_binds_lua(&content);
+                if !parsed.is_empty() {
+                    return parsed;
+                }
+            }
+        }
+        Self::fallback_keybinds()
+    }
+
+    fn fallback_keybinds() -> Vec<KeybindItem> {
         vec![
             // 1. Command Center & Launchers
             KeybindItem {
