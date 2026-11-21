@@ -28,9 +28,11 @@ cat << 'TLP_EOF' > /etc/tlp.d/99-zenith-power.conf
 # ⚡ Zenith Hardware Power Tuning (Lenovo IdeaPad / AMD Zen 2)
 # =========================================================
 
-# CPU Turbo Boost: Off on battery to eliminate 20W+ thermal spikes; on when plugged in
+# CPU Turbo Boost & Scaling Governors
 CPU_BOOST_ON_AC=1
 CPU_BOOST_ON_BAT=0
+CPU_SCALING_GOVERNOR_ON_AC=schedutil
+CPU_SCALING_GOVERNOR_ON_BAT=conservative
 
 # Lenovo ACPI Platform Profile
 PLATFORM_PROFILE_ON_AC=balanced
@@ -51,9 +53,9 @@ AMDGPU_ABM_LEVEL_ON_AC=0
 AMDGPU_ABM_LEVEL_ON_BAT=3
 AMDGPU_ABM_LEVEL_ON_SAV=3
 
-# Wi-Fi & Audio Power Saving
+# Wi-Fi & Audio Power Saving (Keep Wi-Fi power save OFF to prevent drops)
 WIFI_PWR_ON_AC=off
-WIFI_PWR_ON_BAT=on
+WIFI_PWR_ON_BAT=off
 SOUND_POWER_SAVE_ON_AC=1
 SOUND_POWER_SAVE_ON_BAT=1
 SOUND_POWER_SAVE_CONTROLLER=Y
