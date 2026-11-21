@@ -37,6 +37,7 @@ impl ModalManager {
                     | "storage" | "disks"
                     | "reminder" | "reminders"
                     | "settings" | "systemcontrol" | "control-panel"
+                    | "keybinds" | "cheatsheet" | "keys" | "hotkeys"
             )
         };
 
@@ -1325,6 +1326,16 @@ fn main() -> anyhow::Result<()> {
             let config = MsuiConfig::load_or_default();
             if let Err(e) = msui_launcher::run_settings_panel(config) {
                 tracing::error!("msUI Settings Panel exited with error: {:?}", e);
+            }
+        }
+        "keybinds" | "cheatsheet" | "keys" | "hotkeys" => {
+            if try_ipc_toggle("keybinds") {
+                return Ok(());
+            }
+            tracing::info!("Starting msUI Keybindings Cheatsheet...");
+            let config = MsuiConfig::load_or_default();
+            if let Err(e) = msui_launcher::run_keybinds_menu(config) {
+                tracing::error!("msUI Keybinds Menu exited with error: {:?}", e);
             }
         }
         "-border" | "--border" | "border" => {

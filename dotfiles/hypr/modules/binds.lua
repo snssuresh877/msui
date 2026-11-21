@@ -35,6 +35,10 @@ hl.bind(MOD .. " + TAB", hl.dsp.exec_cmd("msui drawer"), {
 	description = "App Drawer & Task Switcher",
 })
 
+hl.bind(MOD .. " + K", hl.dsp.exec_cmd("msui keybinds"), {
+	description = "msUI Keybindings Cheatsheet",
+})
+
 hl.bind(MOD .. " + I", hl.dsp.exec_cmd("msui wifi"), {
 	description = "msUI Wi-Fi & Internet Network Manager",
 })

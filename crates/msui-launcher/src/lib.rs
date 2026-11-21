@@ -17,9 +17,10 @@ pub mod theme_menu;
 pub mod toast;
 pub mod wallpaper_daemon;
 pub mod wallpaper_menu;
-pub mod modal_style;
 pub mod settings_panel;
 pub mod wifi_menu;
+pub mod keybinds_menu;
+pub mod modal_style;
 
 pub use modal_style::{default_modal_card_style, default_subcard_style, modal_card_style, subcard_style};
 
@@ -30,6 +31,7 @@ pub use bluetooth_menu::{run_bluetooth_menu, BluetoothMenu, Message as Bluetooth
 pub use clipboard_menu::{run_clipboard_menu, ClipboardMenu, Message as ClipboardMessage};
 pub use control_center::{run_control_center, run_control_center_topbar, ControlCenter, ControlCenterTab, Message as ControlCenterMessage};
 pub use display_menu::{run_display_menu, DisplayMenu, Message as DisplayMessage};
+pub use keybinds_menu::{run_keybinds_menu, KeybindsMenu, Message as KeybindsMessage};
 pub use launcher::{run_launcher, Launcher, Message as LauncherMessage};
 pub use media_menu::{run_media_menu, MediaMenu, Message as MediaMessage};
 pub use notification_center::{run_notification_center, NotificationCenter, Message as NotificationCenterMessage};

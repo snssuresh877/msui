@@ -21,7 +21,7 @@ use msui_core::{
 use msui_launcher::{
     AppDrawer, AppDrawerMessage, AudioMenu, AudioMessage, BatteryMenu, BatteryMessage,
     BluetoothMenu, BluetoothMessage, ClipboardMenu, ClipboardMessage, ControlCenter,
-    ControlCenterMessage, DisplayMenu, DisplayMessage, Launcher,
+    ControlCenterMessage, DisplayMenu, DisplayMessage, KeybindsMenu, KeybindsMessage, Launcher,
     LauncherMessage, MediaMenu, MediaMessage, NotificationCenter, NotificationCenterMessage,
     OsdMessage, OsdWindow, PolkitDialog, PolkitDialogArgs, PolkitMessage, PowerMenu, PowerMessage,
     ReminderMenu, ReminderMessage, SettingsMessage, SettingsPanel, StorageMenu, StorageMessage, ThemeMenu, ThemeMessage, ToastApp,
@@ -51,6 +51,7 @@ pub enum ActiveModal {
     Storage(StorageMenu),
     Polkit(PolkitDialog),
     Settings(SettingsPanel),
+    Keybinds(KeybindsMenu),
 }
 
 impl ActiveModal {
@@ -74,6 +75,7 @@ impl ActiveModal {
             ActiveModal::Storage(_) => "storage",
             ActiveModal::Polkit(_) => "polkit",
             ActiveModal::Settings(_) => "settings",
+            ActiveModal::Keybinds(_) => "keybinds",
         }
     }
 
@@ -97,6 +99,7 @@ impl ActiveModal {
             ActiveModal::Storage(m) => m.should_close(),
             ActiveModal::Polkit(m) => m.should_close(),
             ActiveModal::Settings(m) => m.should_close(),
+            ActiveModal::Keybinds(m) => m.should_close(),
         }
     }
 
@@ -121,6 +124,7 @@ impl ActiveModal {
             ActiveModal::Storage(m) => m.reset_should_close(),
             ActiveModal::Polkit(m) => m.reset_should_close(),
             ActiveModal::Settings(m) => m.reset_should_close(),
+            ActiveModal::Keybinds(m) => m.reset_should_close(),
         }
     }
 }
@@ -145,6 +149,7 @@ pub enum ModalMessage {
     Storage(StorageMessage),
     Polkit(PolkitMessage),
     Settings(SettingsMessage),
+    Keybinds(KeybindsMessage),
 }
 
 #[to_layer_message(multi)]
@@ -416,6 +421,7 @@ impl UnifiedShell {
             "reminder" | "reminders" | "timer" | "timers" => "reminder",
             "storage" | "disks" | "drives" => "storage",
             "settings" | "systemcontrol" | "control-panel" | "topbar" | "bar-settings" => "settings",
+            "keybinds" | "cheatsheet" | "keys" | "hotkeys" => "keybinds",
             _ => return Task::none(),
         };
 
@@ -767,6 +773,24 @@ impl UnifiedShell {
                 tasks.push(init_cmd.map(|m| DaemonMessage::Modal(ModalMessage::Settings(m))));
                 tasks.push(reset_cmd);
             }
+            "keybinds" => {
+                let (mid, open_task) = DaemonMessage::layershell_open(NewLayerShellSettings {
+                    size: LayerSize::px(780, 600),
+                    layer: Layer::Overlay,
+                    anchor: Anchor::empty(),
+                    keyboard_interactivity: KeyboardInteractivity::Exclusive,
+                    output_option,
+                    blur_option,
+                    ..Default::default()
+                });
+                let (mut kb, init_cmd) = KeybindsMenu::new_embedded(self.config.clone());
+                let reset_cmd = kb.reset().map(|m| DaemonMessage::Modal(ModalMessage::Keybinds(m)));
+                self.modal_id = Some(mid);
+                self.active_modal = Some(ActiveModal::Keybinds(kb));
+                tasks.push(open_task);
+                tasks.push(init_cmd.map(|m| DaemonMessage::Modal(ModalMessage::Keybinds(m))));
+                tasks.push(reset_cmd);
+            }
             _ => {}
         }
 
@@ -817,6 +841,7 @@ impl UnifiedShell {
                 ActiveModal::Storage(m) => m.subscription().map(|msg| DaemonMessage::Modal(ModalMessage::Storage(msg))),
                 ActiveModal::Polkit(m) => m.subscription().map(|msg| DaemonMessage::Modal(ModalMessage::Polkit(msg))),
                 ActiveModal::Settings(m) => m.subscription().map(|msg| DaemonMessage::Modal(ModalMessage::Settings(msg))),
+                ActiveModal::Keybinds(m) => m.subscription().map(|msg| DaemonMessage::Modal(ModalMessage::Keybinds(msg))),
             }
         } else {
             iced::Subscription::none()
@@ -1061,6 +1086,9 @@ impl UnifiedShell {
                         }
                         cmd
                     }
+                    (ModalMessage::Keybinds(m), Some(ActiveModal::Keybinds(inst))) => {
+                        inst.update(m).map(|x| DaemonMessage::Modal(ModalMessage::Keybinds(x)))
+                    }
                     _ => Task::none(),
                 };
 
@@ -1166,6 +1194,7 @@ impl UnifiedShell {
                             "reminder" | "reminders" | "timer" | "timers" => "reminder",
                             "storage" | "disks" | "drives" => "storage",
                             "settings" | "systemcontrol" | "control-panel" | "topbar" | "bar-settings" => "settings",
+                            "keybinds" | "cheatsheet" | "keys" | "hotkeys" => "keybinds",
                             other => other,
                         };
                         if let Some(ActiveModal::ControlCenter(_)) = &mut self.active_modal
@@ -1518,6 +1547,7 @@ impl UnifiedShell {
                     ActiveModal::Storage(m) => m.view().map(|x| DaemonMessage::Modal(ModalMessage::Storage(x))),
                     ActiveModal::Polkit(m) => m.view().map(|x| DaemonMessage::Modal(ModalMessage::Polkit(x))),
                     ActiveModal::Settings(m) => m.view().map(|x| DaemonMessage::Modal(ModalMessage::Settings(x))),
+                    ActiveModal::Keybinds(m) => m.view().map(|x| DaemonMessage::Modal(ModalMessage::Keybinds(x))),
                 }
             } else {
                 container(space()).width(Length::Shrink).height(Length::Shrink).into()
